@@ -5,12 +5,13 @@
 - `public/` : ce que Netlify publie (`config.js` = URL Supabase + clé publique seulement)
 - `supabase/` : schéma SQL et fonction IA (la clé Anthropic reste dans les secrets Supabase, jamais ici)
 
-## Envoi de courriels aux clients (facultatif)
-La fonction `supabase/functions/tl-email` envoie les demandes de précisions par Resend.
-1. Créer un compte sur resend.com, ajouter le domaine `boujradcpa.com` (enregistrements DNS fournis par Resend).
-2. Supabase → Edge Functions → créer `tl-email` avec le code du fichier.
-3. Supabase → Edge Functions → Secrets : `RESEND_API_KEY` (clé Resend) et, au besoin, `COURRIEL_EXPEDITEUR` (ex. `Boujrad CPA Inc. <comptabilite@boujradcpa.com>`).
-Sans cette fonction, le bouton « Ouvrir dans ma messagerie » prépare le courriel dans Outlook ou Gmail.
+## Envoi de courriels aux clients (Microsoft 365)
+Les fonctions `tl-email`, `cc-rappels` et `cc-avis` envoient depuis la boîte Outlook du cabinet (admin@boujradcpa.com) par Microsoft Graph.
+1. Microsoft Entra > Inscriptions d'applications > Nouvelle inscription « Portail Boujrad CPA » (locataire unique).
+2. Autorisations d'API > Microsoft Graph > Autorisations d'application > `Mail.Send`, puis « Accorder un consentement d'administrateur ».
+3. Certificats et secrets > Nouveau secret client (24 mois : le renouveler avant l'échéance).
+4. Secrets Supabase : `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `COURRIEL_EXPEDITEUR` = `admin@boujradcpa.com` (adresse principale de la boîte), `NOTIF_CABINET`, `SITE_URL`, `CRON_SECRET`.
+Resend reste possible à la place (secret `RESEND_API_KEY`) si les secrets MS_* sont absents.
 
 ## Portail client et Centre clients
 - `public/portail.html` : les clients créent leur compte, remplissent le formulaire (nouveau ou existant) et déposent leurs documents d'impôt.

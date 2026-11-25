@@ -2,7 +2,7 @@
 // - Appel automatique quotidien (pg_cron) avec l'en-tête x-cron-secret = CRON_SECRET :
 //   crée les demandes des périodes terminées et envoie le premier courriel, puis un rappel aux 7 jours (3 rappels au plus).
 // - Appel manuel depuis l'intranet (membre connecté) : { demande_id } envoie le courriel tout de suite.
-// Secrets requis : RESEND_API_KEY, CRON_SECRET. Facultatifs : COURRIEL_EXPEDITEUR, COURRIEL_REPONSE, SITE_URL.
+// Secrets requis : MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, COURRIEL_EXPEDITEUR (ou RESEND_API_KEY), CRON_SECRET. Facultatifs : COURRIEL_EXPEDITEUR, COURRIEL_REPONSE, SITE_URL.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
@@ -37,6 +37,48 @@ export function periodes(c: Client, aujourdhui: Date): Periode[] {
   return out;
 }
 
+// ---- Envoi de courriel : Microsoft 365 (boîte Outlook du cabinet) ou, à défaut, Resend ----
+// Microsoft 365 : secrets MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET et COURRIEL_EXPEDITEUR (ex. admin@boujradcpa.com).
+// Le courriel part de cette boîte et apparaît dans ses Éléments envoyés. Resend : secret RESEND_API_KEY.
+let jetonMS: { v: string; exp: number } | null = null;
+async function envoyerCourriel(o: { to: string[]; subject: string; text: string; replyTo?: string | null }) {
+  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;white-space:pre-wrap">${o.text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!))}</div>`;
+  const exp = (Deno.env.get("COURRIEL_EXPEDITEUR") || "admin@boujradcpa.com").trim();
+  const adresse = (exp.match(/<([^>]+)>/)?.[1] || exp).trim();
+  const tenant = Deno.env.get("MS_TENANT_ID"), id = Deno.env.get("MS_CLIENT_ID"), secret = Deno.env.get("MS_CLIENT_SECRET");
+  if (tenant && id && secret) {
+    if (!jetonMS || jetonMS.exp < Date.now() + 60000) {
+      const t = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: id, client_secret: secret, scope: "https://graph.microsoft.com/.default", grant_type: "client_credentials" }),
+      });
+      const j = await t.json();
+      if (!t.ok) throw new Error("Microsoft (connexion) : " + (j.error_description || j.error || t.status).toString().slice(0, 200));
+      jetonMS = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+    }
+    const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(adresse)}/sendMail`, {
+      method: "POST", headers: { Authorization: `Bearer ${jetonMS.v}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject: o.subject.slice(0, 250), body: { contentType: "HTML", content: html },
+          toRecipients: o.to.map((a) => ({ emailAddress: { address: a } })),
+          ...(o.replyTo ? { replyTo: [{ emailAddress: { address: o.replyTo } }] } : {}),
+        },
+        saveToSentItems: true,
+      }),
+    });
+    if (!r.ok) throw new Error("Microsoft (envoi) : " + (await r.text()).slice(0, 250));
+    return;
+  }
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) throw new Error("service de courriel non configuré (secrets MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET)");
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: exp.includes("<") ? exp : `Boujrad CPA Inc. <${adresse}>`, to: o.to, subject: o.subject.slice(0, 250), text: o.text, html, ...(o.replyTo ? { reply_to: o.replyTo } : {}) }),
+  });
+  if (!r.ok) throw new Error("Resend : " + (await r.text()).slice(0, 200));
+}
+
 // Accès au portail : si personne de l'entreprise n'a encore de compte lié, on joint un code d'invitation (créé au besoin)
 // deno-lint-ignore no-explicit-any
 async function codeInvitation(admin: any, c: Client): Promise<string | null> {
@@ -50,8 +92,6 @@ async function codeInvitation(admin: any, c: Client): Promise<string | null> {
 
 // deno-lint-ignore no-explicit-any
 async function envoyer(admin: any, c: Client, d: { id: string; periode: string; debut: string; fin: string; echeance: string | null; rappels: number }) {
-  const key = Deno.env.get("RESEND_API_KEY");
-  if (!key) throw new Error("RESEND_API_KEY manquante");
   const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
   const code = await codeInvitation(admin, c);
   const lien = `${site}/portail.html?depot=${d.id}${code ? `&invite=${code}` : ""}`;
@@ -77,16 +117,7 @@ Vous pouvez aussi les déposer à notre bureau : 220-672, boulevard des Laurenti
 Merci!
 
 Boujrad CPA Inc.`;
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: Deno.env.get("COURRIEL_EXPEDITEUR") || "Boujrad CPA Inc. <comptabilite@boujradcpa.com>",
-      to: [c.courriel], subject: sujet, text: texte,
-      ...(Deno.env.get("COURRIEL_REPONSE") ? { reply_to: Deno.env.get("COURRIEL_REPONSE") } : {}),
-    }),
-  });
-  if (!r.ok) throw new Error("Resend : " + (await r.text()).slice(0, 200));
+  await envoyerCourriel({ to: [c.courriel!], subject: sujet, text: texte, replyTo: Deno.env.get("COURRIEL_REPONSE") });
 }
 
 Deno.serve(async (req) => {

@@ -2,7 +2,7 @@
 // - { action: "publication", publication_id } (membre du cabinet) : avise le client qu'un document ou un paiement l'attend.
 // - { action: "paiement", publication_id } (client connecté au portail) : avise le cabinet (NOTIF_CABINET) qu'un client a payé.
 // - { action: "rappels" } avec l'en-tête x-cron-secret : rappel 5 jours avant la date limite aux clients qui n'ont pas confirmé leur paiement.
-// Secrets : RESEND_API_KEY, CRON_SECRET ; facultatifs : NOTIF_CABINET, COURRIEL_EXPEDITEUR, COURRIEL_REPONSE, SITE_URL.
+// Secrets : MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, COURRIEL_EXPEDITEUR (ou RESEND_API_KEY), CRON_SECRET ; facultatifs : NOTIF_CABINET, COURRIEL_EXPEDITEUR, COURRIEL_REPONSE, SITE_URL.
 // Le courriel au client ne contient ni le montant ni le code de paiement : le client les obtient dans son portail.
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -16,21 +16,48 @@ const longue = (d: string) => new Date(d.slice(0, 10) + "T12:00:00Z").toLocaleDa
 const money = (v: number) => new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" }).format(v);
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
-async function courriel(to: string[], subject: string, text: string) {
+// ---- Envoi de courriel : Microsoft 365 (boîte Outlook du cabinet) ou, à défaut, Resend ----
+// Microsoft 365 : secrets MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET et COURRIEL_EXPEDITEUR (ex. admin@boujradcpa.com).
+// Le courriel part de cette boîte et apparaît dans ses Éléments envoyés. Resend : secret RESEND_API_KEY.
+let jetonMS: { v: string; exp: number } | null = null;
+async function envoyerCourriel(o: { to: string[]; subject: string; text: string; replyTo?: string | null }) {
+  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;white-space:pre-wrap">${o.text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!))}</div>`;
+  const exp = (Deno.env.get("COURRIEL_EXPEDITEUR") || "admin@boujradcpa.com").trim();
+  const adresse = (exp.match(/<([^>]+)>/)?.[1] || exp).trim();
+  const tenant = Deno.env.get("MS_TENANT_ID"), id = Deno.env.get("MS_CLIENT_ID"), secret = Deno.env.get("MS_CLIENT_SECRET");
+  if (tenant && id && secret) {
+    if (!jetonMS || jetonMS.exp < Date.now() + 60000) {
+      const t = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: id, client_secret: secret, scope: "https://graph.microsoft.com/.default", grant_type: "client_credentials" }),
+      });
+      const j = await t.json();
+      if (!t.ok) throw new Error("Microsoft (connexion) : " + (j.error_description || j.error || t.status).toString().slice(0, 200));
+      jetonMS = { v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+    }
+    const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(adresse)}/sendMail`, {
+      method: "POST", headers: { Authorization: `Bearer ${jetonMS.v}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject: o.subject.slice(0, 250), body: { contentType: "HTML", content: html },
+          toRecipients: o.to.map((a) => ({ emailAddress: { address: a } })),
+          ...(o.replyTo ? { replyTo: [{ emailAddress: { address: o.replyTo } }] } : {}),
+        },
+        saveToSentItems: true,
+      }),
+    });
+    if (!r.ok) throw new Error("Microsoft (envoi) : " + (await r.text()).slice(0, 250));
+    return;
+  }
   const key = Deno.env.get("RESEND_API_KEY");
-  if (!key) throw new Error("service de courriel non configuré (RESEND_API_KEY)");
+  if (!key) throw new Error("service de courriel non configuré (secrets MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET)");
   const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: Deno.env.get("COURRIEL_EXPEDITEUR") || "Boujrad CPA Inc. <comptabilite@boujradcpa.com>",
-      to, subject, text,
-      html: `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;white-space:pre-wrap">${esc(text)}</div>`,
-      ...(Deno.env.get("COURRIEL_REPONSE") ? { reply_to: Deno.env.get("COURRIEL_REPONSE") } : {}),
-    }),
+    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: exp.includes("<") ? exp : `Boujrad CPA Inc. <${adresse}>`, to: o.to, subject: o.subject.slice(0, 250), text: o.text, html, ...(o.replyTo ? { reply_to: o.replyTo } : {}) }),
   });
   if (!r.ok) throw new Error("Resend : " + (await r.text()).slice(0, 200));
 }
+const courriel = (to: string[], subject: string, text: string) => envoyerCourriel({ to, subject, text, replyTo: Deno.env.get("COURRIEL_REPONSE") });
 
 // Adresses du client : courriel de la fiche + personnes ayant un accès au portail
 async function destinataires(admin: SupabaseClient, cli: { id: string; courriel: string | null }) {
