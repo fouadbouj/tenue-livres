@@ -56,7 +56,7 @@ function corpsHtml(text: string) {
     <td style="padding:14px 16px 0 0;vertical-align:top"><img src="${site}/logo-courriel.png" width="96" height="38" alt="bCPA." style="display:block;border:0"></td>
     <td style="padding:12px 0 0 16px;border-left:1px solid #d5deeb;vertical-align:top;font-size:13px;line-height:1.5;color:#41506a">
       <strong style="color:#0b1626;font-size:14px">${e(nom)}</strong><br><strong style="color:#0b1626">Boujrad CPA Inc.</strong><br>220-672, boulevard des Laurentides<br>Laval (Québec) H7G 2V9<br>
-      ${tel ? e(tel) + "<br>" : ""}<a href="mailto:${e(mail)}" style="color:#1f3d6e">${e(mail)}</a> · <a href="https://boujradcpa.com" style="color:#1f3d6e">boujradcpa.com</a></td></tr></table>`;
+      ${tel ? e(tel) + "<br>" : ""}<a href="mailto:${e(mail)}" style="color:#1f3d6e">${e(mail)}</a> · <a href="https://www.boujradcpa.com" style="color:#1f3d6e">www.boujradcpa.com</a></td></tr></table>`;
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#0b1626;max-width:640px">${paras}${sig}</div>`;
 }
 

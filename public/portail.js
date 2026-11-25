@@ -1,5 +1,6 @@
 /* Portail client — impôts personnels (T1 fédéral et TP-1 du Québec) */
 (()=>{
+const notify=(m,err)=>{let t=document.getElementById('ntf');if(!t){t=document.createElement('div');t.id='ntf';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=(err?'':'✓ ')+m;t.className=(err?'err ':'')+'on';clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),4500)};
 const cfg=window.CONFIG||{},sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let U=null,DOS=null,SOU=null,F={},TYPE='',STEP=1,FILES=[];
@@ -129,14 +130,14 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
   if(b.id==='addE'){F.enfants=[...(F.enfants||[]),{lien:'Enfant',garde:'Exclusive (vit avec moi)'}];render();return}
   if(b.dataset.delE!=null){F.enfants.splice(+b.dataset.delE,1);render();return}
   if(b.id==='next1'){const E=errors();if(E.length){$('fErr').innerHTML=E.slice(0,8).map(esc).join('<br>');return}b.disabled=true;$('sv').textContent='Enregistrement…';
-    try{await saveDraft();steps(2);render();window.scrollTo(0,0)}catch(err){$('sv').textContent='Enregistrement impossible : '+(err.message||'réessayez.');b.disabled=false}return}
+    try{await saveDraft();steps(2);render();window.scrollTo(0,0);notify('Renseignements enregistrés')}catch(err){$('sv').textContent='Enregistrement impossible : '+(err.message||'réessayez.');b.disabled=false}return}
   if(b.id==='back1'){steps(1);render();return}
   if(b.id==='next2'){if(!FILES.length){$('upM').textContent='Déposez au moins un document.';$('upM').className='msg err';return}steps(3);render();return}
   if(b.id==='back2'){steps(2);render();return}
   if(b.dataset.rm){const{error}=await sb.storage.from('documents').remove([`p/${U.id}/${$('yr').value}/${b.dataset.rm}`]);if(error){$('upM').textContent='Retrait impossible.';return}listFiles();return}
   if(b.id==='send'){b.disabled=true;$('sM').textContent='Envoi…';const fich=FILES.map(f=>({path:`p/${U.id}/${$('yr').value}/${f.name}`,nom:f.name.replace(/^\d+-/,''),taille:f.metadata?.size||0}));
     const{data,error}=await sb.from('pc_soumissions').update({fichiers:fich,statut:'reçue',updated_at:new Date().toISOString()}).eq('id',SOU.id).select().single();
-    if(error){$('sM').textContent='Envoi impossible : '+error.message;b.disabled=false;return}SOU=data;render();window.scrollTo(0,0)}});
+    if(error){$('sM').textContent='Envoi impossible : '+error.message;b.disabled=false;return}SOU=data;render();window.scrollTo(0,0);notify('Dossier envoyé à Boujrad CPA Inc. Merci!')}});
 document.addEventListener('dragover',e=>{const d=e.target.closest?.('#drop');if(d){e.preventDefault();d.classList.add('over')}});
 document.addEventListener('dragleave',e=>{e.target.closest?.('#drop')?.classList.remove('over')});
 document.addEventListener('drop',e=>{const d=e.target.closest?.('#drop');if(d){e.preventDefault();d.classList.remove('over');upload([...e.dataTransfer.files])}});

@@ -4,6 +4,7 @@ const cfg=window.CONFIG||{},sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const SITE=cfg.APP_URL||location.origin,dl=x=>x?new Date((x.length===10?x+'T12:00':x)).toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'}):'—';
 let ACC=[],PUB=[],MSG=[],CLI=[],DEM=[],PCS=[],TAB=location.hash==='#paiements'?'pay':'board',PAYF='',NEWPAY=new Set(),EDIT=null,FILT='ouvertes',PCY='';
+const notify=(m,err)=>{let t=document.getElementById('ntf');if(!t){t=document.createElement('div');t.id='ntf';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=(err?'':'✓ ')+m;t.className=(err?'err ':'')+'on';clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),4200)};
 const fn=async(name,body)=>{const{data,error}=await sb.functions.invoke(name,{body});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
 
 /* périodes terminées (même logique que la fonction cc-rappels) */
@@ -88,7 +89,7 @@ async function saveFiche(){const c=EDIT,g=id=>$(id)?.value.trim()||null,tx=$('cT
   if(!row.nom){$('cM').textContent='Nom requis.';$('cM').className='msg err';return}
   const r=c.id?await sb.from('cc_clients').update(row).eq('id',c.id).select().single():await sb.from('cc_clients').insert(row).select().single();
   if(r.error){$('cM').textContent=r.error.message;$('cM').className='msg err';return}
-  await load();EDIT=CLI.find(x=>x.id===r.data.id)||r.data;TAB='cli';render();$('cM').textContent=c.id?'Enregistré.':'Client créé. Prochaine étape : le contrat de services.';$('cM').className='msg ok'}
+  await load();EDIT=CLI.find(x=>x.id===r.data.id)||r.data;TAB='cli';render();$('cM').textContent=c.id?'Enregistré.':'Client créé. Prochaine étape : le contrat de services.';$('cM').className='msg ok';notify(c.id?'Fiche client enregistrée':'Client créé')}
 
 /* ---------- contrat de services ---------- */
 const UN=window.CONTRAT?.UNITES||{};
@@ -136,7 +137,7 @@ const withSig=(h,k)=>k.signe_le?h.replace('</body>',`<div style="border:2px soli
 function kPrint(h){const w=window.open('','_blank');if(!w){alert('Autorisez les fenêtres surgissantes pour imprimer.');return}w.document.open();w.document.write(h.replace('</body>','<script>setTimeout(()=>print(),300)<\/script></body>'));w.document.close()}
 async function kSave(){const d=kData(),row={client_id:EDIT.id,numero:CED.numero,donnees:d,updated_at:new Date().toISOString()};
   const r=CED.id?await sb.from('cc_contrats').update(row).eq('id',CED.id).select().single():await sb.from('cc_contrats').insert({...row,statut:'brouillon'}).select().single();
-  if(r.error){$('kM').textContent=r.error.message;$('kM').className='msg err';return null}CED.id=r.data.id;const i=CTR.findIndex(x=>x.id===r.data.id);i>=0?CTR[i]=r.data:CTR.push(r.data);$('kM').textContent='Brouillon enregistré.';$('kM').className='msg ok';return r.data}
+  if(r.error){$('kM').textContent=r.error.message;$('kM').className='msg err';return null}CED.id=r.data.id;const i=CTR.findIndex(x=>x.id===r.data.id);i>=0?CTR[i]=r.data:CTR.push(r.data);$('kM').textContent='Brouillon enregistré.';$('kM').className='msg ok';notify('Brouillon du contrat enregistré');return r.data}
 function kNew(src){const c=EDIT,yr=new Date().getFullYear(),n=CTR.filter(x=>(x.numero||'').startsWith(`C-${yr}-`)).length+1;
   const base=src?JSON.parse(JSON.stringify(src.donnees)):window.CONTRAT.defauts(c);base.sigNom=base.signataire?.nom||'';base.sigTitre=base.signataire?.titre||'';base.date=new Date().toISOString().slice(0,10);
   if(!src){base.services={};if(c.type==='particulier')base.services.t1={on:true};else{['tdl','tps','compil','t2'].forEach(k=>base.services[k]={on:true});if(c.employeur)['paie','releves'].forEach(k=>base.services[k]={on:true});base.services.conseil={on:true}}}
@@ -302,9 +303,9 @@ setInterval(async()=>{if($('app').hidden||document.hidden)return;const{data}=awa
   const avant=PUB.filter(p=>p.paye_le).length;PUB=data;badge();if(TAB==='pay'&&PUB.filter(p=>p.paye_le).length!==avant)rPay()},60000);
 const reopen=async()=>{const id=EDIT?.id;await load();EDIT=CLI.find(c=>c.id===id)||null;TAB='cli';render()};
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||!EDIT?.id)return;const c=EDIT;
-  if(b.id==='aNew'){const{error}=await sb.from('cc_acces').insert({client_id:c.id,courriel:$('aCo').value.trim()||null});if(error){$('aMsg').textContent=error.message;return}reopen();return}
+  if(b.id==='aNew'){const{error}=await sb.from('cc_acces').insert({client_id:c.id,courriel:$('aCo').value.trim()||null});if(error){$('aMsg').textContent=error.message;return}await reopen();notify('Code d’accès créé : copiez l’invitation pour le client');return}
   if(b.dataset.inv){const a=ACC.find(x=>x.id===b.dataset.inv);const lien=`${SITE}/portail.html?invite=${a.code}`;const txt=`Bonjour,\n\nVotre espace Entreprise pour ${c.nom} est prêt sur le portail client de Boujrad CPA Inc. Vous pourrez y déposer vos documents, consulter vos déclarations et les montants à payer, et nous écrire.\n\n1. Ouvrez ${lien}\n2. Créez votre compte (ou connectez-vous).\n3. Votre code d’invitation : ${a.code}\n\nCordialement,\nBoujrad CPA Inc.`;
-    try{await navigator.clipboard.writeText(txt);b.textContent='Copiée'}catch(err){prompt('Copiez l’invitation :',txt)}return}
+    try{await navigator.clipboard.writeText(txt);b.textContent='Copiée';notify('Invitation copiée : collez-la dans un courriel au client')}catch(err){prompt('Copiez l’invitation :',txt)}return}
   if(b.dataset.accdel){await sb.from('cc_acces').delete().eq('id',b.dataset.accdel);reopen();return}
   if(b.id==='pGo'){const titre=$('pT').value.trim();if(!titre){$('pMsg').textContent='Titre requis.';return}b.disabled=true;$('pMsg').textContent='Publication…';const fich=[];
     for(const f of $('pF').files){const path=`c/${c.id}/cabinet/${Date.now()}-${f.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-120)}`;const{error}=await sb.storage.from('documents').upload(path,f,{contentType:f.type||undefined});if(error){$('pMsg').textContent='Envoi du fichier impossible : '+error.message;b.disabled=false;return}fich.push({path,nom:f.name,taille:f.size})}
@@ -313,10 +314,10 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
     const{data:ins,error}=await sb.from('cc_publications').insert({client_id:c.id,titre,type:$('pTy').value,periode:per?.lbl||null,periode_fin:per?.fin||null,organisme:org,montant:org==='Aucun paiement'||isNaN(mo)?null:mo,echeance:$('pEc').value||null,code_paiement:$('pCo').value.trim()||null,instructions:$('pIn').value.trim()||null,fichiers:fich}).select('id').single();
     if(error){$('pMsg').textContent=error.message;b.disabled=false;return}
     let note='Publié.';if($('pAv').checked){try{const r=await fn(cfg.FONCTION_AVIS||'cc-avis',{action:'publication',publication_id:ins.id});note=`Publié. Avis envoyé à ${r.envoye_a.join(', ')}.`}catch(err){note='Publié, mais le courriel n’a pas pu partir : '+err.message}}
-    await reopen();$('pMsg')&&($('pMsg').textContent=note);return}
-  if(b.dataset.avis){b.disabled=true;try{const r=await fn(cfg.FONCTION_AVIS||'cc-avis',{action:'publication',publication_id:b.dataset.avis});await reopen();$('pMsg').textContent='Avis envoyé à '+r.envoye_a.join(', ')+'.'}catch(err){$('pMsg').textContent='Envoi impossible : '+err.message;b.disabled=false}return}
+    await reopen();$('pMsg')&&($('pMsg').textContent=note);notify(note,/pas pu/.test(note));return}
+  if(b.dataset.avis){b.disabled=true;try{const r=await fn(cfg.FONCTION_AVIS||'cc-avis',{action:'publication',publication_id:b.dataset.avis});await reopen();$('pMsg').textContent='Avis envoyé à '+r.envoye_a.join(', ')+'.';notify('Avis envoyé à '+r.envoye_a.join(', '))}catch(err){$('pMsg').textContent='Envoi impossible : '+err.message;b.disabled=false}return}
   if(b.dataset.pubdel){await sb.from('cc_publications').delete().eq('id',b.dataset.pubdel);reopen();return}
-  if(b.id==='rGo'){const t=$('rTx').value.trim();if(!t)return;const{error}=await sb.from('cc_messages').insert({client_id:c.id,auteur:'cabinet',texte:t.slice(0,5000)});if(!error)reopen()}});
+  if(b.id==='rGo'){const t=$('rTx').value.trim();if(!t)return;const{error}=await sb.from('cc_messages').insert({client_id:c.id,auteur:'cabinet',texte:t.slice(0,5000)});if(!error){await reopen();notify('Réponse envoyée dans le portail du client')}else notify('Envoi impossible : '+error.message,1)}});
 
 /* ---------- événements ---------- */
 document.addEventListener('change',e=>{if(e.target.id==='pcY'){PCY=e.target.value;rPc()}});
@@ -325,14 +326,14 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button,a[d
   if(b.dataset.file){e.preventDefault();const{data,error}=await sb.storage.from('documents').createSignedUrl(b.dataset.file,300);if(error){alert('Ouverture impossible : '+error.message);return}window.open(data.signedUrl,'_blank','noopener');return}
   if(b.id==='gen'){b.disabled=true;const rows=CLI.filter(c=>c.actif).flatMap(c=>periodes(c).filter(p=>(Date.now()-new Date(p.fin))/864e5<=120&&!DEM.some(d=>d.client_id===c.id&&d.periode===p.periode)).map(p=>({...p,client_id:c.id})));
     const{error}=await sb.from('cc_demandes').insert(rows);$('dM').textContent=error?'Création impossible : '+error.message:`${rows.length} demande(s) créée(s).`;load();return}
-  if(b.id==='tour'){b.disabled=true;$('dM').textContent='Envoi des rappels…';try{const r=await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{});$('dM').textContent=`${r.crees} demande(s) créée(s), ${r.envoyes} courriel(s) envoyé(s).`+(r.erreurs?.length?' Erreurs : '+r.erreurs.join(' · '):'');load()}catch(err){$('dM').textContent='Envoi impossible : '+err.message;b.disabled=false}return}
-  if(b.dataset.send){b.disabled=true;try{await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{demande_id:b.dataset.send});$('dM').textContent='Courriel envoyé.';load()}catch(err){$('dM').textContent='Envoi impossible : '+err.message;b.disabled=false}return}
+  if(b.id==='tour'){b.disabled=true;$('dM').textContent='Envoi des rappels…';try{const r=await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{});$('dM').textContent=`${r.crees} demande(s) créée(s), ${r.envoyes} courriel(s) envoyé(s).`+(r.erreurs?.length?' Erreurs : '+r.erreurs.join(' · '):'');load()}catch(err){$('dM').textContent='Envoi impossible : '+err.message;notify('Envoi impossible : '+err.message,1);b.disabled=false}return}
+  if(b.dataset.send){b.disabled=true;try{await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{demande_id:b.dataset.send});$('dM').textContent='Courriel envoyé.';notify('Demande de documents envoyée au client');load()}catch(err){$('dM').textContent='Envoi impossible : '+err.message;notify('Envoi impossible : '+err.message,1);b.disabled=false}return}
   if(b.dataset.link){const u=`${SITE}/portail.html?depot=${b.dataset.link}`;try{await navigator.clipboard.writeText(u);$('dM').textContent='Lien copié : '+u}catch(err){$('dM').textContent=u}return}
   if(b.dataset.st){const v=b.dataset.v;const{error}=await sb.from('cc_demandes').update({statut:v,...(v==='apportée au bureau'?{recu_le:new Date().toISOString()}:{})}).eq('id',b.dataset.st);$('dM').textContent=error?error.message:'Statut mis à jour.';load();return}
   if(b.dataset.edit){EDIT=CLI.find(c=>c.id===b.dataset.edit);FT='fiche';CED=null;rCli();window.scrollTo(0,0);return}
   if(b.id==='cCancel'){EDIT=null;CED=null;rCli();return}
   if(b.dataset.pc){pcOpen(b.dataset.pc);return}if(b.id==='pcX'){$('pcD').innerHTML='';return}
-  if(b.id==='pcSave'){const{error}=await sb.from('pc_soumissions').update({statut:$('pcS').value,note_cabinet:$('pcN').value.trim()||null,updated_at:new Date().toISOString()}).eq('id',b.dataset.id);$('pcM').textContent=error?error.message:'Enregistré.';if(!error){const id=b.dataset.id;await load();TAB='pc';render();pcOpen(id)}}});
+  if(b.id==='pcSave'){const{error}=await sb.from('pc_soumissions').update({statut:$('pcS').value,note_cabinet:$('pcN').value.trim()||null,updated_at:new Date().toISOString()}).eq('id',b.dataset.id);$('pcM').textContent=error?error.message:'Enregistré.';if(!error){notify('Dossier mis à jour');const id=b.dataset.id;await load();TAB='pc';render();pcOpen(id)}}});
 
 
 /* ---------- facturation et débits préautorisés ---------- */
@@ -375,7 +376,7 @@ function vPrel(){if(!FD)FD=prochainJour(+(PAR.jour||1));const per=FD.slice(0,7),
 async function creerFactures(){const per=FD.slice(0,7),jr=+FD.slice(8,10),rows=ACCD.filter(a=>a.statut==='actif'&&a.jour===jr&&a.debut<=FD&&(CLI.find(c=>c.id===a.client_id)?.statut||'actif')==='actif'&&!(!a.renonce_preavis&&a.signe_le&&new Date(a.signe_le)>new Date(new Date(FD+'T12:00')-10*864e5))&&!FAC.some(f=>f.client_id===a.client_id&&f.periode===per&&f.mode==='dpa'&&f.statut!=='annulée'));
   const ins=rows.map(a=>{const k=CTR.find(x=>x.id===a.contrat_id),t=F().taxes(a.montant);return{client_id:a.client_id,periode:per,date:new Date().toISOString().slice(0,10),mode:'dpa',statut:'à prélever',emetteur:emetteur(),
     lignes:[{description:`Honoraires professionnels — ${F().MOIS(per)}${k?` (contrat ${k.numero})`:''}`,montant:+a.montant}],...t}});
-  if(!ins.length)return;const{error}=await sb.from('cc_factures').insert(ins);const msg=error?'Création impossible : '+error.message:`${ins.length} facture(s) créée(s). Elles sont visibles dans le portail des clients.`;await load();$('fdM')&&($('fdM').textContent=msg)}
+  if(!ins.length)return;const{error}=await sb.from('cc_factures').insert(ins);const msg=error?'Création impossible : '+error.message:`${ins.length} facture(s) créée(s). Elles sont visibles dans le portail des clients.`;await load();$('fdM')&&($('fdM').textContent=msg);notify(msg,!!error)}
 async function genererFichier(){const p=PAR,need=[['organisme',/^\d{10}$/,'numéro d’organisme Desjardins (10 chiffres)'],['nomCourt',/./,'nom abrégé'],['nomLong',/./,'nom complet'],['transitRetour',/^\d{5}$/,'transit du compte de retour'],['compteRetour',/^[\d-]{5,12}$/,'compte de retour']].filter(([k,re])=>!re.test(p[k]||''));
   if(need.length){$('fdM').textContent='Complétez les paramètres : '+need.map(x=>x[2]).join(', ')+'.';$('fdM').className='msg err';FV='par';setTimeout(rFact,1500);return}
   const jr=+FD.slice(8,10),acc=ACCD.filter(a=>a.statut==='actif'&&a.jour===jr),tx=[],ids=[];
@@ -386,7 +387,7 @@ async function genererFichier(){const p=PAR,need=[['organisme',/^\d{10}$/,'numé
   if(error){$('fdM').textContent=error.message;return}
   let txt;try{txt=F().fichier005(p,lot.numero_fichier,new Date().toISOString().slice(0,10),FD,tx)}catch(err){$('fdM').textContent='Fichier invalide : '+err.message;await sb.from('cc_lots_dpa').delete().eq('id',lot.id);return}
   await sb.from('cc_lots_dpa').update({contenu:txt}).eq('id',lot.id);await sb.from('cc_factures').update({statut:'transmise',lot_id:lot.id}).in('id',ids);
-  telecharger(`DPA-Desjardins-${String(lot.numero_fichier).padStart(4,'0')}-${FD}.txt`,txt);await load();$('fdM').textContent='Fichier généré et téléchargé. Déposez-le dans AccèsD Affaires.';$('fdM').className='msg ok'}
+  telecharger(`DPA-Desjardins-${String(lot.numero_fichier).padStart(4,'0')}-${FD}.txt`,txt);await load();$('fdM').textContent='Fichier généré et téléchargé. Déposez-le dans AccèsD Affaires.';$('fdM').className='msg ok';notify('Fichier Desjardins généré et téléchargé')}
 function telecharger(nom,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=nom;document.body.appendChild(a);a.click();a.remove()}
 
 /* -- factures -- */
@@ -447,14 +448,14 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     await sb.from('cc_lots_dpa').update({statut:v}).eq('id',l.id);
     if(v==='traité')await sb.from('cc_factures').update({statut:'payée',paye_le:l.date_prelevement}).eq('lot_id',l.id).eq('statut','transmise');
     if(v==='annulé')await sb.from('cc_factures').update({statut:'à prélever',lot_id:null}).eq('lot_id',l.id).eq('statut','transmise');
-    await load();return}
+    await load();notify({transmis:'Fichier marqué comme transmis',traité:'Prélèvements reçus : factures payées',annulé:'Fichier annulé'}[v]);return}
   if(ds.fprint){const f=FAC.find(x=>x.id===ds.fprint);kPrint(F().factureHtml(f,CLI.find(c=>c.id===f.client_id)||{}));return}
   if(ds.fst){const f=FAC.find(x=>x.id===ds.fst),v=ds.v;
     if(v==='annulée'&&!confirm(`Annuler la facture ${f.numero}?`))return;
     const up={statut:v};if(v==='payée')up.paye_le=new Date().toISOString().slice(0,10);if(v==='à prélever')up.lot_id=null;
     await sb.from('cc_factures').update(up).eq('id',f.id);
     if(v==='rejetée')await sb.from('cc_taches').insert({client_id:f.client_id,titre:`Débit refusé — facture ${f.numero} (${fmt(f.total)})`,details:'Communiquer avec le client, confirmer son compte, puis cliquer sur « Reprélever » dans la facture.',echeance:new Date(Date.now()+3*864e5).toISOString().slice(0,10),priorite:'haute'});
-    await load();return}
+    await load();notify({payée:'Facture marquée payée',rejetée:'Débit refusé : une tâche de relance a été créée',annulée:'Facture annulée','à prélever':'Facture remise au prochain prélèvement'}[v]);return}
   if('fnew' in ds){$('fnBox').innerHTML=facForm(ds.fnew||CLI[0]?.id);return}
   if(b.id==='fnAdd'){$('fnL').insertAdjacentHTML('beforeend',fnRow());return}
   if(b.id==='fnX'){$('fnBox').innerHTML='';return}
@@ -463,10 +464,10 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     if(m==='dpa'&&!acActif(cid)){$('fnMsg').textContent='Ce client n’a pas d’accord de DPA actif : choisissez « Virement ou autre ».';return}
     const t=F().taxes(lignes.reduce((s,l)=>s+l.montant,0),$('fnT').checked);b.disabled=true;
     const{error}=await sb.from('cc_factures').insert({client_id:cid,lignes,...t,mode:m,statut:m==='dpa'?'à prélever':'à payer',echeance:m==='autre'?$('fnE').value||null:null,emetteur:emetteur(),note:$('fnN').value.trim()||null,date:new Date().toISOString().slice(0,10)});
-    if(error){$('fnMsg').textContent=error.message;b.disabled=false;return}await load();return}
+    if(error){$('fnMsg').textContent=error.message;b.disabled=false;return}await load();notify('Facture créée');return}
   if(b.id==='parSave'){const v={};document.querySelectorAll('[data-par]').forEach(i=>v[i.dataset.par]=i.value.trim());
     if(v.organisme&&!/^\d{10}$/.test(v.organisme)){$('parM').textContent='Le numéro d’organisme doit avoir 10 chiffres.';return}
-    const{error}=await sb.from('cc_parametres').upsert({cle:'facturation',valeur:v,updated_at:new Date().toISOString()});$('parM').textContent=error?error.message:'Enregistré.';if(!error)PAR=v;return}
+    const{error}=await sb.from('cc_parametres').upsert({cle:'facturation',valeur:v,updated_at:new Date().toISOString()});$('parM').textContent=error?error.message:'Enregistré.';if(!error){PAR=v;notify('Paramètres de facturation enregistrés')}return}
   if(ds.acshow){const a=ACCD.find(x=>x.id===ds.acshow);$('acNo').textContent=a.compte;b.remove();return}
   if(ds.acst){const v=ds.v;if(v==='annulé'&&!confirm('Annuler l’accord de DPA? Aucun prélèvement ne sera plus fait pour ce client.'))return;
     await sb.from('cc_dpa_accords').update({statut:v,...(v==='annulé'?{annule_le:new Date().toISOString()}:{})}).eq('id',ds.acst);await load();return}
@@ -475,7 +476,7 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     if(!confirm('Enregistrer cet accord? L’accord actif actuel, s’il y en a un, sera remplacé.'))return;
     await sb.from('cc_dpa_accords').update({statut:'annulé',annule_le:new Date().toISOString(),note:'Remplacé'}).eq('client_id',EDIT.id).eq('statut','actif');
     const{error}=await sb.from('cc_dpa_accords').insert({client_id:EDIT.id,categorie:EDIT.type==='particulier'?'personnel':'entreprise',titulaire:g('apT'),institution:g('apI'),transit:g('apR'),compte:g('apC'),montant:m,jour:j,debut:g('apD'),renonce_preavis:$('apP').checked,signe_le:g('apS')+'T12:00:00',signe_nom:g('apT'),source:'papier',statut:'actif'});
-    if(error){$('apMsg').textContent=error.message;return}await load();return}});
+    if(error){$('apMsg').textContent=error.message;return}await load();notify('Accord de débits préautorisés enregistré');return}});
 
 /* ---------- événements : dossiers, contrats, tâches, échéancier ---------- */
 const who=()=>$('whoE')?.textContent||'';
@@ -509,19 +510,19 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
     let r=await sb.from('cc_contrats').update({statut:'envoyé',html:h,envoye_le:now,updated_at:now}).eq('id',k.id);if(r.error){$('kM').textContent=r.error.message;b.disabled=false;return}
     const{data:pub,error}=await sb.from('cc_publications').insert({client_id:c.id,titre:`Contrat de services ${k.numero} à signer`,type:'Contrat de services',organisme:'Aucun paiement',contrat_id:k.id,fichiers:[]}).select('id').single();
     let note='Contrat envoyé dans le portail du client.';if(!error){try{const a=await fn(cfg.FONCTION_AVIS||'cc-avis',{action:'publication',publication_id:pub.id});note+=` Avis envoyé à ${a.envoye_a.join(', ')}.`}catch(err){note+=' Le courriel d’avis n’a pas pu partir : '+err.message}}
-    await load();$('kM')&&($('kM').textContent=note);return}
+    await load();$('kM')&&($('kM').textContent=note);notify(note,/pas pu/.test(note));return}
   /* tâches et journal */
-  if(ds.tadd){const p=ds.tadd,ti=$(p+'T').value.trim();if(!ti)return;const{error}=await sb.from('cc_taches').insert({titre:ti,echeance:$(p+'E').value||null,responsable:$(p+'R').value.trim()||null,priorite:$(p+'P').value,client_id:p==='f'?EDIT.id:($('gC').value||null)});if(!error)await load();return}
-  if(ds.tdo){await sb.from('cc_taches').update({statut:ds.v,fait_le:ds.v==='fait'?new Date().toISOString():null}).eq('id',ds.tdo);await load();return}
+  if(ds.tadd){const p=ds.tadd,ti=$(p+'T').value.trim();if(!ti)return;const{error}=await sb.from('cc_taches').insert({titre:ti,echeance:$(p+'E').value||null,responsable:$(p+'R').value.trim()||null,priorite:$(p+'P').value,client_id:p==='f'?EDIT.id:($('gC').value||null)});if(!error){await load();notify('Tâche ajoutée')}return}
+  if(ds.tdo){await sb.from('cc_taches').update({statut:ds.v,fait_le:ds.v==='fait'?new Date().toISOString():null}).eq('id',ds.tdo);await load();notify(ds.v==='fait'?'Tâche terminée':'Tâche rouverte');return}
   if(ds.tdel){if(!confirm('Supprimer cette tâche?'))return;await sb.from('cc_taches').delete().eq('id',ds.tdel);await load();return}
   if(ds.tf){TF=ds.tf;rTache();return}
-  if(b.id==='nAdd'){const tx=$('nTx').value.trim();if(!tx)return;const{error}=await sb.from('cc_notes').insert({client_id:EDIT.id,type:$('nTy').value,texte:tx.slice(0,5000),auteur:who()});if(!error)await load();return}
+  if(b.id==='nAdd'){const tx=$('nTx').value.trim();if(!tx)return;const{error}=await sb.from('cc_notes').insert({client_id:EDIT.id,type:$('nTy').value,texte:tx.slice(0,5000),auteur:who()});if(!error){await load();notify('Ajouté au journal du dossier')}return}
   /* échéancier */
   if(ds.em){if(ds.em==='0')EM=new Date().toISOString().slice(0,7);else{const[y,m]=EM.split('-').map(Number),d=new Date(Date.UTC(y,m-1+ +ds.em,1));EM=d.toISOString().slice(0,7)}rBoard();return}
-  if(ds.done){const[cid,cle]=ds.done.split('|');b.disabled=true;const{error}=await sb.from('cc_echeances').insert({client_id:cid,cle,par:who()});if(!error)await load();return}
+  if(ds.done){const[cid,cle]=ds.done.split('|');b.disabled=true;const{error}=await sb.from('cc_echeances').insert({client_id:cid,cle,par:who()});if(!error){await load();notify('Échéance marquée comme faite')}return}
   if(ds.undo){const[cid,cle]=ds.undo.split('|');await sb.from('cc_echeances').delete().eq('client_id',cid).eq('cle',cle);await load();return}
   if(b.id==='bPrint'){window.print();return}
-  if(b.id==='bMail'){b.disabled=true;$('bM').textContent='Envoi…';try{const r=await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{sommaire:true});$('bM').textContent=typeof r.sommaire==='number'?`Sommaire envoyé (${r.sommaire} échéance(s), ${r.retard} en retard).`:'Envoi impossible : '+r.sommaire}catch(err){$('bM').textContent='Envoi impossible : '+err.message}b.disabled=false;return}});
+  if(b.id==='bMail'){b.disabled=true;$('bM').textContent='Envoi…';try{const r=await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{sommaire:true});$('bM').textContent=typeof r.sommaire==='number'?`Sommaire envoyé (${r.sommaire} échéance(s), ${r.retard} en retard).`:'Envoi impossible : '+r.sommaire;notify($('bM').textContent,typeof r.sommaire!=='number')}catch(err){$('bM').textContent='Envoi impossible : '+err.message}b.disabled=false;return}});
 
 /* ---------- connexion (membres du cabinet seulement) ---------- */
 async function start(s){const{data:m}=await sb.from('tl_membres').select('role').eq('user_id',s.user.id).maybeSingle();

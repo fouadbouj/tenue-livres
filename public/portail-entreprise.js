@@ -1,5 +1,6 @@
 /* Portail client — espace Entreprise : documents du cabinet à payer, dépôt de documents, échéancier, messages */
 (()=>{
+const notify=(m,err)=>{let t=document.getElementById('ntf');if(!t){t=document.createElement('div');t.id='ntf';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=(err?'':'✓ ')+m;t.className=(err?'err ':'')+'on';clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),4500)};
 const $=id=>document.getElementById(id);let sb,U,esc,ENTS=[],CUR=null,SUB='pub',DEP=null,UP=[];
 const dl=x=>x?new Date((x.length===10?x+'T12:00':x)).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'}):'—';
 const money=v=>v==null?'':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(v);
@@ -102,7 +103,7 @@ document.addEventListener('change',e=>{const t=e.target;if(!$('ent')||$('ent').h
 document.addEventListener('dragover',e=>{const d=e.target.closest?.('#eDrop');if(d){e.preventDefault();d.classList.add('over')}});
 document.addEventListener('drop',e=>{const d=e.target.closest?.('#eDrop');if(d){e.preventDefault();d.classList.remove('over');upload([...e.dataTransfer.files])}});
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||$('ent').hidden)return;const ent=ENTS.find(x=>x.id===CUR);
-  if(b.id==='iGo'){const err=await join($('iCode').value);if(err){$('iM').textContent=err==='code invalide ou déjà utilisé'?'Code invalide ou déjà utilisé.':err;$('iM').className='msg err';return}loadEnts();return}
+  if(b.id==='iGo'){const err=await join($('iCode').value);if(err){$('iM').textContent=err==='code invalide ou déjà utilisé'?'Code invalide ou déjà utilisé.':err;$('iM').className='msg err';return}await loadEnts();notify('Entreprise ajoutée à votre portail');return}
   if(b.id==='eAdd'){CUR=null;ENTS=[];render();return}
   if(b.dataset.sub){SUB=b.dataset.sub;render();return}
   if(b.dataset.ctr){openCtr(b.dataset.ctr);return}
@@ -116,15 +117,15 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
     b.disabled=true;const{error}=await sb.rpc('pc_signer_contrat',{p_id:b.dataset.id,p_nom:nom,p_titre:$('kTi').value.trim()});
     if(error){$('kMsg').textContent='Signature impossible : '+error.message;$('kMsg').className='msg err';b.disabled=false;return}
     const pub=(await sb.from('cc_publications').select('id').eq('contrat_id',b.dataset.id).maybeSingle()).data;if(pub)sb.functions.invoke(window.CONFIG?.FONCTION_AVIS||'cc-avis',{body:{action:'signature',publication_id:pub.id}}).catch(()=>{});
-    openCtr(b.dataset.id,'Merci! Votre contrat est signé. Une copie reste disponible ici en tout temps.');return}
+    openCtr(b.dataset.id,'Merci! Votre contrat est signé. Une copie reste disponible ici en tout temps.');notify('Contrat signé. Merci!');return}
   if(b.id==='kRet'){rPub(ent);return}
   if(b.id==='kImp'){const w=window.open('','_blank');if(w){w.document.write($('kFr').srcdoc.replace('</body>','<script>setTimeout(()=>print(),300)<\/script></body>'));w.document.close()}return}
   if(b.dataset.copy){navigator.clipboard?.writeText(b.dataset.copy);b.textContent='Copié';return}
   if(b.dataset.open){const{data,error}=await sb.storage.from('documents').createSignedUrl(b.dataset.open,300);if(!error)window.open(data.signedUrl,'_blank','noopener');if(b.dataset.pub)sb.rpc('pc_publication',{p_id:b.dataset.pub,p_action:'vu'});return}
-  if(b.dataset.pay){b.disabled=true;await sb.rpc('pc_publication',{p_id:b.dataset.pay,p_action:b.dataset.v});if(b.dataset.v==='payé')sb.functions.invoke(window.CONFIG?.FONCTION_AVIS||'cc-avis',{body:{action:'paiement',publication_id:b.dataset.pay}}).catch(()=>{});rPub(ent);return}
+  if(b.dataset.pay){b.disabled=true;await sb.rpc('pc_publication',{p_id:b.dataset.pay,p_action:b.dataset.v});notify(b.dataset.v==='payé'?'Merci! Le cabinet est avisé de votre paiement':'Paiement remis à « à payer »');if(b.dataset.v==='payé')sb.functions.invoke(window.CONFIG?.FONCTION_AVIS||'cc-avis',{body:{action:'paiement',publication_id:b.dataset.pay}}).catch(()=>{});rPub(ent);return}
   if(b.id==='eFin'){b.disabled=true;let r;if(DEP==='divers')r=await sb.from('cc_messages').insert({client_id:CUR,auteur:'client',user_id:U.id,texte:($('eNote')?.value||'').trim()||`${UP.length} document(s) déposé(s).`,fichiers:UP});
       else r=await sb.rpc('pc_depot_fini',{p_demande:DEP,p_fichiers:UP});
     if(r.error){$('eM').textContent='Envoi impossible : '+r.error.message;$('eM').className='msg err';b.disabled=false;return}
-    $('eBody').innerHTML=`<div class="info" style="font-size:16px"><strong>Merci!</strong> ${UP.length} document(s) bien reçu(s) par Boujrad CPA.</div>`;UP=[];DEP=null;return}
-  if(b.id==='mGo'){const t=$('mTxt').value.trim();if(!t)return;b.disabled=true;const{error}=await sb.from('cc_messages').insert({client_id:CUR,auteur:'client',user_id:U.id,texte:t.slice(0,5000)});if(error){$('mM').textContent='Envoi impossible.';b.disabled=false;return}rMsg(ent)}});
+    $('eBody').innerHTML=`<div class="info" style="font-size:16px"><strong>Merci!</strong> ${UP.length} document(s) bien reçu(s) par Boujrad CPA.</div>`;notify('Documents envoyés au cabinet');UP=[];DEP=null;return}
+  if(b.id==='mGo'){const t=$('mTxt').value.trim();if(!t)return;b.disabled=true;const{error}=await sb.from('cc_messages').insert({client_id:CUR,auteur:'client',user_id:U.id,texte:t.slice(0,5000)});if(error){$('mM').textContent='Envoi impossible.';b.disabled=false;return}rMsg(ent);notify('Message envoyé au cabinet')}});
 })();

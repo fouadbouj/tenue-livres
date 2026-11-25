@@ -1789,6 +1789,10 @@ function txSumHtml(E,f,t){const inR=e=>(!f||e.date>=f)&&(!t||e.date<=t);const fl
   <table class="rep"><tr class="sec"><td colspan="3">TVQ (Revenu Québec)</td></tr>${r('203','Ventes et autres recettes',rev)}${r('205','TVQ perçue',tvqV)}${r('206','Remboursements de la taxe sur les intrants (RTI)',rti)}${r('209',tvqV-rti>=0?'Taxe nette à remettre':'Remboursement net',Math.abs(tvqV-rti),'tot')}</table></div>
   <p class="note">Les repas et frais de représentation ne donnent droit qu’à 50 % des CTI et RTI.</p>`}
 
+/* ---------- confirmation d'action ---------- */
+function notify(m,err){let t=document.getElementById('ntf');if(!t){t=document.createElement('div');t.id='ntf';t.setAttribute('role','status');t.style.cssText='position:fixed;left:50%;bottom:26px;transform:translate(-50%,16px);opacity:0;color:#fff;padding:12px 20px;border-radius:12px;font-weight:600;font-size:15px;box-shadow:0 10px 30px rgba(11,22,38,.25);transition:opacity .2s,transform .2s;z-index:2000;pointer-events:none;max-width:min(560px,92vw);text-align:center';document.body.appendChild(t)}
+  t.textContent=(err?'':'✓ ')+m;t.style.background=err?'#b3261e':'#1d7a4f';t.style.opacity='1';t.style.transform='translate(-50%,0)';clearTimeout(t._h);t._h=setTimeout(()=>{t.style.opacity='0';t.style.transform='translate(-50%,16px)'},4500)}
+
 /* ---------- demande de précisions au client (compte transitoire) ---------- */
 let MAILL=[];
 async function trList(){if(!LED)LED=await loadLedger();const x=curEx();
@@ -1853,8 +1857,9 @@ $('mailPdf').onclick=()=>askDl('pdf');$('mailXls').onclick=()=>askDl('xlsx');
 $('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend');b.disabled=true;$('mailMsg').textContent='Préparation des pièces jointes…';
   try{const att=MAILL.length?[{filename:fnBase()+'.pdf',contentType:'application/pdf',content:b64(await askPdf())},{filename:fnBase()+'.xlsx',contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',content:b64(await askXlsx())}]:[];
     $('mailMsg').textContent='Envoi…';await window.tlSendEmail({to:$('mailTo').value.trim(),subject:$('mailSub').value,text:$('mailBody').value,attachments:att});
-    $('mailMsg').textContent=`Courriel envoyé au client avec ${att.length} pièce(s) jointe(s).`;C.demandes=[...(C.demandes||[]),{date:new Date().toISOString(),to:$('mailTo').value.trim(),n:MAILL.length}].slice(-50);saveClient()}
-  catch(e){$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Téléchargez le PDF et l’Excel, puis utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
+    const dest=$('mailTo').value.trim();C.demandes=[...(C.demandes||[]),{date:new Date().toISOString(),to:dest,n:MAILL.length}].slice(-50);saveClient();
+    const dl=$('mailDlg');dl.close?dl.close():dl.removeAttribute('open');notify(`Courriel envoyé à ${dest} avec le PDF et l’Excel joints`);if(document.querySelector('#side [data-t=home][aria-current]')||!$('tHome')?.hidden)renderHome().catch(()=>{})}
+  catch(e){notify('Envoi impossible : le courriel n’est pas parti',1);$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Téléchargez le PDF et l’Excel, puis utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
 
 /* ---------- accueil du dossier ---------- */
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
@@ -1868,7 +1873,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
     const cls=!P_.length?(fut?'fut':''):t?'r':'o',st=!P_.length?(fut?'À venir':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
-  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>Envoie la liste des transactions à préciser par courriel</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
+  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Dernière demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} (${d.n} transaction${d.n>1?'s':''})`:'Envoie la liste des transactions à préciser par courriel'})()}</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
   const miss=ms.filter(m=>m<now&&!by(m).length);if(miss.length)add('g',`${miss.length} mois sans relevé`,miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':''),'mo:'+miss[0]+':','Déposer');
   if(!x.ouv)add('g','Soldes d’ouverture à saisir','Les soldes au premier jour de l’exercice, pour un bilan complet.','je','Saisir');
   try{if(!MIS||MIS.ex!==x.id)await loadMis();}catch(e){}if(C?.id!==cid)return;
@@ -1879,7 +1884,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   $('hTodo').innerHTML=T.join('');
   try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
     const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
-    {const n=LED.filter(e=>e.todo&&e.date>=x.deb&&e.date<=x.fin).length;if(n&&!$('hTodo').querySelector('[data-askcli]'))$('hTodo').insertAdjacentHTML('afterbegin',`<li><i class="r"></i><div>${n} transaction${n>1?'s':''} au compte transitoire<small>Demandez les détails au client par courriel</small></div><button class="sm pri" data-askcli>Envoyer</button></li>`)}
+    {const n=LED.filter(e=>e.todo&&e.date>=x.deb&&e.date<=x.fin).length;if(n&&!$('hTodo').querySelector('[data-askcli]'))$('hTodo').insertAdjacentHTML('afterbegin',`<li><i class="r"></i><div>${n} transaction${n>1?'s':''} au compte transitoire<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} · en attente des réponses du client`:'Demandez les détails au client par courriel'})()}</small></div><button class="sm${(C.demandes||[]).length?'':' pri'}" data-askcli>${(C.demandes||[]).length?'Renvoyer':'Envoyer'}</button></li>`)}
     $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
 $('expChg').onclick=()=>setTab('rev');
 $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;
