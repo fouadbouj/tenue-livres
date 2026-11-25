@@ -18,7 +18,7 @@ Sans cette fonction, le bouton « Ouvrir dans ma messagerie » prépare le courr
 - `public/depot.html` : page de dépôt par lien (envoyée dans les rappels), sans compte.
 
 Installation (une fois) :
-1. Supabase → SQL Editor : exécuter `supabase/portail_centre.sql`.
+1. Supabase → SQL Editor : exécuter `supabase/portail_centre.sql`, puis `supabase/portail_entreprise.sql`.
 2. Edge Functions : créer `cc-depot` (désactiver « Enforce JWT verification ») et `cc-rappels` avec le code des dossiers correspondants.
 3. Secrets des fonctions : `RESEND_API_KEY`, `CRON_SECRET` (une phrase secrète au choix), facultatif `NOTIF_CABINET` (courriel du cabinet averti à chaque dépôt), `SITE_URL` = `https://app.boujradcpa.com`.
 4. Database → Extensions : activer `pg_cron` et `pg_net`, puis exécuter la commande `cron.schedule` en bas de `portail_centre.sql` (avec l'adresse du projet et le secret).

@@ -3,7 +3,7 @@
 const cfg=window.CONFIG||{},sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const SITE=cfg.APP_URL||location.origin,dl=x=>x?new Date((x.length===10?x+'T12:00':x)).toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'}):'—';
-let CLI=[],DEM=[],PCS=[],TAB='dem',EDIT=null,FILT='ouvertes',PCY='';
+let ACC=[],PUB=[],MSG=[],CLI=[],DEM=[],PCS=[],TAB='dem',EDIT=null,FILT='ouvertes',PCY='';
 const fn=async(name,body)=>{const{data,error}=await sb.functions.invoke(name,{body});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
 
 /* périodes terminées (même logique que la fonction cc-rappels) */
@@ -13,7 +13,8 @@ function periodes(c,auj=new Date()){const M=+String(c.fin_exercice).slice(0,2)||
     out.push({periode:`${pas===1?'M':pas===3?'T':'A'}-${iso(fin)}`,debut:iso(new Date(Date.UTC(y,m-pas,1))),fin:iso(fin),echeance:iso(pas===12?finMois(y,m+3):finMois(y,m+1))})}return out}
 const STP={'à envoyer':'g','envoyée':'g','reçue':'ok','apportée au bureau':'ok','annulée':''};
 
-async function load(){const[a,b,c]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false})]);
+async function load(){const[a,b,c,d,e,f]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at')]);
+  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
 function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['dem','cli','pc'].forEach(k=>$('t'+k).hidden=k!==TAB);({dem:rDem,cli:rCli,pc:rPc})[TAB]()}
@@ -39,9 +40,9 @@ function rCli(){const c=EDIT||{nom:'',contact:'',courriel:'',frequence:'trimestr
     <label class="f"><b>Fin d’exercice (mm-jj)</b><input id="cX" value="${esc(c.fin_exercice)}" placeholder="12-31"></label><label class="f"><b>Suivre à partir du</b><input id="cD" type="date" value="${esc(c.depuis)}"></label></div>
     <label class="f" style="margin-top:10px"><b>Documents demandés (texte du courriel)</b><textarea id="cT">${esc(c.documents)}</textarea></label>
     <label class="opt"><input type="checkbox" id="cA"${c.actif?' checked':''}> Rappels actifs</label>
-    <div class="row" style="margin-top:8px"><button class="pri" id="cSave">Enregistrer</button>${EDIT?'<button id="cCancel">Annuler</button>':''}<span class="msg" id="cM"></span></div></div>
-    <div class="card"><h2>Clients (${CLI.length})</h2><div class="scroll"><table><thead><tr><th>Client</th><th>Courriel</th><th>Fréquence</th><th>Prochaine période</th><th>Statut</th><th></th></tr></thead><tbody>
-    ${CLI.map(c=>{const p=periodes(c,new Date(Date.now()+400*864e5)).find(p=>new Date(p.fin)>=new Date());return `<tr><td><strong>${esc(c.nom)}</strong>${c.contact?`<br><small class="sub">${esc(c.contact)}</small>`:''}</td><td>${esc(c.courriel||'—')}</td><td>${esc(c.frequence)}</td><td>${p?`fin le ${dl(p.fin)}`:'—'}</td><td>${c.actif?'<span class="pill ok">Actif</span>':'<span class="pill">Inactif</span>'}</td><td><button class="sm" data-edit="${c.id}">Modifier</button></td></tr>`}).join('')||'<tr><td colspan="6" class="sub">Aucun client encore.</td></tr>'}</tbody></table></div></div>`}
+    <div class="row" style="margin-top:8px"><button class="pri" id="cSave">Enregistrer</button>${EDIT?'<button id="cCancel">Fermer</button>':''}<span class="msg" id="cM"></span></div></div>${EDIT?.id?portalPanel(EDIT):''}
+    <div class="card"><h2>Clients (${CLI.length})</h2><div class="scroll"><table><thead><tr><th>Client</th><th>Courriel</th><th>Fréquence</th><th>Prochaine période</th><th>Statut</th><th>Portail</th><th></th></tr></thead><tbody>
+    ${CLI.map(c=>{const p=periodes(c,new Date(Date.now()+400*864e5)).find(p=>new Date(p.fin)>=new Date());return `<tr><td><strong>${esc(c.nom)}</strong>${c.contact?`<br><small class="sub">${esc(c.contact)}</small>`:''}</td><td>${esc(c.courriel||'—')}</td><td>${esc(c.frequence)}</td><td>${p?`fin le ${dl(p.fin)}`:'—'}</td><td>${c.actif?'<span class="pill ok">Actif</span>':'<span class="pill">Inactif</span>'}</td><td>${ACC.some(a=>a.client_id===c.id&&a.user_id)?'<span class="pill ok">Lié</span>':'—'}${MSG.filter(m=>m.client_id===c.id&&m.auteur==='client'&&!m.lu).length?` <span class="pill r">${MSG.filter(m=>m.client_id===c.id&&m.auteur==='client'&&!m.lu).length} message(s)</span>`:''}</td><td><button class="sm" data-edit="${c.id}">Ouvrir</button></td></tr>`}).join('')||'<tr><td colspan="7" class="sub">Aucun client encore.</td></tr>'}</tbody></table></div></div>`}
 
 /* ---------- impôts personnels (portail) ---------- */
 const LAB={prenom:'Prénom',nom:'Nom',ddn:'Date de naissance',nas:'NAS',tel:'Téléphone',courriel:'Courriel',langue:'Langue',adresse:'Adresse',app:'App.',ville:'Ville',prov:'Province',cp:'Code postal',adresse31:'Adresse au 31 décembre',arrivee:'Arrivée au Canada/Québec',citoyen:'Citoyen canadien',elections:'Élections Canada',
@@ -64,6 +65,39 @@ async function pcOpen(id){const s=PCS.find(x=>x.id===id);if(!s)return;const f=s.
     <div class="grid" style="margin-top:10px"><label class="f"><b>Statut</b><select id="pcS">${['brouillon','reçue','en traitement','terminée'].map(o=>`<option${s.statut===o?' selected':''}>${o}</option>`).join('')}</select></label>
     <label class="f" style="grid-column:span 2"><b>Note visible par le client</b><input id="pcN" value="${esc(s.note_cabinet||'')}"></label></div>
     <div class="row" style="margin-top:10px"><button class="pri" id="pcSave" data-id="${s.id}">Enregistrer</button><span class="msg" id="pcM"></span></div></div>`;$('pcD').scrollIntoView({behavior:'smooth'})}
+
+
+/* ---------- portail entreprise : accès, documents publiés, messages ---------- */
+function portalPanel(c){const A=ACC.filter(a=>a.client_id===c.id),P=PUB.filter(p=>p.client_id===c.id),Ms=MSG.filter(m=>m.client_id===c.id),D=DEM.filter(d=>d.client_id===c.id&&(d.fichiers||[]).length);
+  const unread=Ms.filter(m=>m.auteur==='client'&&!m.lu);if(unread.length)sb.from('cc_messages').update({lu:true}).in('id',unread.map(m=>m.id)).then(()=>unread.forEach(m=>m.lu=true));
+  return `<div class="card"><h2>Accès au portail client</h2><p class="sub" style="font-size:14px">Remettez un code à chaque personne de l’entreprise qui doit accéder à l’espace Entreprise du portail. Le code ne sert qu’une fois.</p>
+    <table><thead><tr><th>Courriel</th><th>Code</th><th>Statut</th><th></th></tr></thead><tbody>${A.map(a=>`<tr><td>${esc(a.courriel||'—')}</td><td style="font-family:monospace">${esc(a.code)}</td><td>${a.user_id?`<span class="pill ok">Lié le ${dl(a.joint_le)}</span>`:'<span class="pill g">En attente</span>'}</td><td><div class="row" style="gap:6px">${a.user_id?'':`<button class="sm" data-inv="${a.id}">Copier l’invitation</button>`}<button class="sm danger" data-accdel="${a.id}">Retirer</button></div></td></tr>`).join('')||'<tr><td colspan="4" class="sub">Aucun accès.</td></tr>'}</tbody></table>
+    <div class="row" style="margin-top:10px;align-items:flex-end"><label class="f" style="width:300px"><b>Courriel de la personne</b><input id="aCo" type="email" value="${esc(c.courriel||'')}"></label><button id="aNew">Créer un code d’accès</button></div><div class="msg" id="aMsg"></div></div>
+  <div class="card"><h2>Publier un document pour le client</h2><p class="sub" style="font-size:14px">Ex. la déclaration de TPS/TVQ produite, avec le montant à payer, la date limite et le code de paiement. Le client la voit dans son portail.</p>
+    <div class="grid"><label class="f"><b class="req">Titre</b><input id="pT" placeholder="Déclaration TPS/TVQ — T3 2026"></label><label class="f"><b>Type</b><select id="pTy">${['Déclaration TPS/TVQ','Avis de paiement','Remise de DAS','Déclaration T2 / CO-17','États financiers','Lettre ou avis','Autre'].map(o=>`<option>${o}</option>`).join('')}</select></label>
+      <label class="f"><b>Période</b><input id="pPe" placeholder="1er juillet au 30 septembre 2026"></label><label class="f"><b>Montant à payer ($)</b><input id="pMo" inputmode="decimal" placeholder="0,00"></label>
+      <label class="f"><b>Date limite</b><input id="pEc" type="date"></label><label class="f"><b>Code ou référence de paiement</b><input id="pCo"></label></div>
+    <label class="f" style="margin-top:10px"><b>Instructions (facultatif)</b><textarea id="pIn" style="min-height:70px" placeholder="Payez par votre institution financière (bénéficiaire : Revenu Québec – TPS/TVQ) avec le numéro de référence ci-dessus."></textarea></label>
+    <label class="f" style="margin-top:10px"><b>Fichier(s)</b><input type="file" id="pF" multiple></label>
+    <div class="row" style="margin-top:10px"><button class="pri" id="pGo">Publier</button><span class="msg" id="pMsg"></span></div>
+    <h3>Publiés</h3><table><thead><tr><th>Document</th><th>Montant</th><th>Date limite</th><th>Client</th><th></th></tr></thead><tbody>${P.map(p=>`<tr><td><strong>${esc(p.titre)}</strong><br><small class="sub">${esc(p.type)} · ${dl(p.created_at)}</small>${(p.fichiers||[]).map(f=>`<br><a href="#" data-file="${esc(f.path)}">${esc(f.nom)}</a>`).join('')}</td><td>${p.montant!=null?Number(p.montant).toLocaleString('fr-CA',{style:'currency',currency:'CAD'}):'—'}</td><td>${dl(p.echeance)}</td>
+      <td>${p.paye_le?`<span class="pill ok">Payé (${dl(p.paye_le)})</span>`:p.vu_le?`<span class="pill">Vu ${dl(p.vu_le)}</span>`:'<span class="pill g">Pas encore vu</span>'}</td><td><button class="sm danger" data-pubdel="${p.id}">Retirer</button></td></tr>`).join('')||'<tr><td colspan="5" class="sub">Rien de publié.</td></tr>'}</tbody></table></div>
+  <div class="card"><h2>Messages et documents reçus</h2><div style="display:grid;gap:10px;max-height:420px;overflow:auto">${Ms.map(m=>`<div style="justify-self:${m.auteur==='cabinet'?'end':'start'};max-width:80%;background:${m.auteur==='cabinet'?'var(--soft)':'#fbf4e4'};border-radius:12px;padding:10px 14px"><small class="sub">${m.auteur==='cabinet'?'Cabinet':'Client'} · ${dl(m.created_at)}</small><div style="white-space:pre-wrap">${esc(m.texte)}</div>${(m.fichiers||[]).map(f=>`<a href="#" data-file="${esc(f.path)}">${esc(f.nom)}</a>`).join('<br>')}</div>`).join('')||'<p class="sub">Aucun message.</p>'}</div>
+    <label class="f" style="margin-top:12px"><b>Répondre au client</b><textarea id="rTx" style="min-height:70px"></textarea></label><div class="row" style="margin-top:8px"><button class="pri" id="rGo">Envoyer</button></div>
+    ${D.length?`<h3>Documents TPS/TVQ déposés</h3><ul>${D.map(d=>`<li>${dl(d.debut)} au ${dl(d.fin)} : ${(d.fichiers||[]).map(f=>`<a href="#" data-file="${esc(f.path)}">${esc(f.nom)}</a>`).join(', ')}</li>`).join('')}</ul>`:''}</div>`}
+const reopen=async()=>{const id=EDIT?.id;await load();EDIT=CLI.find(c=>c.id===id)||null;TAB='cli';render()};
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||!EDIT?.id)return;const c=EDIT;
+  if(b.id==='aNew'){const{error}=await sb.from('cc_acces').insert({client_id:c.id,courriel:$('aCo').value.trim()||null});if(error){$('aMsg').textContent=error.message;return}reopen();return}
+  if(b.dataset.inv){const a=ACC.find(x=>x.id===b.dataset.inv);const lien=`${SITE}/portail.html?invite=${a.code}`;const txt=`Bonjour,\n\nVotre espace Entreprise pour ${c.nom} est prêt sur le portail client de Boujrad CPA Inc. Vous pourrez y déposer vos documents, consulter vos déclarations et les montants à payer, et nous écrire.\n\n1. Ouvrez ${lien}\n2. Créez votre compte (ou connectez-vous).\n3. Votre code d’invitation : ${a.code}\n\nCordialement,\nBoujrad CPA Inc.`;
+    try{await navigator.clipboard.writeText(txt);b.textContent='Copiée'}catch(err){prompt('Copiez l’invitation :',txt)}return}
+  if(b.dataset.accdel){await sb.from('cc_acces').delete().eq('id',b.dataset.accdel);reopen();return}
+  if(b.id==='pGo'){const titre=$('pT').value.trim();if(!titre){$('pMsg').textContent='Titre requis.';return}b.disabled=true;$('pMsg').textContent='Publication…';const fich=[];
+    for(const f of $('pF').files){const path=`c/${c.id}/cabinet/${Date.now()}-${f.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-120)}`;const{error}=await sb.storage.from('documents').upload(path,f,{contentType:f.type||undefined});if(error){$('pMsg').textContent='Envoi du fichier impossible : '+error.message;b.disabled=false;return}fich.push({path,nom:f.name,taille:f.size})}
+    const mo=$('pMo').value.trim()?parseFloat($('pMo').value.replace(/\s/g,'').replace(',','.')):null;
+    const{error}=await sb.from('cc_publications').insert({client_id:c.id,titre,type:$('pTy').value,periode:$('pPe').value.trim()||null,montant:isNaN(mo)?null:mo,echeance:$('pEc').value||null,code_paiement:$('pCo').value.trim()||null,instructions:$('pIn').value.trim()||null,fichiers:fich});
+    if(error){$('pMsg').textContent=error.message;b.disabled=false;return}reopen();return}
+  if(b.dataset.pubdel){await sb.from('cc_publications').delete().eq('id',b.dataset.pubdel);reopen();return}
+  if(b.id==='rGo'){const t=$('rTx').value.trim();if(!t)return;const{error}=await sb.from('cc_messages').insert({client_id:c.id,auteur:'cabinet',texte:t.slice(0,5000)});if(!error)reopen()}});
 
 /* ---------- événements ---------- */
 document.addEventListener('change',e=>{if(e.target.id==='pcY'){PCY=e.target.value;rPc()}});

@@ -132,7 +132,7 @@ document.addEventListener('drop',e=>{const d=e.target.closest?.('#drop');if(d){e
 async function loadYear(){const y=+$('yr').value;$('view').innerHTML='<div class="card"><p class="sub">Chargement…</p></div>';
   const{data}=await sb.from('pc_soumissions').select('*').eq('user_id',U.id).eq('annee',y).maybeSingle();SOU=data||null;
   F=SOU?{...SOU.formulaire}:{courriel:U.email};TYPE=SOU?.type||'';steps(SOU&&SOU.statut==='brouillon'?1:1);render()}
-async function start(){$('auth').hidden=true;$('reset').hidden=true;$('app').hidden=false;$('who').hidden=false;$('whoE').textContent=U.email;
+async function start(){window.PORTAIL={sb,U,esc};document.dispatchEvent(new Event('portail-pret'));$('auth').hidden=true;$('reset').hidden=true;$('app').hidden=false;$('who').hidden=false;$('whoE').textContent=U.email;
   const{data}=await sb.from('pc_dossiers').select('*').eq('user_id',U.id).maybeSingle();DOS=data;
   const nm=DOS?.profil?.prenom||U.user_metadata?.nom?.split(' ')[0]||'';$('hi').textContent='Bonjour'+(nm?' '+nm:'');
   $('yr').innerHTML=[0,1,2,3].map(i=>Y0-i).map(y=>`<option value="${y}">${y}</option>`).join('');await loadYear()}

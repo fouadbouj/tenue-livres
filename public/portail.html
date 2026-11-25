@@ -41,7 +41,9 @@
 
 <main id="app" hidden>
   <h1 id="hi">Bonjour</h1>
-  <p class="sub">Préparez votre déclaration de revenus fédérale et du Québec en trois étapes : vos renseignements, vos documents, l’envoi.</p>
+  <nav class="tabs" id="space" style="margin-bottom:6px"><button data-sp="perso" aria-pressed="true">Impôts personnels</button><button data-sp="ent" aria-pressed="false">Entreprise</button></nav>
+  <div id="perso">
+  <p class="sub" style="margin-top:14px">Préparez votre déclaration de revenus fédérale et du Québec en trois étapes : vos renseignements, vos documents, l’envoi.</p>
   <div class="card">
     <div class="row" style="justify-content:space-between;align-items:flex-end">
       <label class="f" style="width:240px"><b>Année d’imposition</b><select id="yr"></select></label>
@@ -49,10 +51,13 @@
     </div>
   </div>
   <div id="view"></div>
+  </div>
+  <div id="ent" hidden></div>
 </main>
 <footer>Boujrad CPA Inc. · 220-672, boulevard des Laurentides, Laval (Québec) H7G 2V9 · Vos renseignements sont conservés de façon confidentielle et servent uniquement à la préparation de vos déclarations.</footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="portail.js"></script>
+<script src="portail-entreprise.js"></script>
 </body>
 </html>
