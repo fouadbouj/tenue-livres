@@ -11,3 +11,15 @@ La fonction `supabase/functions/tl-email` envoie les demandes de précisions par
 2. Supabase → Edge Functions → créer `tl-email` avec le code du fichier.
 3. Supabase → Edge Functions → Secrets : `RESEND_API_KEY` (clé Resend) et, au besoin, `COURRIEL_EXPEDITEUR` (ex. `Boujrad CPA Inc. <comptabilite@boujradcpa.com>`).
 Sans cette fonction, le bouton « Ouvrir dans ma messagerie » prépare le courriel dans Outlook ou Gmail.
+
+## Portail client et Centre clients
+- `public/portail.html` : les clients créent leur compte, remplissent le formulaire (nouveau ou existant) et déposent leurs documents d'impôt.
+- `public/centre.html` : l'équipe gère les clients TPS/TVQ, les rappels automatiques et les documents reçus, et consulte les dossiers du portail.
+- `public/depot.html` : page de dépôt par lien (envoyée dans les rappels), sans compte.
+
+Installation (une fois) :
+1. Supabase → SQL Editor : exécuter `supabase/portail_centre.sql`.
+2. Edge Functions : créer `cc-depot` (désactiver « Enforce JWT verification ») et `cc-rappels` avec le code des dossiers correspondants.
+3. Secrets des fonctions : `RESEND_API_KEY`, `CRON_SECRET` (une phrase secrète au choix), facultatif `NOTIF_CABINET` (courriel du cabinet averti à chaque dépôt), `SITE_URL` = `https://app.boujradcpa.com`.
+4. Database → Extensions : activer `pg_cron` et `pg_net`, puis exécuter la commande `cron.schedule` en bas de `portail_centre.sql` (avec l'adresse du projet et le secret).
+5. Authentication → Sign In / Providers → Email : réactiver « Confirm email » est recommandé pour le portail (les clients confirment leur courriel).

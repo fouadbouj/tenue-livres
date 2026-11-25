@@ -3,5 +3,6 @@ window.CONFIG = {
   SUPABASE_URL: 'https://dluizzekoukuwskokyfz.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_Wbi4xM9ECQ0jXUadV8gphA_t662RNM6',
   NOM_CABINET: 'Intranet Boujrad CPA Inc.',
+  APP_URL: 'https://app.boujradcpa.com',
   FONCTION_IA: 'ai'
 };

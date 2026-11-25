@@ -71,7 +71,7 @@ function loginUI(){return new Promise(done=>{const d=document.createElement('div
 async function boot(){let{data:{session}}=await sb.auth.getSession();if(!session){await loginUI();({data:{session}}=await sb.auth.getSession())}
   const{data:m}=await sb.from('tl_membres').select('role').eq('user_id',session.user.id).maybeSingle();
   if(!m){document.body.insertAdjacentHTML('beforeend',`<div id="auth"><form><h1>Accès en attente</h1><p>Le compte ${session.user.email.replace(/</g,'&lt;')} n'est pas encore autorisé. Demandez à l'administrateur du cabinet de l'ajouter aux membres.</p><button type="button" onclick="sbClient.auth.signOut().then(()=>location.reload())">Se déconnecter</button></form></div>`);return}
-  document.body.insertAdjacentHTML('beforeend',`<div id="who"><span>${session.user.email.replace(/</g,'&lt;')}</span><button type="button" id="logout">Déconnexion</button></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div id="who"><a href="centre.html" style="color:inherit">Centre clients</a><span>${session.user.email.replace(/</g,'&lt;')}</span><button type="button" id="logout">Déconnexion</button></div>`);
   document.getElementById('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
   const dict=makeDictation();
   window.claude={use:async n=>n==='db'?db:n==='sample'?sample:n==='downloads'?downloads:n==='dictation'?dict:n==='user'?{id:async()=>session.user.id}:null};
