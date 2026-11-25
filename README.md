@@ -19,7 +19,7 @@ Resend reste possible à la place (secret `RESEND_API_KEY`) si les secrets MS_* 
 - Les rappels TPS/TVQ envoient vers le portail client (connexion obligatoire) ; la bonne période s'ouvre directement. Si l'entreprise n'a encore aucun compte lié, le courriel contient un code d'invitation.
 
 Installation (une fois) :
-1. Supabase → SQL Editor : exécuter `supabase/portail_centre.sql`, puis `supabase/portail_entreprise.sql`, puis `supabase/centre_dossiers.sql` (fiches clients, contrats, tâches, échéancier).
+1. Supabase → SQL Editor : exécuter `supabase/portail_centre.sql`, puis `supabase/portail_entreprise.sql`, puis `supabase/centre_dossiers.sql` (fiches clients, contrats, tâches, échéancier), puis `supabase/facturation.sql` (factures, accords de DPA, fichiers Desjardins).
 2. Edge Functions : créer `cc-rappels` et `cc-avis` (avis au client quand le cabinet publie un document à payer, avis au cabinet quand le client confirme son paiement, rappel 5 jours avant la date limite) avec le code des dossiers correspondants.
 3. Secrets des fonctions : `RESEND_API_KEY`, `CRON_SECRET` (une phrase secrète au choix), facultatif `NOTIF_CABINET` (courriel du cabinet averti à chaque dépôt), `SITE_URL` = `https://app.boujradcpa.com`.
 4. Database → Extensions : activer `pg_cron` et `pg_net`, puis exécuter la commande `cron.schedule` en bas de `portail_centre.sql` (avec l'adresse du projet et le secret).

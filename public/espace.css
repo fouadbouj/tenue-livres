@@ -39,3 +39,4 @@ footer{color:var(--mute);font-size:13px;text-align:center;padding:30px 16px}
 .kq{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--soft);flex-wrap:wrap}.kq>span{font-size:14.5px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:14px}.kpi{background:var(--soft);border-radius:12px;padding:12px 16px}.kpi b{display:block;font-size:26px;color:var(--navy)}.kpi span{font-size:13.5px;color:var(--mute)}
 @media print{.top,#tabs,#toast,button,.who{display:none!important}main{padding:0}.card{box-shadow:none;border:0}}
+.tabs .tgrp{align-self:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding:0 4px 0 14px}.tabs .tgrp:first-child{padding-left:0}

@@ -13,11 +13,11 @@ function periodes(c,auj=new Date()){const M=+String(c.fin_exercice).slice(0,2)||
     out.push({periode:`${pas===1?'M':pas===3?'T':'A'}-${iso(fin)}`,debut:iso(new Date(Date.UTC(y,m-pas,1))),fin:iso(fin),echeance:iso(pas===12?finMois(y,m+3):finMois(y,m+1))})}return out}
 const STP={'à envoyer':'g','envoyée':'g','reçue':'ok','apportée au bureau':'ok','annulée':''};
 
-async function load(){const[a,b,c,d,e,f,g,h,k,l]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*')]);
-  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];
+async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*'),sb.from('cc_dpa_accords').select('*'),sb.from('cc_factures').select('*'),sb.from('cc_lots_dpa').select('*'),sb.from('cc_parametres').select('*')]);
+  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
-function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc})[TAB]()}
+function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact})[TAB]()}
 
 /* ---------- documents à recevoir ---------- */
 function rDem(){const nm=id=>CLI.find(c=>c.id===id)?.nom||'?';
@@ -53,10 +53,10 @@ function rCli(){if(EDIT)return rFiche();
       <td><button class="sm" data-edit="${c.id}">Ouvrir</button></td></tr>`}).join('')||'<tr><td colspan="7" class="sub">Aucun client.</td></tr>'}</tbody></table></div></div>`}
 
 function rFiche(){const c=EDIT,neuf=!c.id;if(neuf)FT='fiche';
-  const tabs=[['fiche','Fiche'],['contrat','Contrat de services'],['portail','Portail et documents'],['suivi','Tâches et journal']];
+  const tabs=[['fiche','Fiche'],['contrat','Contrat de services'],['factu','Facturation'],['portail','Portail et documents'],['suivi','Tâches et journal']];
   $('tcli').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div><button class="sm" id="cCancel">← Tous les clients</button></div>${c.id?`<span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span>`:''}</div>
     <h2 style="margin:12px 0 4px">${neuf?'Nouveau client':esc(c.nom)}</h2>${c.id?`<nav class="tabs">${tabs.map(([k,l])=>`<button data-ft="${k}" aria-pressed="${FT===k}">${l}</button>`).join('')}</nav>`:''}<div id="fBody" style="margin-top:14px"></div></div>`;
-  ({fiche:fFiche,contrat:fContrat,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
+  ({fiche:fFiche,contrat:fContrat,factu:fFact,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
 
 function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par actions',province:'QC',frequence:'trimestrielle',fin_exercice:'12-31',depuis:new Date().toISOString().slice(0,10),ouverture:new Date().toISOString().slice(0,10),tps_tvq:true,spcc_dpe:true,actif:true,contacts:[],checklist:{},documents:'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',...EDIT};
   const v=k=>esc(c[k]??''),inp=(id,l,k,t='text',ph='')=>`<label class="f"><b>${l}</b><input id="${id}" type="${t}" value="${v(k)}" placeholder="${ph}"></label>`,sel=(id,l,k,o)=>`<label class="f"><b>${l}</b><select id="${id}">${o.map(x=>{const[val,lab]=Array.isArray(x)?x:[x,x];return `<option value="${val}"${String(c[k]??'')===val?' selected':''}>${lab}</option>`}).join('')}</select></label>`;
@@ -105,7 +105,10 @@ function ctrEditor(){const c=EDIT,d=CED.d,S=window.CONTRAT.SERVICES,cats=[...new
     <h3 style="margin-top:0">1. Services</h3>${cats.map(cat=>`<p style="margin:12px 0 4px"><strong>${cat}</strong></p>${S.filter(s=>s.cat===cat).map(s=>{const x=d.services[s.id]||{};return `<div class="ksv"><label class="opt" style="flex:1"><input type="checkbox" data-sv="${s.id}"${x.on?' checked':''}> <span>${s.nom}</span></label>${x.on&&(d.mode==='service'||s.unite==='heure')?`<input data-svt="${s.id}" value="${esc(x.tarif??'')}" placeholder="${s.unite==='heure'?esc(d.horaire):'Tarif'}" style="width:90px"> <select data-svu="${s.id}">${Object.entries(UN).map(([k,l])=>`<option value="${k}"${(x.unite||s.unite)===k?' selected':''}>${l}</option>`).join('')}</select>`:''}</div>`}).join('')}`).join('')}
     <h3>2. Tarification</h3><div class="row" style="gap:6px"><button class="sm${d.mode==='forfait'?' pri':''}" data-mode="forfait">Forfait mensuel</button><button class="sm${d.mode==='service'?' pri':''}" data-mode="service">Tarif par service</button></div>
     ${d.mode==='forfait'?`<div class="kq"><span>Montant du forfait mensuel ($, avant taxes)</span>${ni('forfait',110,'0,00')}</div>`:''}<div class="kq"><span>Taux horaire (travaux hors forfait, représentation, conseils)</span>${ni('horaire',90)}</div>
-    <h3>3. Questions</h3>
+    <h3>3. Paiement</h3>${yn('dpa','Paiement par débits préautorisés mensuels (accord signé avec le contrat)?')}
+    ${d.dpa?`<div class="kq"><span>Montant prélevé chaque mois, avant taxes</span>${ni('dpaMontant',110,d.forfait||'0,00')}</div><div class="kq"><span>Jour du prélèvement (1 à 28)</span>${ni('dpaJour',60)}</div><div class="kq"><span>Premier prélèvement</span><input type="date" data-k="dpaDebut" value="${esc(d.dpaDebut||'')}"></div>${yn('dpaRenonce','Le client renonce au préavis de 10 jours avant le premier prélèvement?')}
+    <p class="sub" style="font-size:13px;margin:4px 0">Avec un contrat annuel de 3 600 $, inscrivez 300 $ : le client paie 344,93 $ par mois, taxes incluses.</p>`:''}
+    <h3>4. Questions</h3>
     <div class="kq"><span>Date d’entrée en vigueur</span><input type="date" data-k="date" value="${esc(d.date)}"></div>
     <div class="kq"><span>Signataire du client</span><div class="row" style="gap:6px">${ni('sigNom',170,'Nom')}${ni('sigTitre',120,'Titre')}</div></div>
     ${d.services.tdl?.on?`<div class="kq"><span>Fréquence de la tenue de livres</span><select data-k="frequenceTdl">${['mensuelle','trimestrielle','annuelle'].map(o=>`<option${d.frequenceTdl===o?' selected':''}>${o}</option>`).join('')}</select></div>`:''}
@@ -126,7 +129,7 @@ function ctrEditor(){const c=EDIT,d=CED.d,S=window.CONTRAT.SERVICES,cats=[...new
     <p class="sub" style="font-size:12.5px;margin-top:10px">Modèle de contrat à faire valider une première fois par votre conseiller juridique ou l’Ordre avant usage courant.</p>
   </div><div><h3 style="margin-top:0">Aperçu</h3><iframe id="kFrame" title="Aperçu du contrat" style="width:100%;height:900px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe></div></div>`;
   kPreview()}
-const kData=()=>{const d=CED.d;return{...d,signataire:{nom:d.sigNom||'',titre:d.sigTitre||''}}};
+const kData=()=>{const d=CED.d;return{...d,dpaMontant:d.dpa?(d.dpaMontant||d.forfait||''):'',signataire:{nom:d.sigNom||'',titre:d.sigTitre||''}}};
 const kClient=()=>({...EDIT,numero:CED.numero});
 function kPreview(){const f=$('kFrame');if(f)f.srcdoc=window.CONTRAT.html(kClient(),kData())}
 const withSig=(h,k)=>k.signe_le?h.replace('</body>',`<div style="border:2px solid #1d7a4f;background:#eef8f2;padding:12px;margin:24px 0;font-size:10.5pt">Contrat accepté électroniquement par <strong>${esc(k.signe_nom)}</strong>${k.signe_titre?', '+esc(k.signe_titre):''}, le ${new Date(k.signe_le).toLocaleString('fr-CA',{dateStyle:'long',timeStyle:'short'})}, au moyen du portail client de Boujrad CPA Inc.</div></body>`):h;
@@ -198,7 +201,7 @@ function rBoard(){const[y,m]=EM.split('-').map(Number),deb=`${EM}-01`,fin=ymd(fM
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
     <div class="card"><h2>Fins d’exercice ce mois-ci</h2>${fins.map(c=>`<div><a href="#" data-cli="${c.id}">${esc(c.nom)}</a> <small class="sub">· ${esc(c.fin_exercice)}</small></div>`).join('')||'<p class="sub">Aucune.</p>'}<p class="sub" style="font-size:13px">Planifiez la demande des documents de fin d’année et la mission de compilation.</p></div>
     <div class="card"><h2>Tâches à faire</h2>${tch.slice(0,10).map(t=>`<div style="margin-bottom:6px">${t.echeance<auj?'<span class="pill r">En retard</span> ':''}<strong>${esc(t.titre)}</strong> <small class="sub">· ${dl(t.echeance)}${t.client_id?' · '+esc(nom(t.client_id)):''}</small></div>`).join('')||'<p class="sub">Rien d’urgent.</p>'}<button class="sm" data-t="tache">Toutes les tâches</button></div>
-    <div class="card"><h2>À surveiller</h2><div>${unread?`<span class="pill r">${unread}</span> message(s) de clients non lus`:'Aucun message non lu'}</div><div style="margin-top:6px">${attente.length} contrat(s) en attente de signature</div>${signes.map(k=>`<div style="margin-top:6px"><span class="pill ok">Signé</span> ${esc(nom(k.client_id))} <small class="sub">· ${dl(k.signe_le)}</small></div>`).join('')}</div></div>`}
+    <div class="card"><h2>À surveiller</h2><div>${unread?`<span class="pill r">${unread}</span> message(s) de clients non lus`:'Aucun message non lu'}</div><div style="margin-top:6px">${attente.length} contrat(s) en attente de signature</div><div style="margin-top:6px">${FAC.filter(f=>['rejetée','à payer'].includes(f.statut)).length} facture(s) impayée(s) · ${CLI.filter(c=>(c.statut||'actif')==='actif'&&!acActif(c.id)).length} client(s) actif(s) sans DPA</div>${signes.map(k=>`<div style="margin-top:6px"><span class="pill ok">Signé</span> ${esc(nom(k.client_id))} <small class="sub">· ${dl(k.signe_le)}</small></div>`).join('')}</div></div>`}
 
 /* ---------- impôts personnels (portail) ---------- */
 const LAB={prenom:'Prénom',nom:'Nom',ddn:'Date de naissance',nas:'NAS',tel:'Téléphone',courriel:'Courriel',langue:'Langue',adresse:'Adresse',app:'App.',ville:'Ville',prov:'Province',cp:'Code postal',adresse31:'Adresse au 31 décembre',arrivee:'Arrivée au Canada/Québec',citoyen:'Citoyen canadien',elections:'Élections Canada',
@@ -278,7 +281,7 @@ document.addEventListener('change',e=>{if(!EDIT?.id)return;if(e.target.id==='pTy
 
 /* ---------- suivi des paiements ---------- */
 const money=v=>v==null?'—':Number(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD'});
-function badge(){const n=PUB.filter(p=>p.paye_le&&!p.paye_vu).length,bt=document.querySelector('#tabs [data-t=pay]');if(bt)bt.innerHTML='Paiements'+(n?` <span class="pill ok" style="margin-left:4px">${n} nouveau${n>1?'x':''}</span>`:'');
+function badge(){const n=PUB.filter(p=>p.paye_le&&!p.paye_vu).length,bt=document.querySelector('#tabs [data-t=pay]');if(bt)bt.innerHTML='Paiements des clients'+(n?` <span class="pill ok" style="margin-left:4px">${n} nouveau${n>1?'x':''}</span>`:'');
   const t=$('toast');if(t){t.hidden=!n||TAB==='pay';t.innerHTML=n?`<strong>${n} client${n>1?'s ont':' a'} confirmé ${n>1?'leurs paiements':'son paiement'}.</strong> <button class="sm" data-t="pay">Voir les paiements</button>`:''}}
 function rPay(){const P=PUB.filter(p=>p.montant>0&&p.organisme!=='Aucun paiement');
   const cles=[...new Set(P.map(p=>p.periode_fin||(p.echeance||'').slice(0,7)||'—'))].sort().reverse();if(!PAYF||!cles.includes(PAYF))PAYF=cles[0]||'';
@@ -318,7 +321,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
 /* ---------- événements ---------- */
 document.addEventListener('change',e=>{if(e.target.id==='pcY'){PCY=e.target.value;rPc()}});
 document.addEventListener('click',async e=>{const b=e.target.closest('button,a[data-file]');if(!b)return;
-  if(b.dataset.t){TAB=b.dataset.t;render();return}if(b.dataset.f){FILT=b.dataset.f;rDem();return}
+  if(b.dataset.t){if(b.dataset.t==='cli'&&TAB==='cli'){EDIT=null;CED=null}TAB=b.dataset.t;render();return}if(b.dataset.f){FILT=b.dataset.f;rDem();return}
   if(b.dataset.file){e.preventDefault();const{data,error}=await sb.storage.from('documents').createSignedUrl(b.dataset.file,300);if(error){alert('Ouverture impossible : '+error.message);return}window.open(data.signedUrl,'_blank','noopener');return}
   if(b.id==='gen'){b.disabled=true;const rows=CLI.filter(c=>c.actif).flatMap(c=>periodes(c).filter(p=>(Date.now()-new Date(p.fin))/864e5<=120&&!DEM.some(d=>d.client_id===c.id&&d.periode===p.periode)).map(p=>({...p,client_id:c.id})));
     const{error}=await sb.from('cc_demandes').insert(rows);$('dM').textContent=error?'Création impossible : '+error.message:`${rows.length} demande(s) créée(s).`;load();return}
@@ -331,6 +334,148 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button,a[d
   if(b.dataset.pc){pcOpen(b.dataset.pc);return}if(b.id==='pcX'){$('pcD').innerHTML='';return}
   if(b.id==='pcSave'){const{error}=await sb.from('pc_soumissions').update({statut:$('pcS').value,note_cabinet:$('pcN').value.trim()||null,updated_at:new Date().toISOString()}).eq('id',b.dataset.id);$('pcM').textContent=error?error.message:'Enregistré.';if(!error){const id=b.dataset.id;await load();TAB='pc';render();pcOpen(id)}}});
 
+
+/* ---------- facturation et débits préautorisés ---------- */
+let ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
+const F=()=>window.FACTURE;
+const fmt=v=>F().money(v);
+const acOf=id=>ACCD.filter(a=>a.client_id===id).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
+const acActif=id=>ACCD.find(a=>a.client_id===id&&a.statut==='actif');
+const STF={'à prélever':'g','transmise':'g','payée':'ok','rejetée':'r','à payer':'r','annulée':''};
+const emetteur=()=>({nom:'Boujrad CPA Inc.',adresse:'220-672, boulevard des Laurentides',ville:'Laval (Québec) H7G 2V9',tps:PAR.tps||'',tvq:PAR.tvq||'',courriel:PAR.courriel||''});
+const nomC=id=>CLI.find(c=>c.id===id)?.nom||'?';
+function prochainJour(j){const n=new Date(),d=new Date(n.getFullYear(),n.getMonth(),j);if(d<=n)d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,10)}
+function joursOuvrables(a,b){let n=0;const d=new Date(a+'T12:00');const e=new Date(b+'T12:00');while(d<e){d.setDate(d.getDate()+1);if(d.getDay()%6)n++}return n}
+function rFact(){const tabs=[['prel','Prélèvements du mois'],['fac','Factures'],['cc','Comptes clients'],['par','Paramètres']];
+  $('tfact').innerHTML=`<div class="card"><nav class="tabs">${tabs.map(([k,l])=>`<button data-fv="${k}" aria-pressed="${FV===k}">${l}</button>`).join('')}</nav><div id="fvBody" style="margin-top:14px"></div></div>`;
+  ({prel:vPrel,fac:vFac,cc:vCC,par:vPar})[FV]()}
+
+/* -- prélèvements -- */
+function vPrel(){if(!FD)FD=prochainJour(+(PAR.jour||1));const per=FD.slice(0,7),jr=+FD.slice(8,10),auj=new Date().toISOString().slice(0,10),lim=new Date(Date.now()+10*864e5).toISOString().slice(0,10);
+  const actifs=ACCD.filter(a=>a.statut==='actif'&&(CLI.find(c=>c.id===a.client_id)?.statut||'actif')==='actif');
+  const rows=actifs.map(a=>{const pre=!a.renonce_preavis&&a.signe_le&&new Date(a.signe_le)>new Date(new Date(FD+'T12:00')-10*864e5),avant=a.debut>FD,autreJour=a.jour!==jr;
+    const fm=FAC.find(f=>f.client_id===a.client_id&&f.periode===per&&f.mode==='dpa'&&f.statut!=='annulée'),extra=FAC.filter(f=>f.client_id===a.client_id&&f.mode==='dpa'&&f.statut==='à prélever'&&f!==fm&&f.date<=FD);
+    return{a,pre,avant,autreJour,fm,extra,ok:!pre&&!avant&&!autreJour}});
+  const ok=rows.filter(r=>r.ok),aFact=ok.filter(r=>!r.fm),pret=ok.filter(r=>r.fm?.statut==='à prélever'||r.extra.length);
+  const total=pret.reduce((s,r)=>s+(r.fm?.statut==='à prélever'?+r.fm.total:0)+r.extra.reduce((x,f)=>x+ +f.total,0),0);
+  const sans=CLI.filter(c=>(c.statut||'actif')==='actif'&&!acActif(c.id));
+  const bus=joursOuvrables(auj,FD),days=(new Date(FD)-new Date(auj))/864e5;
+  $('fvBody').innerHTML=`<div class="row" style="align-items:flex-end;gap:12px"><label class="f"><b>Date du prélèvement</b><input type="date" id="fdD" value="${FD}"></label>
+    <div class="sub" style="font-size:14px;padding-bottom:10px">Facturation de ${F().MOIS(per)} · accords au ${jr}${jr===1?'er':'e'} du mois</div></div>
+    ${bus<2?`<div class="alert" style="margin-top:10px"><strong>Trop tard pour cette date.</strong>Desjardins doit recevoir le fichier au plus tard à midi, 2 jours ouvrables avant la date du prélèvement.</div>`:days>14?`<div class="info" style="margin-top:10px">Desjardins accepte un fichier au plus 14 jours avant la date du prélèvement : générez-le à partir du ${new Date(new Date(FD)-14*864e5).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})}.</div>`:''}
+    <div class="kpis"><div class="kpi"><b>${ok.length}</b><span>Accords à prélever à cette date</span></div><div class="kpi"><b>${aFact.length}</b><span>Factures du mois à créer</span></div><div class="kpi"><b>${fmt(total)}</b><span>Total prêt à prélever</span></div><div class="kpi"><b style="color:${sans.length?'var(--red)':'var(--navy)'}">${sans.length}</b><span>Clients actifs sans accord DPA</span></div></div>
+    <div class="row" style="margin-top:14px"><button class="pri" id="fdFac"${aFact.length?'':' disabled'}>1. Créer les factures de ${F().MOIS(per)} (${aFact.length})</button><button class="pri" id="fdGen"${pret.length&&bus>=2&&days<=14?'':' disabled'}>2. Générer le fichier Desjardins (${pret.length})</button></div><div class="msg" id="fdM"></div>
+    <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Client</th><th>Accord</th><th>Facture du mois</th><th>Autres montants</th><th>Statut</th></tr></thead><tbody>${rows.map(r=>`<tr${r.ok?'':' style="opacity:.6"'}><td><a href="#" data-cli="${r.a.client_id}">${esc(nomC(r.a.client_id))}</a></td><td>${fmt(r.a.montant)} + taxes · le ${r.a.jour}<br><small class="sub">${esc(r.a.titulaire)} · ${esc(r.a.institution)}-${esc(r.a.transit)} · •••${esc(String(r.a.compte).slice(-3))}</small></td>
+      <td>${r.fm?`${esc(r.fm.numero)} · ${fmt(r.fm.total)}`:'—'}</td><td>${r.extra.map(f=>`${esc(f.numero)} · ${fmt(f.total)}`).join('<br>')||'—'}</td>
+      <td>${r.autreJour?`<small>Prélevé le ${r.a.jour} du mois</small>`:r.avant?`<small>Premier prélèvement le ${dl(r.a.debut)}</small>`:r.pre?'<span class="pill r">Préavis de 10 jours non écoulé</span>':r.fm?`<span class="pill ${STF[r.fm.statut]}">${esc(r.fm.statut)}</span>`:'<span class="pill g">Facture à créer</span>'}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Aucun accord de DPA actif. Les accords se signent avec le contrat dans le portail, ou se saisissent dans la fiche du client (onglet Facturation).</td></tr>'}</tbody></table></div>
+    ${sans.length?`<details class="fold" style="margin-top:12px"><summary><span>Clients actifs sans accord de DPA (${sans.length})</span></summary><p>${sans.map(c=>`<a href="#" data-cli="${c.id}">${esc(c.nom)}</a>`).join(' · ')}</p></details>`:''}
+    <h3>Fichiers transmis</h3><table><thead><tr><th>Fichier</th><th>Date du prélèvement</th><th>Débits</th><th>Total</th><th>Statut</th><th></th></tr></thead><tbody>${LOTS.slice().sort((a,b)=>b.created_at.localeCompare(a.created_at)).map(l=>`<tr><td>No ${String(l.numero_fichier).padStart(4,'0')}<br><small class="sub">${dl(l.created_at)}</small></td><td>${dl(l.date_prelevement)}</td><td>${l.nb}</td><td>${fmt(l.total)}</td><td><span class="pill ${l.statut==='traité'?'ok':l.statut==='annulé'?'':'g'}">${esc(l.statut)}</span></td>
+      <td><div class="row" style="gap:6px">${l.contenu&&l.statut!=='annulé'?`<button class="sm" data-ldl="${l.id}">Télécharger</button>`:''}${l.statut==='généré'?`<button class="sm" data-lst="${l.id}" data-v="transmis">Transmis à Desjardins</button>`:''}${['généré','transmis'].includes(l.statut)?`<button class="sm pri" data-lst="${l.id}" data-v="traité">Prélèvements reçus</button><button class="sm danger" data-lst="${l.id}" data-v="annulé">Annuler</button>`:''}</div></td></tr>`).join('')||'<tr><td colspan="6" class="sub">Aucun fichier.</td></tr>'}</tbody></table>
+    <p class="sub" style="font-size:13px">Étapes : créez les factures (elles apparaissent dans le portail des clients), générez le fichier, puis déposez-le dans AccèsD Affaires (Transmission de données – dépôt ou retrait direct) au plus tard à midi, 2 jours ouvrables avant la date du prélèvement. Quand l’argent est reçu, cliquez sur « Prélèvements reçus ». Un débit refusé se marque dans l’onglet Factures.</p>`}
+async function creerFactures(){const per=FD.slice(0,7),jr=+FD.slice(8,10),rows=ACCD.filter(a=>a.statut==='actif'&&a.jour===jr&&a.debut<=FD&&(CLI.find(c=>c.id===a.client_id)?.statut||'actif')==='actif'&&!(!a.renonce_preavis&&a.signe_le&&new Date(a.signe_le)>new Date(new Date(FD+'T12:00')-10*864e5))&&!FAC.some(f=>f.client_id===a.client_id&&f.periode===per&&f.mode==='dpa'&&f.statut!=='annulée'));
+  const ins=rows.map(a=>{const k=CTR.find(x=>x.id===a.contrat_id),t=F().taxes(a.montant);return{client_id:a.client_id,periode:per,date:new Date().toISOString().slice(0,10),mode:'dpa',statut:'à prélever',emetteur:emetteur(),
+    lignes:[{description:`Honoraires professionnels — ${F().MOIS(per)}${k?` (contrat ${k.numero})`:''}`,montant:+a.montant}],...t}});
+  if(!ins.length)return;const{error}=await sb.from('cc_factures').insert(ins);const msg=error?'Création impossible : '+error.message:`${ins.length} facture(s) créée(s). Elles sont visibles dans le portail des clients.`;await load();$('fdM')&&($('fdM').textContent=msg)}
+async function genererFichier(){const p=PAR,need=[['organisme',/^\d{10}$/,'numéro d’organisme Desjardins (10 chiffres)'],['nomCourt',/./,'nom abrégé'],['nomLong',/./,'nom complet'],['transitRetour',/^\d{5}$/,'transit du compte de retour'],['compteRetour',/^[\d-]{5,12}$/,'compte de retour']].filter(([k,re])=>!re.test(p[k]||''));
+  if(need.length){$('fdM').textContent='Complétez les paramètres : '+need.map(x=>x[2]).join(', ')+'.';$('fdM').className='msg err';FV='par';setTimeout(rFact,1500);return}
+  const jr=+FD.slice(8,10),acc=ACCD.filter(a=>a.statut==='actif'&&a.jour===jr),tx=[],ids=[];
+  for(const a of acc){const fs=FAC.filter(f=>f.client_id===a.client_id&&f.mode==='dpa'&&f.statut==='à prélever'&&f.date<=FD);if(!fs.length)continue;
+    const tot=F().r2(fs.reduce((s,f)=>s+ +f.total,0));tx.push({montant:tot,institution:a.institution,transit:a.transit,compte:a.compte,nom:a.titulaire,categorie:a.categorie,reference:fs.length===1?fs[0].numero:fs[0].numero+'+'+(fs.length-1),info:'HON '+FD.slice(0,7)});ids.push(...fs.map(f=>f.id))}
+  if(!tx.length)return;if(!confirm(`Générer le fichier Desjardins : ${tx.length} débit(s), ${fmt(tx.reduce((s,t)=>s+t.montant,0))}, le ${dl(FD)}?`))return;
+  const tot=F().r2(tx.reduce((s,t)=>s+t.montant,0));const{data:lot,error}=await sb.from('cc_lots_dpa').insert({date_prelevement:FD,nb:tx.length,total:tot,statut:'généré'}).select().single();
+  if(error){$('fdM').textContent=error.message;return}
+  let txt;try{txt=F().fichier005(p,lot.numero_fichier,new Date().toISOString().slice(0,10),FD,tx)}catch(err){$('fdM').textContent='Fichier invalide : '+err.message;await sb.from('cc_lots_dpa').delete().eq('id',lot.id);return}
+  await sb.from('cc_lots_dpa').update({contenu:txt}).eq('id',lot.id);await sb.from('cc_factures').update({statut:'transmise',lot_id:lot.id}).in('id',ids);
+  telecharger(`DPA-Desjardins-${String(lot.numero_fichier).padStart(4,'0')}-${FD}.txt`,txt);await load();$('fdM').textContent='Fichier généré et téléchargé. Déposez-le dans AccèsD Affaires.';$('fdM').className='msg ok'}
+function telecharger(nom,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=nom;document.body.appendChild(a);a.click();a.remove()}
+
+/* -- factures -- */
+function vFac(){const flt={ouvertes:f=>['à prélever','transmise','rejetée','à payer'].includes(f.statut),impayees:f=>['rejetée','à payer'].includes(f.statut),payees:f=>f.statut==='payée',toutes:()=>true}[FF];
+  const L=FAC.filter(flt).sort((a,b)=>(b.numero||'').localeCompare(a.numero||''));
+  $('fvBody').innerHTML=`<div class="row" style="justify-content:space-between"><div class="row" style="gap:6px">${[['ouvertes','En cours'],['impayees','Impayées'],['payees','Payées'],['toutes','Toutes']].map(([k,l])=>`<button class="sm${FF===k?' pri':''}" data-ff="${k}">${l}</button>`).join('')}</div><button class="pri" data-fnew="">+ Nouvelle facture</button></div>
+    <div id="fnBox"></div><div class="scroll" style="margin-top:12px">${facTable(L,1)}</div>`}
+const facTable=(L,cli)=>`<table><thead><tr><th>Facture</th>${cli?'<th>Client</th>':''}<th>Description</th><th class="r">Total</th><th>Paiement</th><th>Statut</th><th></th></tr></thead><tbody>${L.map(f=>`<tr><td><strong>${esc(f.numero||'')}</strong><br><small class="sub">${dl(f.date)}</small></td>${cli?`<td><a href="#" data-cli="${f.client_id}">${esc(nomC(f.client_id))}</a></td>`:''}<td>${esc((f.lignes||[]).map(l=>l.description).join(' · ')).slice(0,90)}</td><td class="r">${fmt(f.total)}</td><td>${f.mode==='dpa'?'Débit préautorisé':'Virement ou autre'}${f.echeance&&f.mode==='autre'?`<br><small class="sub">dû le ${dl(f.echeance)}</small>`:''}</td>
+  <td><span class="pill ${STF[f.statut]}">${esc(f.statut)}</span>${f.paye_le?`<br><small class="sub">${dl(f.paye_le)}</small>`:''}</td><td><div class="row" style="gap:6px"><button class="sm" data-fprint="${f.id}">Voir</button>${['transmise','à payer','rejetée','à prélever'].includes(f.statut)?`<button class="sm pri" data-fst="${f.id}" data-v="payée">Payée</button>`:''}${f.statut==='transmise'?`<button class="sm danger" data-fst="${f.id}" data-v="rejetée">Débit refusé</button>`:''}${f.statut==='rejetée'&&acActif(f.client_id)?`<button class="sm" data-fst="${f.id}" data-v="à prélever">Reprélever</button>`:''}${['à prélever','à payer','rejetée'].includes(f.statut)?`<button class="sm danger" data-fst="${f.id}" data-v="annulée">Annuler</button>`:''}</div></td></tr>`).join('')||`<tr><td colspan="${cli?7:6}" class="sub">Aucune facture.</td></tr>`}</tbody></table>`;
+function facForm(cid){const c=CLI.find(x=>x.id===cid);return `<div class="card" style="box-shadow:none;border:1px solid var(--line);margin-top:12px"><h3 style="margin-top:0">Nouvelle facture</h3><div class="grid">
+  <label class="f"><b class="req">Client</b><select id="fnC">${CLI.map(x=>`<option value="${x.id}"${x.id===cid?' selected':''}>${esc(x.nom)}</option>`).join('')}</select></label>
+  <label class="f"><b>Paiement</b><select id="fnM"><option value="dpa"${acActif(cid)?' selected':''}>Débit préautorisé (prochain fichier)</option><option value="autre"${acActif(cid)?'':' selected'}>Virement ou autre</option></select></label><label class="f"><b>Payable au plus tard le</b><input type="date" id="fnE" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"></label></div>
+  <div id="fnL">${[0,1].map(()=>fnRow()).join('')}</div><button class="sm" id="fnAdd">+ Ligne</button>
+  <label class="opt"><input type="checkbox" id="fnT" checked> <span>Taxable (TPS et TVQ)</span></label><label class="f"><b>Note sur la facture (facultatif)</b><input id="fnN"></label>
+  <div class="row" style="margin-top:10px"><button class="pri" id="fnGo">Créer la facture</button><button class="sm" id="fnX">Annuler</button><span class="msg" id="fnMsg"></span></div>
+  ${c&&c.statut!=='actif'?'':`<p class="sub" style="font-size:13px">Une facture prélevée par DPA en dehors du montant mensuel exige un avis écrit de 10 jours au client : la facture déposée dans son portail tient lieu d’avis si elle est créée au moins 10 jours avant le prélèvement.</p>`}</div>`}
+const fnRow=()=>`<div class="row fnr" style="gap:8px;margin-top:6px"><input data-fl="d" placeholder="Description (ex. Travaux de rattrapage 2025, 4 h)" style="flex:1"><input data-fl="m" placeholder="Montant" inputmode="decimal" style="width:120px"></div>`;
+
+/* -- comptes clients -- */
+function vCC(){const L=CLI.map(c=>{const fs=FAC.filter(f=>f.client_id===c.id&&f.statut!=='annulée'),imp=fs.filter(f=>['rejetée','à payer'].includes(f.statut)),enc=fs.filter(f=>['à prélever','transmise'].includes(f.statut));
+    const vieux=imp.map(f=>f.mode==='autre'?f.echeance||f.date:f.date).sort()[0];return{c,imp:imp.reduce((s,f)=>s+ +f.total,0),enc:enc.reduce((s,f)=>s+ +f.total,0),paye:fs.filter(f=>f.statut==='payée'&&f.date.slice(0,4)===String(new Date().getFullYear())).reduce((s,f)=>s+ +f.total,0),vieux,a:acActif(c.id)}}).filter(x=>x.imp||x.enc||x.paye||x.a||(x.c.statut||'actif')==='actif');
+  const mensuel=ACCD.filter(a=>a.statut==='actif').reduce((s,a)=>s+ +a.montant,0),imp=L.reduce((s,x)=>s+x.imp,0);
+  $('fvBody').innerHTML=`<div class="kpis"><div class="kpi"><b>${fmt(mensuel)}</b><span>Honoraires mensuels prélevés (avant taxes)</span></div><div class="kpi"><b>${fmt(mensuel*12)}</b><span>Sur 12 mois</span></div><div class="kpi"><b style="color:${imp?'var(--red)':'var(--navy)'}">${fmt(imp)}</b><span>Impayé (débits refusés et factures échues)</span></div><div class="kpi"><b>${L.filter(x=>!x.a&&(x.c.statut||'actif')==='actif').length}</b><span>Clients actifs sans DPA</span></div></div>
+    <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Client</th><th>Accord DPA</th><th class="r">En cours</th><th class="r">Impayé</th><th>Plus ancien impayé</th><th class="r">Payé cette année</th></tr></thead><tbody>${L.sort((a,b)=>b.imp-a.imp||a.c.nom.localeCompare(b.c.nom)).map(x=>{const j=x.vieux?Math.floor((Date.now()-new Date(x.vieux))/864e5):0;return `<tr><td><a href="#" data-cli="${x.c.id}">${esc(x.c.nom)}</a></td><td>${x.a?`<span class="pill ok">${fmt(x.a.montant)}/mois</span>`:'<span class="pill r">Aucun</span>'}</td><td class="r">${x.enc?fmt(x.enc):'—'}</td><td class="r">${x.imp?`<strong style="color:var(--red)">${fmt(x.imp)}</strong>`:'—'}</td><td>${x.vieux?`${dl(x.vieux)} <small class="sub">(${j} j)</small>`:'—'}</td><td class="r">${x.paye?fmt(x.paye):'—'}</td></tr>`}).join('')}</tbody></table></div>`}
+
+/* -- paramètres -- */
+function vPar(){const p=PAR,i=(k,l,ph='',hint='')=>`<label class="f"><b>${l}</b><input data-par="${k}" value="${esc(p[k]||'')}" placeholder="${ph}">${hint?`<small class="sub">${hint}</small>`:''}</label>`;
+  $('fvBody').innerHTML=`<h3 style="margin-top:0">Cabinet (sur les factures)</h3><div class="grid">${i('tps','Numéro de TPS du cabinet','123456789 RT0001')}${i('tvq','Numéro de TVQ du cabinet','1234567890 TQ0001')}${i('courriel','Courriel de facturation','admin@boujradcpa.com')}${i('jour','Jour de prélèvement par défaut','1','Entre 1 et 28')}</div>
+    <h3>Desjardins — retrait direct (débits préautorisés)</h3><p class="sub" style="font-size:14px">Ces renseignements vous sont remis par votre caisse lors de l’adhésion au service de retrait direct dans AccèsD Affaires.</p>
+    <div class="grid">${i('organisme','Numéro d’organisme (10 chiffres)','0000000000','Remis par la caisse')}${i('nomCourt','Nom abrégé (15 caractères)','BOUJRAD CPA','Apparaît sur le relevé du client')}${i('nomLong','Nom complet (30 caractères)','BOUJRAD CPA INC.')}${i('transitRetour','Transit de votre caisse (5 chiffres)','','Compte où les montants sont déposés et les retours imputés')}${i('compteRetour','Numéro de folio (compte)','')}${i('codeEnt','Code de transaction — DPA d’entreprise','700','700 = DPA d’entreprise')}${i('codePers','Code de transaction — DPA personnel','','À confirmer avec Desjardins pour les particuliers')}</div>
+    <div class="row" style="margin-top:12px"><button class="pri" id="parSave">Enregistrer</button><span class="msg" id="parM"></span></div>
+    <p class="sub" style="font-size:13px">Avant le premier vrai fichier, Desjardins exige un fichier d’essai pour valider le format : générez un premier lot et demandez au soutien AccèsD Affaires de le traiter en mode essai.</p>`}
+
+/* -- fiche client : facturation -- */
+function fFact(){const c=EDIT,a=acOf(c.id),fs=FAC.filter(f=>f.client_id===c.id).sort((x,y)=>(y.numero||'').localeCompare(x.numero||'')),imp=fs.filter(f=>['rejetée','à payer'].includes(f.statut)).reduce((s,f)=>s+ +f.total,0);
+  const t=a?F().taxes(a.montant):null;
+  $('fBody').innerHTML=`<h3 style="margin-top:0">Accord de débits préautorisés</h3>${a?`<div class="info"><div class="row" style="justify-content:space-between"><div><span class="pill ${a.statut==='actif'?'ok':'r'}">${esc(a.statut)}</span> <strong>${fmt(a.montant)}</strong> + taxes = <strong>${fmt(t.total)}</strong> le ${a.jour}${a.jour===1?'er':'e'} de chaque mois, à compter du ${dl(a.debut)}</div></div>
+      <div style="margin-top:6px">Titulaire : ${esc(a.titulaire)} · Institution ${esc(a.institution)} · Transit ${esc(a.transit)} · Compte <span id="acNo">•••${esc(String(a.compte).slice(-3))}</span> <button class="sm" data-acshow="${a.id}">Afficher</button></div>
+      <small class="sub">${a.source==='papier'?'Accord papier':'Signé dans le portail'}${a.signe_le?` le ${dl(a.signe_le)} par ${esc(a.signe_nom||'')}`:''} · DPA ${esc(a.categorie)}${a.renonce_preavis?' · renonciation au préavis de 10 jours':''}${a.specimen?.path?` · <a href="#" data-file="${esc(a.specimen.path)}">spécimen de chèque</a>`:''}</small>
+      <div class="row" style="gap:6px;margin-top:8px">${a.statut==='actif'?`<button class="sm" data-acst="${a.id}" data-v="suspendu">Suspendre</button>`:''}${a.statut==='suspendu'?`<button class="sm" data-acst="${a.id}" data-v="actif">Réactiver</button>`:''}${a.statut!=='annulé'?`<button class="sm danger" data-acst="${a.id}" data-v="annulé">Annuler l’accord (révocation)</button>`:''}</div></div>`:'<p class="sub">Aucun accord. Il se signe avec le contrat dans le portail (contrat avec « Paiement par débits préautorisés »), ou saisissez ci-dessous un accord signé sur papier.</p>'}
+    <details class="fold" style="margin-top:10px"${a?'':' open'}><summary><span>${a?'Remplacer par un accord papier':'Saisir un accord signé sur papier'}</span></summary><div class="grid" style="margin-top:8px">
+      <label class="f"><b class="req">Titulaire du compte</b><input id="apT" value="${esc(c.nom)}"></label><label class="f"><b class="req">Institution (3 chiffres)</b><input id="apI" placeholder="815" maxlength="3"></label><label class="f"><b class="req">Transit (5 chiffres)</b><input id="apR" maxlength="5"></label><label class="f"><b class="req">Compte</b><input id="apC" maxlength="12"></label>
+      <label class="f"><b class="req">Montant mensuel avant taxes</b><input id="apM" inputmode="decimal"></label><label class="f"><b>Jour du mois</b><input id="apJ" value="${esc(PAR.jour||'1')}"></label><label class="f"><b>Premier prélèvement</b><input id="apD" type="date" value="${prochainJour(+(PAR.jour||1))}"></label><label class="f"><b>Date de signature</b><input id="apS" type="date" value="${new Date().toISOString().slice(0,10)}"></label></div>
+      <label class="opt"><input type="checkbox" id="apP"> <span>Le client a renoncé au préavis de 10 jours avant le premier prélèvement</span></label><div class="row" style="margin-top:8px"><button class="pri" id="apGo">Enregistrer l’accord</button><span class="msg" id="apMsg"></span></div></details>
+    <div class="row" style="justify-content:space-between;margin-top:18px"><h3 style="margin:0">Factures${imp?` · <span style="color:var(--red)">impayé ${fmt(imp)}</span>`:''}</h3><button class="pri" data-fnew="${c.id}">+ Nouvelle facture</button></div><div id="fnBox"></div><div class="scroll" style="margin-top:8px">${facTable(fs)}</div>`}
+
+/* ---------- événements : facturation ---------- */
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='fdD'){FD=t.value;vPrel()}});
+document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acshow]');const b=e.target.closest('button');if(!b)return;const ds=b.dataset;
+  if(ds.fv){FV=ds.fv;rFact();return}
+  if(ds.ff){FF=ds.ff;vFac();return}
+  if(b.id==='fdFac'){b.disabled=true;await creerFactures();return}
+  if(b.id==='fdGen'){b.disabled=true;await genererFichier();return}
+  if(ds.ldl){const l=LOTS.find(x=>x.id===ds.ldl);telecharger(`DPA-Desjardins-${String(l.numero_fichier).padStart(4,'0')}-${l.date_prelevement}.txt`,l.contenu);return}
+  if(ds.lst){const l=LOTS.find(x=>x.id===ds.lst),v=ds.v;
+    if(v==='annulé'&&!confirm('Annuler ce fichier? Les factures redeviennent « à prélever ». Ne le faites que si le fichier n’a pas été traité par Desjardins.'))return;
+    if(v==='traité'&&!confirm(`Confirmer que les prélèvements du ${dl(l.date_prelevement)} ont été reçus? Les factures passent à « payée ». Marquez ensuite les débits refusés, s’il y a lieu.`))return;
+    await sb.from('cc_lots_dpa').update({statut:v}).eq('id',l.id);
+    if(v==='traité')await sb.from('cc_factures').update({statut:'payée',paye_le:l.date_prelevement}).eq('lot_id',l.id).eq('statut','transmise');
+    if(v==='annulé')await sb.from('cc_factures').update({statut:'à prélever',lot_id:null}).eq('lot_id',l.id).eq('statut','transmise');
+    await load();return}
+  if(ds.fprint){const f=FAC.find(x=>x.id===ds.fprint);kPrint(F().factureHtml(f,CLI.find(c=>c.id===f.client_id)||{}));return}
+  if(ds.fst){const f=FAC.find(x=>x.id===ds.fst),v=ds.v;
+    if(v==='annulée'&&!confirm(`Annuler la facture ${f.numero}?`))return;
+    const up={statut:v};if(v==='payée')up.paye_le=new Date().toISOString().slice(0,10);if(v==='à prélever')up.lot_id=null;
+    await sb.from('cc_factures').update(up).eq('id',f.id);
+    if(v==='rejetée')await sb.from('cc_taches').insert({client_id:f.client_id,titre:`Débit refusé — facture ${f.numero} (${fmt(f.total)})`,details:'Communiquer avec le client, confirmer son compte, puis cliquer sur « Reprélever » dans la facture.',echeance:new Date(Date.now()+3*864e5).toISOString().slice(0,10),priorite:'haute'});
+    await load();return}
+  if('fnew' in ds){$('fnBox').innerHTML=facForm(ds.fnew||CLI[0]?.id);return}
+  if(b.id==='fnAdd'){$('fnL').insertAdjacentHTML('beforeend',fnRow());return}
+  if(b.id==='fnX'){$('fnBox').innerHTML='';return}
+  if(b.id==='fnGo'){const lignes=[...document.querySelectorAll('.fnr')].map(r=>({description:r.querySelector('[data-fl=d]').value.trim(),montant:F().r2(parseFloat(r.querySelector('[data-fl=m]').value.replace(/\s/g,'').replace(',','.'))||0)})).filter(l=>l.description&&l.montant);
+    if(!lignes.length){$('fnMsg').textContent='Ajoutez au moins une ligne avec un montant.';return}const cid=$('fnC').value,m=$('fnM').value;
+    if(m==='dpa'&&!acActif(cid)){$('fnMsg').textContent='Ce client n’a pas d’accord de DPA actif : choisissez « Virement ou autre ».';return}
+    const t=F().taxes(lignes.reduce((s,l)=>s+l.montant,0),$('fnT').checked);b.disabled=true;
+    const{error}=await sb.from('cc_factures').insert({client_id:cid,lignes,...t,mode:m,statut:m==='dpa'?'à prélever':'à payer',echeance:m==='autre'?$('fnE').value||null:null,emetteur:emetteur(),note:$('fnN').value.trim()||null,date:new Date().toISOString().slice(0,10)});
+    if(error){$('fnMsg').textContent=error.message;b.disabled=false;return}await load();return}
+  if(b.id==='parSave'){const v={};document.querySelectorAll('[data-par]').forEach(i=>v[i.dataset.par]=i.value.trim());
+    if(v.organisme&&!/^\d{10}$/.test(v.organisme)){$('parM').textContent='Le numéro d’organisme doit avoir 10 chiffres.';return}
+    const{error}=await sb.from('cc_parametres').upsert({cle:'facturation',valeur:v,updated_at:new Date().toISOString()});$('parM').textContent=error?error.message:'Enregistré.';if(!error)PAR=v;return}
+  if(ds.acshow){const a=ACCD.find(x=>x.id===ds.acshow);$('acNo').textContent=a.compte;b.remove();return}
+  if(ds.acst){const v=ds.v;if(v==='annulé'&&!confirm('Annuler l’accord de DPA? Aucun prélèvement ne sera plus fait pour ce client.'))return;
+    await sb.from('cc_dpa_accords').update({statut:v,...(v==='annulé'?{annule_le:new Date().toISOString()}:{})}).eq('id',ds.acst);await load();return}
+  if(b.id==='apGo'){const g=id=>$(id).value.trim(),m=parseFloat(g('apM').replace(',','.')),j=parseInt(g('apJ'))||1;
+    if(!/^\d{3}$/.test(g('apI'))||!/^\d{5}$/.test(g('apR'))||!/^[\d-]{5,12}$/.test(g('apC'))||!(m>0)||j<1||j>28){$('apMsg').textContent='Vérifiez : institution 3 chiffres, transit 5 chiffres, compte 5 à 12 chiffres, montant et jour (1 à 28).';$('apMsg').className='msg err';return}
+    if(!confirm('Enregistrer cet accord? L’accord actif actuel, s’il y en a un, sera remplacé.'))return;
+    await sb.from('cc_dpa_accords').update({statut:'annulé',annule_le:new Date().toISOString(),note:'Remplacé'}).eq('client_id',EDIT.id).eq('statut','actif');
+    const{error}=await sb.from('cc_dpa_accords').insert({client_id:EDIT.id,categorie:EDIT.type==='particulier'?'personnel':'entreprise',titulaire:g('apT'),institution:g('apI'),transit:g('apR'),compte:g('apC'),montant:m,jour:j,debut:g('apD'),renonce_preavis:$('apP').checked,signe_le:g('apS')+'T12:00:00',signe_nom:g('apT'),source:'papier',statut:'actif'});
+    if(error){$('apMsg').textContent=error.message;return}await load();return}});
 
 /* ---------- événements : dossiers, contrats, tâches, échéancier ---------- */
 const who=()=>$('whoE')?.textContent||'';
@@ -358,6 +503,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
   if(ds.kcancel){if(!confirm('Annuler ce contrat? Le client ne pourra plus le signer.'))return;await sb.from('cc_contrats').update({statut:'annulé',updated_at:new Date().toISOString()}).eq('id',ds.kcancel);await sb.from('cc_publications').delete().eq('contrat_id',ds.kcancel);await load();return}
   if(ds.ksend){const k=CTR.find(x=>x.id===ds.ksend),c=EDIT;
     if(!ACC.some(a=>a.client_id===c.id)){$('kM').textContent='Créez d’abord un accès au portail pour ce client (onglet Portail et documents), ou imprimez le contrat pour une signature sur papier.';$('kM').className='msg err';return}
+    if(k.donnees?.dpa&&!(parseFloat(String(k.donnees.dpaMontant).replace(',','.'))>0)){$('kM').textContent='Inscrivez le montant mensuel du débit préautorisé dans le contrat (Modifier), puis enregistrez.';$('kM').className='msg err';return}
     if(!confirm('Envoyer ce contrat au client pour signature? Il ne pourra plus être modifié.'))return;b.disabled=true;
     const h=window.CONTRAT.html({...c,numero:k.numero},k.donnees),now=new Date().toISOString();
     let r=await sb.from('cc_contrats').update({statut:'envoyé',html:h,envoye_le:now,updated_at:now}).eq('id',k.id);if(r.error){$('kM').textContent=r.error.message;b.disabled=false;return}

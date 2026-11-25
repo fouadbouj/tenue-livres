@@ -177,6 +177,27 @@ Deno.serve(async (req) => {
         await courriel([notif], `Contrat signé : ${p.cc_clients.nom} (${k.numero || ""})`,
           `${p.cc_clients.nom} a signé électroniquement le contrat de services ${k.numero || ""}.\n\nSignataire : ${k.signe_nom}${k.signe_titre ? ", " + k.signe_titre : ""}\nDate : ${new Date(k.signe_le).toLocaleString("fr-CA", { timeZone: "America/Toronto" })}\nCompte du portail : ${user.email}\n\nDossier : ${site}/centre.html`);
       }
+      // Confirmation écrite de l'accord de DPA au payeur (Règle H1)
+      const { data: acc2 } = await admin.from("cc_dpa_accords").select("*").eq("contrat_id", p.contrat_id).eq("statut", "actif").maybeSingle();
+      if (acc2) {
+        const to = await destinataires(admin, p.cc_clients);
+        const ttc = Math.round(acc2.montant * 1.14975 * 100) / 100;
+        if (to.length) await courriel(to, `Confirmation de votre accord de débits préautorisés — Boujrad CPA Inc.`,
+          `Bonjour${p.cc_clients.contact ? " " + p.cc_clients.contact : ""},
+
+Nous confirmons votre contrat de services ${k?.numero || ""} et votre accord de débits préautorisés (DPA ${acc2.categorie === "personnel" ? "personnel" : "d'entreprise"}) :
+
+- Titulaire du compte : ${acc2.titulaire}
+- Institution ${acc2.institution}, transit ${acc2.transit}, compte se terminant par ${String(acc2.compte).slice(-3)}
+- Montant : ${money(ttc)} par mois (${money(+acc2.montant)} plus TPS et TVQ), le ${acc2.jour} de chaque mois (ou le jour ouvrable suivant)
+- Premier débit : ${longue(acc2.debut)}${acc2.renonce_preavis ? "\n- Vous avez renoncé au délai de 10 jours avant le premier débit." : ""}
+
+Une facture est déposée dans votre portail client avant chaque débit. Vous pouvez modifier ou révoquer cet accord en tout temps sur préavis écrit de 10 jours. Vous avez certains droits de recours si un débit n'est pas conforme à l'accord, par exemple le droit d'en obtenir le remboursement. Pour plus d'information sur vos droits, communiquez avec votre institution financière ou consultez www.paiements.ca.
+
+Une copie du contrat et de l'accord est disponible en tout temps dans votre portail client.
+
+Boujrad CPA Inc.`);
+      }
       return json({ ok: true });
     }
 
