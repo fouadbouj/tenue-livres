@@ -58,7 +58,7 @@ const css=`#auth{position:fixed;inset:0;z-index:50;display:grid;place-items:cent
 #auth form{background:var(--panel,#fff);border:1px solid var(--line,#d5deeb);border-radius:12px;padding:28px;width:min(400px,92vw);display:grid;gap:12px}
 #auth h1{font-size:26px;margin:0}#auth input{font:inherit;font-size:16px;padding:10px;border:1px solid var(--line,#ccc);border-radius:6px;min-height:44px}
 #auth button{font:inherit;font-weight:600;min-height:44px;border-radius:6px;border:1px solid #1f3d6e;background:#1f3d6e;color:#fff;cursor:pointer}#auth .alt{background:transparent;color:#1f3d6e}
-#auth .m{font-size:14px;min-height:1em}#auth .e{color:#b3261e}#who{position:fixed;top:8px;right:12px;z-index:40;font:13px system-ui;display:flex;gap:8px;align-items:center}#who button{font:inherit;font-size:13px;border:1px solid currentColor;background:transparent;border-radius:6px;padding:4px 10px;cursor:pointer}`;
+#auth .m{font-size:14px;min-height:1em}#auth .e{color:#b3261e}#who{position:relative;z-index:40;font:13px system-ui;display:flex;gap:14px;align-items:center;justify-content:flex-end;padding:6px 16px;background:#0b1626;color:#fff}#who a{color:#fff}#who button{font:inherit;font-size:12.5px;border:1px solid rgba(255,255,255,.5);color:#fff;background:transparent;border-radius:6px;padding:3px 10px;cursor:pointer;min-height:0;height:auto;line-height:1.4;box-shadow:none}#who .wb{margin-right:auto;font-weight:700;letter-spacing:.2px}#who .wb i{color:#c99d45;font-style:normal}`;
 document.head.insertAdjacentHTML('beforeend',`<style>${css}</style>`);
 document.title=cfg.NOM_CABINET||document.title;
 function loginUI(){return new Promise(done=>{const d=document.createElement('div');d.id='auth';d.innerHTML=`<form><img src="favicon.svg" alt="" width="48" height="48" style="display:block;margin:0 0 14px"><h1>${(cfg.NOM_CABINET||'Tenue de livres').replace(/</g,'&lt;')}</h1>
@@ -71,7 +71,7 @@ function loginUI(){return new Promise(done=>{const d=document.createElement('div
 async function boot(){let{data:{session}}=await sb.auth.getSession();if(!session){await loginUI();({data:{session}}=await sb.auth.getSession())}
   const{data:m}=await sb.from('tl_membres').select('role').eq('user_id',session.user.id).maybeSingle();
   if(!m){document.body.insertAdjacentHTML('beforeend',`<div id="auth"><form><h1>Accès en attente</h1><p>Le compte ${session.user.email.replace(/</g,'&lt;')} n'est pas encore autorisé. Demandez à l'administrateur du cabinet de l'ajouter aux membres.</p><button type="button" onclick="sbClient.auth.signOut().then(()=>location.reload())">Se déconnecter</button></form></div>`);return}
-  document.body.insertAdjacentHTML('beforeend',`<div id="who"><a href="centre.html" style="color:inherit">Gestion du cabinet</a><span>${session.user.email.replace(/</g,'&lt;')}</span><button type="button" id="logout">Déconnexion</button></div>`);
+  document.body.insertAdjacentHTML('afterbegin',`<div id="who"><span class="wb">b<i>.</i> Intranet Boujrad CPA Inc.</span><a href="centre.html" style="color:inherit">Gestion du cabinet</a><span>${session.user.email.replace(/</g,'&lt;')}</span><button type="button" id="logout">Déconnexion</button></div>`);
   document.getElementById('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
   const dict=makeDictation();
   window.claude={use:async n=>n==='db'?db:n==='sample'?sample:n==='downloads'?downloads:n==='dictation'?dict:n==='user'?{id:async()=>session.user.id}:null};
