@@ -1076,7 +1076,7 @@ function enforceLock(p){if(!p||!p._lk)return;const snap=new Map(p._lk.map(t=>[t.
 
 /* ---------- mission de compilation ---------- */
 const NOTE1={
-  ex:'Les états financiers ont été compilés par la direction selon la méthode de la comptabilité d’exercice, au coût historique. Les produits sont constatés lorsque les services sont rendus ou les biens livrés, et les charges lorsqu’elles sont engagées. Les immobilisations sont comptabilisées au coût et amorties selon les méthodes et les taux utilisés aux fins de l’impôt sur le revenu. Aucun état des flux de trésorerie n’a été préparé.',
+  ex:'La méthode de comptabilité appliquée dans la préparation des informations financières se fonde sur le coût historique, compte tenu des opérations de trésorerie ainsi que des éléments suivants :',
   caisse:'Les états financiers ont été compilés par la direction selon la méthode de la comptabilité de caisse : les produits sont constatés lorsqu’ils sont encaissés et les charges lorsqu’elles sont payées. Les immobilisations sont passées en charges ou amorties selon les taux utilisés aux fins de l’impôt sur le revenu. Aucun état des flux de trésorerie n’a été préparé.',
   fisc:'Les états financiers ont été compilés par la direction à partir des montants déterminés aux fins de l’impôt sur le revenu. Les produits et les charges sont constatés selon la méthode de la comptabilité d’exercice et l’amortissement correspond à la déduction pour amortissement réclamée. Aucun état des flux de trésorerie n’a été préparé.'};
 const ACC=['Les règles de déontologie (Code de déontologie des comptables professionnels agréés) peuvent être respectées, y compris quant à l’indépendance ou à sa divulgation dans le rapport.',
@@ -1148,7 +1148,7 @@ function newMis(x){const today=new Date().toISOString().slice(0,10);
     lettre:{date:today,ville:'Laval',usage:'la direction, l’institution financière de l’entreprise et la préparation des déclarations de revenus',fiscal:true,honoraires:'',signee:false},
     ent:{activites:'',forme:'Société par actions (Loi sur les sociétés par actions du Québec)',utilisateurs:'La direction, l’institution financière et les autorités fiscales',base:'ex',note1:NOTE1.ex},
     quest:{},qx:[],map:{},ws:{},ajeOk:{},ia:null,
-    ef:{dateRapport:'',ville:'Laval',signataire:'Boujrad CPA Inc.',nImmo:true,nDette:true,dette:'[Préciser pour chaque emprunt : prêteur, taux d’intérêt, versements, échéance et garanties.]',nAct:true,act:'Les avances de l’actionnaire ne portent pas intérêt et ne comportent aucune modalité de remboursement.',nCap:true,cap:'Autorisé : un nombre illimité d’actions ordinaires, votantes et participantes, sans valeur nominale.\nÉmis : [nombre] actions ordinaires',prevIS:'',revu:false},
+    ef:{dateRapport:'',ville:'Laval',signataire:'Boujrad CPA Inc.',nImmo:true,nDette:false,dette:'[Préciser pour chaque emprunt : prêteur, taux d’intérêt, versements, échéance et garanties.]',nAct:false,act:'Les avances de l’actionnaire ne portent pas intérêt et ne comportent aucune modalité de remboursement.',nCap:true,arr:true,nous:false,actions:'',capAut:'',constit:'',statut:'',permis:'',chLbl:'Frais d’administration',amo:{},cap:'Autorisé : un nombre illimité d’actions ordinaires, votantes et participantes, sans valeur nominale.\nÉmis : [nombre] actions ordinaires',prevIS:'',revu:false},
     fisc:{dpa:[],autres:[],taux:'',ok:false},decl:{date:'',signee:false},ach:{},approb:{}}}
 async function loadMis(){MIS=null;if(!C.exCur)return null;
   if(local)MIS=(LOCAL.mis||{})[C.id+'/'+C.exCur]||null;else{const s=await db.collection('clients').doc(C.id).collection('missions').doc(C.exCur).get();MIS=s.exists?s.data():null}
@@ -1256,6 +1256,144 @@ function decHtml(){const M=MIS,nom=esc(C.nom),fin=dLong(M.fin);
   <li>Nous avons lu et approuvé les états financiers compilés.</li></ol>
   <p style="margin-top:20px">Pour ${nom},</p><div class="sig">Nom, titre et signature</div>`}
 
+/* --- états financiers : format du cabinet (modèle 9392-6467) --- */
+const NOTE2_INTRO='La méthode de comptabilité appliquée dans la préparation des informations financières se fonde sur le coût historique, compte tenu des opérations de trésorerie ainsi que des éléments suivants :';
+const AMO_DEF=n=>/TERRAIN/.test(n)?['Non amorti','-']:/BATIMENT|IMMEUBLE|EDIFICE/.test(n)?['Dégressif','4 %']:/VEHICULE|AUTOMOBILE|MATERIEL ROULANT|CAMION/.test(n)?['Dégressif','30 %']:/ORDINATEUR|INFORMATIQUE|LOGICIEL/.test(n)?['Dégressif','55 %']:/AMELIORATION/.test(n)?['Linéaire','5 ans']:['Dégressif','20 %'];
+function efModel(d){const M=MIS,E=M.ef,ARR=E.arr!==false,R=c=>ARR?Math.round((c||0)/100)*100:(c||0),hasP=!!d.prior,pIS=hasP&&d.priorIS;
+  const cur=a=>d.cur.get(a)||0,pri=a=>hasP?(d.prior.get(a)||0):0;const nm=a=>accName(a),N=a=>norm(nm(a));
+  const inSec=k=>d.accts.filter(a=>secOf(a)===k);const sumR=(L,f,sg)=>L.reduce((s,a)=>s+R(sg*f(a)),0);
+  const isTax=a=>/IMPOTS? SUR LE REVENU/.test(N(a)),isAm=a=>/AMORTISSEMENT/.test(N(a));
+  /* résultats */
+  const rows=(L,sg)=>L.filter(a=>R(cur(a))||(pIS&&R(pri(a)))).map(a=>({t:'l',l:nm(a),a:R(sg*cur(a)),b:pIS?R(sg*pri(a)):null,ind:1}));
+  const rv=inSec('10'),cs=inSec('20'),ch=[...inSec('30'),...inSec('40')].filter(a=>!isTax(a)).sort((a,b)=>(isAm(a)-isAm(b))||(Math.abs(cur(b))-Math.abs(cur(a)))),tx=d.accts.filter(a=>+String(a)[0]>=5&&isTax(a));
+  const T=(L,f,sg)=>sumR(L,f,sg);const rvA=T(rv,cur,-1),rvB=T(rv,pri,-1),csA=T(cs,cur,1),csB=T(cs,pri,1),chA=T(ch,cur,1),chB=T(ch,pri,1),txA=T(tx,cur,1),txB=T(tx,pri,1);
+  const niA=rvA-csA-chA-txA,niB=pIS?rvB-csB-chB-txB:null;
+  const IS=[{t:'g',l:'Produits'},...rows(rv,-1)];if(rv.length>1)IS.push({t:'s',a:rvA,b:pIS?rvB:null});
+  if(cs.length){IS.push({t:'sp'},{t:'g',l:'Coût des ventes'},...rows(cs,1),{t:'s',a:csA,b:pIS?csB:null},{t:'l',l:'Bénéfice brut',a:rvA-csA,b:pIS?rvB-csB:null,bold:1})}
+  IS.push({t:'sp'},{t:'g',l:E.chLbl||'Frais d’administration'},...rows(ch,1),{t:'s',a:chA,b:pIS?chB:null});
+  if(tx.length)IS.push({t:'sp'},{t:'l',l:'Bénéfice (perte) avant impôts',a:rvA-csA-chA,b:pIS?rvB-csB-chB:null,bold:1},{t:'l',l:'Impôts sur le revenu',a:txA,b:pIS?txB:null,ind:1});
+  IS.push({t:'sp'},{t:'n',l:'Bénéfice net (perte nette)',a:niA,b:niB});
+  /* bénéfices non répartis */
+  const HH=inSec('HH'),divA=R(d.accts.filter(isDiv).reduce((s,a)=>s+cur(a),0)-Object.entries(d.x.ouv?.s||{}).filter(([a])=>isDiv(a)).reduce((s,[,c])=>s+c,0));
+  const divB=d.pOuv?R(d.accts.filter(isDiv).reduce((s,a)=>s+pri(a),0)-Object.entries(d.pOuv.s||{}).filter(([a])=>isDiv(a)).reduce((s,[,c])=>s+c,0)):0;
+  const debOf=o=>o?R(-Object.entries(o.s||{}).filter(([a])=>secOf(a)==='HH'||+String(a)[0]>=4).reduce((s,[,c])=>s+c,0)):null;
+  const reBS=(f,ni)=>-HH.reduce((s,a)=>s+f(a),0)+ni;
+  const finB=hasP?R(reBS(pri,pIS?(niB!=null?-[...d.prior].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s+c,0):0):0)):null;
+  const debA=finB!=null?finB:debOf(d.x.ouv);const othA=R(reBS(cur,-[...d.cur].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s+c,0)))-(debA+niA-divA);
+  const finA=debA+niA-divA+othA;const debB=d.pOuv?debOf(d.pOuv):(finB!=null&&niB!=null?finB-niB+divB:null),othB=finB!=null&&debB!=null&&niB!=null?finB-(debB+niB-divB):0;
+  const RE=[{t:'l',l:'Solde au début',a:debA,b:debB,bold:1},{t:'l',l:'Bénéfice net (perte nette)',a:niA,b:niB,ind:1}];
+  if(divA||divB)RE.push({t:'l',l:'Dividendes',a:-divA,b:hasP?-divB:null,ind:1});if(othA||othB)RE.push({t:'l',l:'Redressements',a:othA,b:hasP?othB:null,ind:1});
+  RE.push({t:'n',l:'Solde à la fin'+(finA<0?' (déficit)':''),a:finA,b:finB});
+  /* bilan */
+  const S=(k,f,sg=1)=>R(sg*inSec(k).reduce((s,a)=>s+f(a),0));const both=(k,sg)=>[S(k,cur,sg),hasP?S(k,pri,sg):null];
+  let[cA,cB]=both('A',1);const[bA,bB]=both('B',1),[cl0,cl1]=both('C',1),[dA,dB]=both('D',1),[eA,eB]=both('E',1),[fA,fB]=both('F',1),[gA,gB]=both('G',1);
+  let[aaA,aaB]=both('AA',-1),[bbA,bbB]=both('BB',-1);const[ccA,ccB]=both('CC',-1),[eeA,eeB]=both('EE',-1),[capA,capB]=both('GG',-1);
+  let ovA=0,ovB=0,trA=0,trB=0;if(cA<0){ovA=-cA;cA=0}if(cB<0){ovB=-cB;cB=0}if(bbA<0){trA=-bbA;bbA=0}if(bbB<0){trB=-bbB;bbB=0}
+  const dd=inSec('DD').map(a=>({l:nm(a),a:R(-cur(a)),b:hasP?R(-pri(a)):null})).filter(x=>x.a||x.b);
+  const lA=dd.reduce((s,x)=>s+x.a,0)+eeA,lB=dd.reduce((s,x)=>s+(x.b||0),0)+(eeB||0);
+  const clA=ovA+aaA+bbA+ccA,clB=ovB+(aaB||0)+(bbB||0)+(ccB||0),eqA=capA+finA,eqB=(capB||0)+(finB||0);
+  let caA=cA+bA+cl0+trA+dA+eA,caB=(cB||0)+(bB||0)+(cl1||0)+trB+(dB||0)+(eB||0);
+  const adjA=(clA+lA+eqA)-(caA+fA+gA),adjB=hasP?(clB+lB+eqB)-(caB+(fB||0)+(gB||0)):0;cA+=adjA;caA+=adjA;if(hasP){cB=(cB||0)+adjB;caB+=adjB}
+  const L=(l,a,b,ind=1)=>(a||b)?{t:'l',l,a,b,ind}:null;const NO={};let n=2;
+  if(fA||fB)NO.F=++n;if(E.nDette&&dd.length)NO.DD=++n;if(E.nAct&&(eeA||eeB))NO.EE=++n;if(capA||capB)NO.GG=++n;
+  const BS=[{t:'h',l:'ACTIF'},{t:'sp'},{t:'g',l:'Court terme'},L('Encaisse',cA,cB),L('Placements',bA,bB),L('Comptes clients',cl0,cl1),L('Taxes à recevoir',trA,trB),L('Stocks',dA,dB),L('Frais payés d’avance',eA,eB),{t:'s',a:caA,b:hasP?caB:null},{t:'sp'},
+    (fA||fB)?{t:'k',l:'Immobilisations corporelles',note:NO.F,a:fA,b:fB}:null,(gA||gB)?{t:'k',l:'Autres actifs',a:gA,b:gB}:null,{t:'t',a:caA+fA+gA,b:hasP?caB+(fB||0)+(gB||0):null},{t:'sp'},
+    {t:'h',l:'PASSIF'},{t:'sp'},{t:'g',l:'Court terme'},L('Découvert bancaire',ovA,ovB),L('Fournisseurs et charges à payer',aaA,aaB),L('Taxes à payer',bbA,bbB),L('Impôts sur le revenu à payer',ccA,ccB),{t:'s',a:clA,b:hasP?clB:null}];
+  if(lA||lB)BS.push({t:'sp'},{t:'g',l:'Long terme'},...dd.map(x=>({t:'l',l:x.l+(NO.DD&&x===dd[dd.length-1]?'':''),a:x.a,b:x.b,ind:1})),L('Somme due à l’actionnaire',eeA,eeB),{t:'s',a:lA,b:hasP?lB:null});
+  BS.push({t:'s',a:clA+lA,b:hasP?clB+lB:null},{t:'sp'},{t:'h',l:'CAPITAUX PROPRES'},{t:'sp'},{t:'k',l:'Capital-actions',note:NO.GG,a:capA,b:capB},{t:'k',l:'Bénéfices non répartis'+((finA<0||finB<0)?' (déficit)':''),a:finA,b:finB},{t:'s',a:eqA,b:hasP?eqB:null},{t:'t',a:clA+lA+eqA,b:hasP?clB+lB+eqB:null});
+  /* notes */
+  const notes=[{n:1,t:'STATUT ET NATURE DES ACTIVITÉS',p:[E.statut||`La société a été constituée le ${E.constit?dLong(E.constit):'[date]'} en vertu de la Loi sur les sociétés par actions du Québec. Elle oeuvre dans ${M.ent.activites?M.ent.activites.replace(/\.$/,''):'[secteur d’activité]'}.`]}];
+  const F=inSec('F'),acc=F.filter(isAm),cost=F.filter(a=>!isAm(a));
+  const pair=c=>acc.filter(a=>{const x=N(a),y=N(c).replace(/^(COUT|COÛT)\s*-?\s*/,'');return x.includes(y)||y.split(' ').filter(w=>w.length>3).some(w=>x.includes(w))});
+  const used=new Set();const cats=cost.map(c=>{const ac=pair(c).filter(a=>!used.has(a));ac.forEach(a=>used.add(a));return{l:nm(c).replace(/^co[uû]t\s*-?\s*/i,''),n:N(c),c:R(cur(c)),am:R(-ac.reduce((s,a)=>s+cur(a),0)),pb:R(pri(c)+ac.reduce((s,a)=>s+pri(a),0))}});
+  acc.filter(a=>!used.has(a)).forEach(a=>cats.push({l:nm(a),n:N(a),c:0,am:R(-cur(a)),pb:R(pri(a))}));
+  if(M.ent.base==='ex'||!M.ent.base){const bl=[];if(cl0||cl1)bl.push('Comptes clients, déduction faite d’une provision pour créances douteuses;');if(dA||dB)bl.push('Stocks évalués au moindre du coût et de la valeur nette de réalisation;');if(eA||eB)bl.push('Frais payés d’avance;');
+    if(cats.length)bl.push({t:`Immobilisations corporelles amorties sur leur durée de vie utile estimative selon les méthodes et les taux indiqués ci-dessous.${cats.some(c=>/TERRAIN/.test(c.n))?' Le terrain n’est pas amorti.':''}`,tab:cats.filter(c=>!/TERRAIN/.test(c.n)&&c.c).map(c=>{const k=c.l.replace(/[^\w]/g,'_'),o=(E.amo||{})[k]||{},df=AMO_DEF(c.n);return[c.l,o.m||df[0],o.t||df[1],k]})});
+    if(aaA||aaB||bbA||bbB)bl.push('Comptes fournisseurs et charges à payer;');const lt=[dd.length?(dd.length===1?dd[0].l.toLowerCase():'emprunts'):'',(eeA||eeB)?'somme due à l’actionnaire':''].filter(Boolean);if(lt.length){const s=lt.join(' et ')+'.';bl.push(s[0].toUpperCase()+s.slice(1))}
+    notes.push({n:2,t:'MÉTHODE DE COMPTABILITÉ',p:(M.ent.note1||NOTE2_INTRO).split('\n'),bl})}
+  else notes.push({n:2,t:'MÉTHODE DE COMPTABILITÉ',p:M.ent.note1.split('\n')});
+  if(NO.F)notes.push({n:NO.F,t:'IMMOBILISATIONS CORPORELLES',fa:{cats,hasP,tot:[cats.reduce((s,c)=>s+c.c,0),cats.reduce((s,c)=>s+c.am,0),fA,fB]}});
+  if(NO.DD)notes.push({n:NO.DD,t:'DETTE À LONG TERME',p:E.dette.split('\n')});if(NO.EE)notes.push({n:NO.EE,t:'SOMME DUE À L’ACTIONNAIRE',p:E.act.split('\n')});
+  if(NO.GG)notes.push({n:NO.GG,t:'CAPITAL-ACTIONS',cap:{lbl:E.actions||'[nombre] actions ordinaires',a:capA,b:capB,hasP,aut:E.capAut||''}});
+  const fin=dLong(d.x.fin);
+  return{nom:C.nom,fin,N:d.x.fin.slice(0,4),N1:String(+d.x.fin.slice(0,4)-1),hasP,pIS,
+    pages:[{k:'cover'},{k:'toc'},{k:'rap'},{k:'fs',t:'RÉSULTATS',s:`Exercice terminé le ${fin}`,rows:IS},{k:'fs',t:'BÉNÉFICES NON RÉPARTIS',s:`Exercice terminé le ${fin}`,rows:RE},
+      {k:'fs',t:'BILAN',s:`Au ${fin}`,rows:BS.filter(Boolean),sig:1},{k:'notes',t:'NOTES AFFÉRENTES AUX INFORMATIONS FINANCIÈRES',s:`Au ${fin}`,notes}]}}
+function rapParas(m){const M=MIS,E=M.ef,je=E.nous?0:1,nom=m.nom,f=m.fin;
+  return[je?`J'ai compilé, à partir des informations fournies par la direction, le bilan de la société ${nom} au ${f}, les états des résultats et des bénéfices non répartis pour l'exercice terminé à cette date ainsi que la note 2, qui décrit la méthode de comptabilité appliquée à la préparation des informations financières compilées et, s'il y a lieu, d'autres informations explicatives (les « informations financières »).`
+      :`Nous avons compilé, à partir des informations fournies par la direction, le bilan de la société ${nom} au ${f}, les états des résultats et des bénéfices non répartis pour l'exercice terminé à cette date ainsi que la note 2, qui décrit la méthode de comptabilité appliquée à la préparation des informations financières compilées et, s'il y a lieu, d'autres informations explicatives (les « informations financières »).`,
+    `La responsabilité des informations financières ci-jointes, y compris de l'exactitude et de l'exhaustivité des informations sous-jacentes ayant servi à leur compilation, et de la sélection de la méthode de comptabilité, incombe à la direction.`,
+    je?`J'ai réalisé la mission conformément à la Norme canadienne de services connexes (NCSC) 4200, Missions de compilation, qui exige que je me conforme aux règles de déontologie pertinentes. Ma responsabilité consiste à assister la direction dans la préparation des informations financières.`
+      :`Nous avons réalisé la mission conformément à la Norme canadienne de services connexes (NCSC) 4200, Missions de compilation, qui exige que nous nous conformions aux règles de déontologie pertinentes. Notre responsabilité consiste à assister la direction dans la préparation des informations financières.`,
+    je?`Je n'ai pas réalisé une mission d'audit ou d'examen et n'étais pas tenu de mettre en œuvre des procédures pour vérifier l'exactitude et l'exhaustivité des informations fournies par la direction. Par conséquent, je n'exprime pas une opinion d'audit ni une conclusion de mission d'examen, ni ne fournis une quelconque forme d'assurance à l'égard des informations financières.`
+      :`Nous n'avons pas réalisé une mission d'audit ou d'examen et n'étions pas tenus de mettre en œuvre des procédures pour vérifier l'exactitude et l'exhaustivité des informations fournies par la direction. Par conséquent, nous n'exprimons pas une opinion d'audit ni une conclusion de mission d'examen, ni ne fournissons une quelconque forme d'assurance à l'égard des informations financières.`,
+    `Le lecteur doit garder à l'esprit que les informations financières risquent de ne pas convenir à ses besoins.`,
+    ...(M.indep==='non'?[`${je?'Je ne suis pas indépendant':'Nous ne sommes pas indépendants'} de la société ${nom}${M.indepRaison?' : '+M.indepRaison:''}.`]:[])]}
+const fd=c=>{if(c==null)return'';if(!c)return'-';const s=new Intl.NumberFormat('fr-CA',{maximumFractionDigits:MIS.ef.arr!==false?0:2,minimumFractionDigits:MIS.ef.arr!==false?0:2}).format(Math.abs(c)/100);return c<0?`(${s})`:s};
+function efPreview(m){const E=MIS.ef,h=(t,s)=>`<div class="ehd"><strong>${esc(m.nom)}</strong><em>${esc(t)}</em><b>${esc(s)}</b></div>`;
+  const yr=`<tr class="yr"><td></td><td class="num"><b>${m.N}</b><br>$</td>${m.hasP?`<td class="num">${m.N1}<br>$</td>`:''}</tr>`;
+  const row=r=>{if(r.t==='sp')return'<tr class="sp"><td colspan="3"></td></tr>';if(r.t==='h')return `<tr><td colspan="3"><em>${esc(r.l)}</em></td></tr>`;if(r.t==='g')return `<tr><td colspan="3"><strong>${esc(r.l)}</strong></td></tr>`;
+    const lbl=r.t==='k'?`<strong>${esc(r.l)}</strong>${r.note?` (note ${r.note})`:''}`:r.t==='n'||r.bold?`<strong>${esc(r.l)}</strong>`:esc(r.l||'');
+    return `<tr class="${r.t}"><td${r.ind?' class="ind"':''}>${lbl}</td><td class="num"><b>${fd(r.a)}</b></td>${m.hasP?`<td class="num">${fd(r.b)}</td>`:''}</tr>`};
+  let x=`<div class="pg ecov"><hr><p><strong><em>${esc(m.nom)}</em></strong></p><p><strong>INFORMATIONS FINANCIÈRES</strong></p><p><strong>${esc(m.fin)}</strong></p><hr></div>`;
+  x+=`<div class="pg">${h('TABLE DES MATIÈRES',m.fin)}<table class="etoc"><tr><td></td><td class="num"><b>Page</b></td></tr><tr><td><b>Rapport de mission de compilation</b></td><td class="num">2</td></tr><tr><td><b>Informations financières</b></td><td></td></tr><tr><td class="ind">Résultats</td><td class="num">3</td></tr><tr><td class="ind">Bénéfices non répartis</td><td class="num">4</td></tr><tr><td class="ind">Bilan</td><td class="num">5</td></tr><tr><td class="ind">Notes afférentes aux informations financières</td><td class="num">6</td></tr></table></div>`;
+  x+=`<div class="pg"><p class="c"><strong><em>RAPPORT DE MISSION DE COMPILATION</em></strong></p><p><strong><em>À la direction de</em><br>${esc(m.nom)}</strong></p>${rapParas(m).map(p=>`<p class="j">${esc(p).replace('Missions de compilation','<em>Missions de compilation</em>')}</p>`).join('')}
+    <p style="margin-top:40px">______________________________<sup>1</sup></p><p style="margin-top:20px">${esc(E.ville||'Laval')}, le ${esc(dLong(E.dateRapport))}</p><p style="margin-top:40px;font-size:12px"><sup>1</sup> Par ${esc(MIS.approb.prep||'______________________')}, CPA, permis de CPA nº ${esc(E.permis||'__________')}</p></div>`;
+  m.pages.filter(p=>p.k==='fs').forEach(p=>{x+=`<div class="pg">${h(p.t,p.s)}<table class="efs">${yr}${p.rows.map(row).join('')}</table>${p.sig?'<p style="margin-top:30px"><strong>POUR LE CONSEIL D’ADMINISTRATION,</strong></p><p style="margin-top:26px">______________________________, administrateur</p><p style="margin-top:20px">______________________________, administrateur</p>':''}</div>`});
+  const np=m.pages.find(p=>p.k==='notes');x+=`<div class="pg">${h(np.t,np.s)}${np.notes.map(nt=>`<p class="nt"><strong>${nt.n}.&nbsp;&nbsp;${esc(nt.t)}</strong></p><div class="nb">${(nt.p||[]).map(p=>`<p class="j">${esc(p)}</p>`).join('')}
+    ${nt.bl?`<ul>${nt.bl.map(b=>typeof b==='string'?`<li>${esc(b)}</li>`:`<li>${esc(b.t)}${b.tab.length?`<table class="efs" style="max-width:420px"><tr><td></td><td><b>Méthodes</b></td><td><b>Taux</b></td></tr>${b.tab.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</table>`:''}</li>`).join('')}</ul>`:''}
+    ${nt.fa?`<table class="efs"><tr class="yr"><td></td><td class="num" colspan="3"><b>${m.N}</b></td>${nt.fa.hasP?`<td class="num">${m.N1}</td>`:''}</tr><tr class="yr"><td></td><td class="num">Coût<br>$</td><td class="num">Amortissement cumulé<br>$</td><td class="num">Valeur nette<br>$</td>${nt.fa.hasP?'<td class="num">Valeur nette<br>$</td>':''}</tr>${nt.fa.cats.map(c=>`<tr><td>${esc(c.l)}</td><td class="num"><b>${fd(c.c)}</b></td><td class="num"><b>${fd(c.am)}</b></td><td class="num"><b>${fd(c.c-c.am)}</b></td>${nt.fa.hasP?`<td class="num">${fd(c.pb)}</td>`:''}</tr>`).join('')}<tr class="t"><td></td><td class="num"><b>${fd(nt.fa.tot[0])}</b></td><td class="num"><b>${fd(nt.fa.tot[1])}</b></td><td class="num"><b>${fd(nt.fa.tot[2])}</b></td>${nt.fa.hasP?`<td class="num">${fd(nt.fa.tot[3])}</td>`:''}</tr></table>`:''}
+    ${nt.cap?`<table class="efs">${yr}${nt.cap.aut?`<tr><td colspan="3">${esc(nt.cap.aut)}</td></tr>`:''}<tr><td>Émis et payé :</td><td></td>${nt.cap.hasP?'<td></td>':''}</tr><tr class="s"><td class="ind">${esc(nt.cap.lbl)}</td><td class="num"><b>${fd(nt.cap.a)}</b></td>${nt.cap.hasP?`<td class="num">${fd(nt.cap.b)}</td>`:''}</tr></table>`:''}</div>`).join('')}</div>`;
+  return x}
+async function efPdf(m,file){if(!downloads)throw{code:'nodl'};
+  if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),X=72,XR=W-72;
+  const cl=t=>String(t??'').replace(/[   ]/g,' ').replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/…/g,'...');
+  const F=(st,sz)=>{doc.setFont('helvetica',st);doc.setFontSize(sz)};const C1=XR-80,C2=XR;let y=0,pg=0;
+  const line=(x1,x2,yy,w=.5)=>{doc.setLineWidth(w);doc.line(x1,yy,x2,yy)};
+  const newPage=()=>{if(pg++)doc.addPage();y=72};
+  const hdr=(t,s)=>{F('bold',11);doc.text(cl(m.nom),X,y);y+=11;F('bolditalic',7.5);doc.text(cl(t),X,y);y+=9;F('bold',7.5);doc.text(cl(s),X,y);y+=6;line(X,XR,y,1.4);y+=24};
+  const para=(t,o={})=>{F(o.st||'normal',o.sz||9.5);const L=doc.splitTextToSize(cl(t),(o.w||XR-X));if(y+L.length*12>H-70){newPage()}
+    if(o.just&&L.length>1){L.forEach((ln,i)=>{const last=i===L.length-1;if(last){doc.text(ln,o.x||X,y)}else doc.text(ln,o.x||X,y,{maxWidth:o.w||XR-X,align:'justify'});y+=12})}else{doc.text(L,o.c?W/2:(o.x||X),y,{align:o.c?'center':'left'});y+=L.length*12}y+=o.after??8};
+  const amt=(a,b,hasP,bold=true)=>{F(bold?'bold':'normal',9);if(a!=null)doc.text(cl(fd(a)),hasP?C1:C2,y,{align:'right'});F('normal',9);if(hasP&&b!=null)doc.text(cl(fd(b)),C2,y,{align:'right'})};
+  const yrs=(hasP)=>{F('bold',9);doc.text(m.N,hasP?C1:C2,y,{align:'right'});if(hasP){F('normal',9);doc.text(m.N1,C2,y,{align:'right'})}y+=10;F('bold',9);doc.text('$',hasP?C1:C2,y,{align:'right'});if(hasP){F('normal',9);doc.text('$',C2,y,{align:'right'})}y+=16};
+  const cols=hasP=>hasP?[C1-62,C2-62]:[C2-62];
+  // couverture
+  newPage();y=300;line(X+20,W/2+70,y,1.2);y+=24;F('bolditalic',10);doc.text(cl(m.nom),(X+20+W/2+70)/2,y,{align:'center'});y+=18;F('bold',7.5);doc.text('INFORMATIONS FINANCIÈRES',(X+20+W/2+70)/2,y,{align:'center'});y+=18;doc.text(cl(m.fin),(X+20+W/2+70)/2,y,{align:'center'});y+=24;line(X+20,W/2+70,y,1.2);
+  // table des matières
+  newPage();hdr('TABLE DES MATIÈRES',m.fin);y+=60;F('bold',9);doc.text('Page',XR,y,{align:'right'});y+=20;
+  [['Rapport de mission de compilation','2',1,0],['Informations financières','',1,0],['Résultats','3',0,1],['Bénéfices non répartis','4',0,1],['Bilan','5',0,1],['Notes afférentes aux informations financières','6',0,1]].forEach(([l,p,b,i])=>{F(b?'bold':'normal',9);doc.text(cl(l),X+(i?18:0),y);F('normal',9);if(p)doc.text(p,XR,y,{align:'right'});y+=20});
+  // rapport
+  newPage();y=110;F('bolditalic',12);doc.text('RAPPORT DE MISSION DE COMPILATION',W/2,y,{align:'center'});y+=36;F('bolditalic',9.5);doc.text('À la direction de',X,y);y+=12;F('bold',9.5);doc.text(cl(m.nom),X,y);y+=30;
+  rapParas(m).forEach(p=>para(p,{just:1,after:9}));y+=50;line(X,X+170,y,.5);F('normal',6);doc.text('1',X+173,y-3);y+=40;F('normal',9.5);doc.text(cl(`${MIS.ef.ville||'Laval'}, le ${dLong(MIS.ef.dateRapport)}`),X,y);
+  y=H-90;line(X,X+170,y,.5);y+=12;F('normal',6);doc.text('1',X,y-3);F('normal',8.5);doc.text(cl(`Par ${MIS.approb.prep||'______________________'}, CPA, permis de CPA nº ${MIS.ef.permis||'__________'}`),X+5,y);
+  // états
+  const drawRows=(rows,hasP)=>{rows.forEach(r=>{if(y>H-80){newPage()}
+    if(r.t==='sp'){y+=6;return}if(r.t==='h'){F('bolditalic',9);doc.text(cl(r.l),X,y);y+=15;return}if(r.t==='g'){F('bold',9);doc.text(cl(r.l),X,y);y+=13;return}
+    const xs=cols(hasP);if(r.t==='s'||r.t==='t'){doc.setDrawColor(0);xs.forEach(x=>line(x,x+62,y-9,.6));}
+    if(r.t==='n'){line(X,XR,y-9,.6)}if(r.t==='k'){}
+    if(r.l){if(r.t==='k'){F('bold',9);doc.text(cl(r.l),X,y);if(r.note){const w=doc.getTextWidth(cl(r.l));F('normal',9);doc.text(` (note ${r.note})`,X+w,y)}}else{F(r.t==='n'||r.bold?'bold':'normal',9);doc.text(cl(r.l),X+(r.ind?16:0),y)}}
+    amt(r.a,r.b,hasP);
+    if(r.t==='k')line(X,XR,y+4,.5);
+    if(r.t==='t'||r.t==='n'){xs.forEach(x=>{line(r.t==='n'?X:x,x+62,y+4,.6);line(r.t==='n'?X:x,x+62,y+6.5,.6)});if(r.t==='n')line(X,XR,y+4,.6)}
+    y+=r.t==='s'||r.t==='t'||r.t==='n'?16:13})};
+  m.pages.filter(p=>p.k==='fs').forEach(p=>{newPage();hdr(p.t,p.s);yrs(m.hasP);drawRows(p.rows,m.hasP);
+    if(p.sig){y+=40;F('bold',8.5);doc.text('POUR LE CONSEIL D’ADMINISTRATION,'.replace('’',"'"),X,y);y+=36;F('normal',8.5);doc.text('______________________________, administrateur',X,y);y+=30;doc.text('______________________________, administrateur',X,y)}});
+  // notes
+  const np=m.pages.find(p=>p.k==='notes');newPage();hdr(np.t,np.s);const NX=X+28;
+  np.notes.forEach(nt=>{if(y>H-130)newPage();F('bold',8.5);doc.text(nt.n+'.',X,y);doc.text(cl(nt.t),NX,y);y+=16;
+    (nt.p||[]).forEach(p=>para(p,{x:NX,w:XR-NX,just:1}));
+    (nt.bl||[]).forEach(b=>{const t=typeof b==='string'?b:b.t;F('normal',9.5);doc.text('-',NX,y);const L=doc.splitTextToSize(cl(t),XR-NX-22);doc.text(L,NX+22,y);y+=L.length*12+6;
+      if(typeof b!=='string'&&b.tab.length){F('bold',8.5);doc.text('Méthodes',NX+200,y);doc.text('Taux',NX+300,y);y+=12;F('normal',8.5);b.tab.forEach(r=>{doc.text(cl(r[0]),NX+22,y);doc.text(cl(r[1]),NX+200,y);doc.text(cl(r[2]),NX+300,y);y+=12});y+=8}});
+    if(nt.fa){const fa=nt.fa,cx=fa.hasP?[XR-230,XR-160,XR-90,XR]:[XR-160,XR-90,XR];y+=4;F('bold',8.5);doc.text(m.N,fa.hasP?cx[1]-20:cx[1]-20,y,{align:'center'});if(fa.hasP){F('normal',8.5);doc.text(m.N1,cx[3],y,{align:'right'})}y+=4;line(cx[0]-50,cx[2],y,.5);y+=10;
+      [['','Amortissement','Valeur','Valeur'],['Coût','cumulé','nette','nette'],['$','$','$','$']].forEach(rw=>{rw.forEach((t,i)=>{if(i===3&&!fa.hasP)return;F(i<3?'bold':'normal',8.5);doc.text(t,cx[i],y,{align:'right'})});y+=10});y+=6;
+      fa.cats.forEach((c,i)=>{F('normal',8.5);doc.text(cl(c.l),NX+10,y);F('bold',8.5);[c.c,c.am,c.c-c.am].forEach((v,j)=>doc.text(cl(fd(v)),cx[j],y,{align:'right'}));if(fa.hasP){F('normal',8.5);doc.text(cl(fd(c.pb)),cx[3],y,{align:'right'})}if(i===fa.cats.length-1)line(NX+10,XR,y+4,.5);y+=13});
+      F('bold',8.5);fa.tot.slice(0,3).forEach((v,j)=>doc.text(cl(fd(v)),cx[j],y,{align:'right'}));if(fa.hasP){F('normal',8.5);doc.text(cl(fd(fa.tot[3])),cx[3],y,{align:'right'})}line(cx[0]-50,XR,y+4,.6);line(cx[0]-50,XR,y+6.5,.6);y+=24}
+    if(nt.cap){const c=nt.cap;y+=2;yrs(c.hasP);if(c.aut)para(c.aut,{x:NX,w:XR-NX});F('normal',8.5);doc.text('Émis et payé :',NX+10,y);y+=13;doc.text(cl(c.lbl),NX+20,y);amt(c.a,c.b,c.hasP);cols(c.hasP).forEach(x=>line(x,x+62,y+4,.6));y+=24}
+    y+=6});
+  const n=doc.getNumberOfPages();for(let i=4;i<=n;i++){doc.setPage(i);F('normal',8);doc.text(String(i-1),W/2,H-36,{align:'center'})}
+  await downloads.save({filename:file.replace(/[^\w.-]+/g,'_'),data:new Uint8Array(doc.output('arraybuffer'))})}
+
 /* --- rendu de l'onglet --- */
 async function renderMis(){const x=curEx();$('misMsg').textContent='';
   if(!x){$('misSub').textContent='';$('misHead').innerHTML='<p class="note" style="margin-top:10px">Définissez d’abord l’exercice (début et fin) dans Paramètres.</p>';$('misBody').innerHTML='';return}
@@ -1312,12 +1450,17 @@ function stepHtml(k,d){const M=MIS;
     <div class="scroll"><table class="stack"><thead><tr><th>Date</th><th>Réf.</th><th>Écriture</th><th class="num">Effet sur le bénéfice</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">Aucune écriture d’ajustement pour l’instant.</td></tr>'}</tbody></table></div>
     ${ia&&ia.aje?.length?`<h3 style="margin-top:16px">Ajustements proposés par l’IA (${esc((ia.date||'').slice(0,10))})</h3><ul class="chk">${ia.aje.map((a,i)=>`<li class="warn"><div><strong>${esc(a.desc||'')}</strong><span>${esc(a.raison||'')}${(a.lignes||[]).length?' — '+a.lignes.map(l=>`${esc(l.compte)} ${l.debit?'Dt '+esc(l.debit):''}${l.credit?'Ct '+esc(l.credit):''}`).join(' · '):''}</span></div><button class="sm" data-iaje="${i}">Préparer l’écriture</button></li>`).join('')}</ul>`:''}
     ${mCk('ajeDone','Toutes les écritures d’ajustement ont été passées en revue et approuvées par la direction')}`}
-  if(k==='ef')return `<h2>8. États financiers compilés</h2><div class="mgrid">${mIn('ef.dateRapport','Date du rapport de compilation',{type:'date',rr:1})}${mIn('ef.ville','Ville',{rr:1})}${mIn('ef.signataire','Cabinet',{rr:1})}${mIn('approb.prep','CPA signataire',{rr:1})}</div>
-    <div class="row">${mCk('ef.nImmo','Note Immobilisations')}${mCk('ef.nDette','Note Dette à long terme')}${mCk('ef.nAct','Note Avances de l’actionnaire')}${mCk('ef.nCap','Note Capital-actions')}</div>
-    <details style="margin-top:8px"><summary>Textes des notes et chiffres comparatifs</summary>${mTa('ef.dette','Dette à long terme : modalités',60,1)}${mTa('ef.act','Avances de l’actionnaire',50,1)}${mTa('ef.cap','Capital-actions',60,1)}
+  if(k==='ef'){const m=efModel(d),fa=m.pages[6].notes.find(n=>n.bl)?.bl.find(b=>typeof b!=='string');
+    return `<h2>8. États financiers compilés</h2><p class="note">Format du cabinet : page titre, table des matières, rapport de mission de compilation, résultats, bénéfices non répartis, bilan et notes, montants arrondis au dollar.</p>
+    <div class="mgrid">${mIn('ef.dateRapport','Date du rapport',{type:'date',rr:1})}${mIn('ef.ville','Ville',{rr:1})}${mIn('approb.prep','CPA signataire (nom)',{rr:1})}${mIn('ef.permis','Permis de CPA nº',{rr:1})}${mIn('ef.constit','Date de constitution',{type:'date',rr:1})}${mIn('ef.actions','Actions émises et payées (ex. 100 actions ordinaires)',{rr:1})}${mIn('ef.chLbl','Titre des charges à l’état des résultats',{rr:1})}</div>
+    ${mTa('ent.activites','Nature des activités (note 1 : « Elle oeuvre dans… »), ex. la location d’immeubles',50,1)}
+    <div class="row">${mCk('ef.arr','Arrondir au dollar')}${mCk('ef.nous','Rapport au « nous » (plusieurs associés)')}${mCk('ef.nDette','Note Dette à long terme')}${mCk('ef.nAct','Note Somme due à l’actionnaire')}</div>
+    <details style="margin-top:8px"><summary>Textes des notes, méthodes d’amortissement et chiffres comparatifs</summary>${mTa('ef.statut','Note 1 en entier (laisser vide pour le texte automatique)',50,1)}${mTa('ent.note1','Note 2 : introduction',60,1)}
+    ${fa&&fa.tab.length?`<table class="qa" style="margin-top:8px"><tr><th>Immobilisation</th><th>Méthode</th><th>Taux</th></tr>${fa.tab.map(r=>`<tr><td>${esc(r[0])}</td><td><input data-mk="ef.amo.${r[3]}.m" value="${esc(r[1])}" data-rr></td><td><input data-mk="ef.amo.${r[3]}.t" value="${esc(r[2])}" data-rr></td></tr>`).join('')}</table>`:''}
+    ${mTa('ef.capAut','Capital-actions : texte « Autorisé » (facultatif)',40,1)}${mTa('ef.dette','Dette à long terme : modalités',50,1)}${mTa('ef.act','Somme due à l’actionnaire',40,1)}
     ${d.priorIS?'':mTa('ef.prevIS','Résultats de l’exercice précédent (un compte par ligne : numéro puis montant, débit positif, crédit négatif) — pour les chiffres comparatifs',90,1)}</details>
     <div class="row" style="margin-top:10px"><button class="sm pri" data-pdf="ef">Télécharger les états financiers (PDF)</button></div>
-    <div class="paper" id="efPaper">${efHtml(d)}</div>${mCk('ef.revu','États financiers lus en entier et comparés à l’exercice précédent')}`;
+    <div class="paper efp" id="efPaper">${efPreview(m)}</div>${mCk('ef.revu','États financiers lus en entier et comparés à l’exercice précédent')}`}
   if(k==='fis'){const f=fsCalc(d),sumA=re=>d.accts.filter(a=>+String(a)[0]>=5&&re.test(norm(accName(a)))).reduce((s,a)=>s+(d.cur.get(a)||0),0);
     const am=sumA(/AMORTISSEMENT/),rep=Math.round(sumA(/REPAS|REPRESENTATION|DIVERTISSEMENT/)/2),pen=sumA(/AMENDE|PENALITE/),imp=sumA(/IMPOTS? SUR LE REVENU/),dons=sumA(/\bDONS?\b|BIENFAISANCE/);
     const dpa=(M.fisc.dpa||[]).map(r=>{const f0=cents(r.fnacc),ac=cents(r.acq),di=cents(r.disp),t=parseFloat(String(r.taux).replace(',','.'))/100||0,fa=parseFloat(String(r.f||'1').replace(',','.'))||1,net=ac-di,base=f0+(net>0?net*fa:net),x=Math.max(0,Math.round(base*t));return{...r,f0,ac,di,x,fin:f0+net-x,rec:f0+net<0}});
@@ -1441,7 +1584,7 @@ async function misPdf(kind,btn){const say=t=>$('misMsg').textContent=t;if(!downl
     if(kind==='let'){root.innerHTML=`<div class="pg">${letHtml()}</div>`;name+='Lettre_de_mission_'+fy}
     else if(kind==='dec'){root.innerHTML=`<div class="pg">${decHtml()}</div>`;name+='Declaration_de_la_direction_'+fy}
     else if(kind==='q'){root.innerHTML=`<div class="pg"><h1>${esc(C.nom)}</h1><h2>Questionnaire de fin d’exercice — exercice clos le ${dLong(MIS.fin)}</h2><p>Merci de répondre à chaque question et de joindre les documents demandés.</p><table class="rep"><tr class="sec"><td>Question</td><td>Oui / Non</td><td>Détails</td></tr>${[...QS,...MIS.qx.map(q=>q.q)].map((q,i)=>`<tr><td>${i+1}. ${esc(q)}</td><td>${esc((i<QS.length?MIS.quest['q'+i]?.r:MIS.qx[i-QS.length]?.r)||'')}</td><td>${esc((i<QS.length?MIS.quest['q'+i]?.d:MIS.qx[i-QS.length]?.d)||'')}</td></tr>`).join('')}</table><div class="sig">Signature de la direction et date</div></div>`;name+='Questionnaire_'+fy}
-    else{const d=await misCalc();if(kind==='ef'){root.innerHTML=efHtml(d);name+='Etats_financiers_'+fy}else{root.innerHTML=wpHtml(d);name+='Dossier_de_travail_'+fy}}
+    else{const d=await misCalc();if(kind==='ef'){await efPdf(efModel(d),name+'Informations_financieres_'+fy+'.pdf');say('PDF enregistré.');btn.disabled=false;return}else{root.innerHTML=wpHtml(d);name+='Dossier_de_travail_'+fy}}
     await pdfOf(root,name+'.pdf');say('PDF enregistré.')}
   catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.')}btn.disabled=false}
 
