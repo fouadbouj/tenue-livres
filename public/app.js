@@ -77,7 +77,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -188,14 +188,14 @@ async function openRange(){let f=$('rFrom').value,t=$('rTo').value;const src=$('
   msg(`${P.tx.length} transaction(s) de ${moisLbl(months[0])} à ${moisLbl(months[months.length-1])}, sur ${P.parts.filter(p=>p.exists).length} mois avec des données. Les modifications sont enregistrées dans chaque mois.`);render()}
 
 /* ---------- onglets ---------- */
-const CFG=['set','plan','rules','links','per'],PGT={home:['Accueil','Où en est le dossier et ce qu’il reste à faire.'],rev:['Transactions','Déposez un relevé, puis classez les transactions du mois.'],inv:['Factures','Comptes clients et fournisseurs.'],je:['Écritures de journal','Ajustements, amortissement et soldes d’ouverture.'],rec:['Conciliation bancaire','Comparez les livres aux soldes des relevés.'],rep:['Rapports','Bilan, résultats, grand livre et autres rapports.'],mis:['Mission de compilation','Tout le dossier de fin d’exercice, étape par étape.']};
+const CFG=['set','plan','rules','links','per'],PGT={home:['Accueil','Où en est le dossier et ce qu’il reste à faire.'],rev:['Transactions','Déposez un relevé, puis classez les transactions du mois.'],inv:['Factures','Comptes clients et fournisseurs.'],je:['Écritures de journal','Ajustements, amortissement et soldes d’ouverture.'],rec:['Conciliation bancaire','Comparez les livres aux soldes des relevés.'],rep:['Rapports','Bilan, résultats, grand livre et autres rapports.'],mis:['Mission de compilation','Tout le dossier de fin d’exercice, étape par étape.'],pay:['Paie','Salaire de l’actionnaire et des employés : retenues, cotisations et DAS.'],exp:['Export Sage 50','Le fichier d’import des écritures pour Sage 50.']};
 function setTab(t){tab=t;const g=CFG.includes(t)?'set':t;document.querySelectorAll('#side [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g));document.querySelectorAll('#cfgNav [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
   $('cfgNav').hidden=g!=='set';const pt=PGT[g]||['Réglages','Plan comptable, règles, comptes liés, exercices et paramètres du dossier.'];$('pgTitle').textContent=pt[0];$('pgSub').textContent=pt[1];window.scrollTo?.(0,0);
   $('tHome').hidden=t!=='home';if(t==='home')renderHome();
-  for(const[k,id]of[['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
+  for(const[k,id]of[['exp','tExp'],['pay','tPay'],['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
   if(t==='mis')renderMis();
   if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
-  if(t==='per')loadPeriods();navPush()}
+  if(t==='per'||t==='exp')loadPeriods();if(t==='pay')renderPay();if(t==='exp')$('expPer').textContent=P?`${moisLbl(P.mois||$('pMois').value)} · ${$('pSrc').value} ${accName($('pSrc').value)}`:'aucun';navPush()}
 document.querySelectorAll('#side [data-t],#cfgNav [data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
 let PERS=[];
@@ -738,11 +738,9 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
       rows.forEach(([e,c])=>{sb+=c;c>0?D+=c:K-=c;x+=`<tr><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td>${e.kind==='rel'?`<a data-open="${esc(e.mois+'|'+e.src+'|'+e.desc)}">${esc(e.desc)}</a>`:esc(e.desc)}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td><td class="num">${fmtN(sb)}</td></tr>`});
       x+=`<tr class="sub"><td colspan="3">Total ${esc(a)}</td><td class="num">${fmtN(D)}</td><td class="num">${fmtN(K)}</td><td class="num">${fmtN(sb)}</td></tr>`});
     h=`<h2>Grand livre du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="grp"><td>Date</td><td>Réf.</td><td>Description</td><td class="num">Débit</td><td class="num">Crédit</td><td class="num">Solde</td></tr>${x||'<tr><td colspan="6" class="empty">Aucune écriture.</td></tr>'}</table>`}
-  if(REP==='tx'){const fl=a=>E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).reduce((s,e)=>s+e.lines.filter(l=>l[0]===a).reduce((x,l)=>x+l[1],0),0);
-    const tpsV=-fl(C.tpsV),tvqV=-fl(C.tvqV),cti=fl(C.tpsA),rti=fl(C.tvqA);const rev=-E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).reduce((s,e)=>s+e.lines.filter(l=>String(l[0])[0]==='4').reduce((x,l)=>x+l[1],0),0);
-    const row=(a,b,c)=>`<tr><td>${a}</td><td class="num">${fmtN(b)||'0,00'}</td><td class="num">${fmtN(c)||'0,00'}</td></tr>`;
-    h=`<h2>TPS/TVQ du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td></td><td class="num">TPS</td><td class="num">TVQ</td></tr>${row(`Taxes perçues (${esc(C.tpsV)} / ${esc(C.tvqV)})`,tpsV,tvqV)}${row(`CTI / RTI (${esc(C.tpsA)} / ${esc(C.tvqA)})`,cti,rti)}<tr class="tot"><td>${tpsV-cti>=0?'Taxe nette à remettre':'Remboursement'}</td><td class="num">${fmtN(Math.abs(tpsV-cti))||'0,00'}</td><td class="num">${fmtN(Math.abs(tvqV-rti))||'0,00'}</td></tr></table>
-      <p class="note">Revenus totaux de la période (comptes 4xxx) : ${fmtN(rev)||'0,00'} $. Ces montants viennent des taxes ventilées (« Taxes incl. ») et des factures. Les repas ne donnent droit qu'à 50 % des CTI/RTI.</p>`}
+  if(REP==='tx')h=txSumHtml(E,f,t);
+  if(REP==='txd')h=txDetHtml(E,f,t);
+  if(REP==='das')h=await dasHtml(f,t);
   if(REP==='ap'||REP==='ar'){await loadInv();h=agingHtml(REP==='ap'?'achat':'vente',t)}
   if(REP==='gifi'){const[exD]=exRange();const B=balances(E,null,t),I=balances(E,f||exD,t);const G=C.gifi||{};
     const acc=[...new Map([...[...B].filter(([a,c])=>c&&+String(a)[0]<4),...[...I].filter(([a,c])=>c&&+String(a)[0]>=4)])].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true}));
@@ -1603,6 +1601,91 @@ async function misPdf(kind,btn){const say=t=>$('misMsg').textContent=t;if(!downl
 $('perAll').onchange=loadPeriods;$('jeAll').onchange=renderJe;
 
 
+/* ---------- paie ---------- */
+/* Taux 2026 (Revenu Québec, ARC, EDSC) */
+const PR={2026:{rrq:{mga:74600,exe:3500,t:6.30,mga2:85000,t2:4},rqap:{max:103000,e:.430,r:.602},ae:{max:68900,e:1.30,r:1.82},cnt:{max:103000,t:.06},
+  fed:{br:[[58523,14],[117045,20.5],[181440,26],[258482,29],[1e12,33]],bpa:16452,ab:16.5},qc:{br:[[54345,14],[108680,19],[132245,24],[1e12,25.75]],bpa:18952}}};
+const prOf=y=>PR[y]||PR[Math.max(...Object.keys(PR).map(Number))];
+const FREQ={1:'Annuelle (ou prime unique)',12:'Mensuelle',24:'Bimensuelle',26:'Aux deux semaines',52:'Hebdomadaire'};
+let PAY=[];
+const payCol=()=>db.collection('clients').doc(C.id).collection('paies');
+async function loadPay(){PAY=[];try{if(local)PAY=Object.entries(LOCAL.pay||{}).filter(([k])=>k.startsWith(C.id+'/')).map(([k,v])=>({id:k.split('/')[1],...v}));else{const s=await payCol().get();PAY=s.docs.map(d=>({id:d.id,...d.data()}))}}catch(e){}PAY.sort((a,b)=>a.date.localeCompare(b.date));return PAY}
+const pset=()=>{C.paie=C.paie||{};const s=C.paie;return{fss:s.fss??1.65,cnesst:s.cnesst??0,sal:s.sal||findAcc(/SALAIRE|REMUNERATION/,true)||'',chg:s.chg||findAcc(/CHARGES? SOCIALES|AVANTAGES SOCIAUX|COTISATIONS? D.?EMPLOYEUR/,true)||'',
+  das:s.das||findAcc(/DAS|RETENUES? A LA SOURCE|SOMMES A REMETTRE|DEDUCTIONS A LA SOURCE|REMISES/)||'',net:s.net||findAcc(/SALAIRES? A PAYER|PAIE A PAYER/)||C.paie.net||''}};
+const brk=(A,br)=>{let t=0,lo=0;for(const[hi,r]of br){if(A>lo)t+=(Math.min(A,hi)-lo)*r/100;lo=hi}return t};
+function payCalc(emp,date,brut,ovr={}){const y=+date.slice(0,4),R=prOf(y),P=+emp.freq||12,g=brut/100;
+  const ytd=PAY.filter(p=>p.emp===emp.id&&p.date.slice(0,4)===String(y)&&p.date<date).reduce((s,p)=>s+(p.c?.brut||0)/100,0);
+  const r2=x=>Math.round(x*100);const cap=(max,v)=>Math.max(0,Math.min(v,max-ytd));
+  const rrqMax=(R.rrq.mga-R.rrq.exe)*R.rrq.t/100,rrqYtd=PAY.filter(p=>p.emp===emp.id&&p.date.slice(0,4)===String(y)&&p.date<date).reduce((s,p)=>s+(p.c?.rrq||0)/100,0);
+  const rrq=Math.max(0,Math.min(Math.max(0,Math.min(g,Math.max(0,R.rrq.mga-ytd))-R.rrq.exe/P)*R.rrq.t/100,rrqMax-rrqYtd));
+  const rrq2=Math.max(0,Math.min(ytd+g,R.rrq.mga2)-Math.max(ytd,R.rrq.mga))*R.rrq.t2/100;
+  const ins=cap(R.rqap.max,g),rqap=ins*R.rqap.e/100,ae=emp.act?0:cap(R.ae.max,g)*R.ae.e/100,aeR=emp.act?0:cap(R.ae.max,g)*R.ae.r/100;
+  const A=g*P,base=rrq*P*(5.3/R.rrq.t),K=0.14*(R.fed.bpa+Math.min(base,(R.rrq.mga-R.rrq.exe)*0.053)+Math.min(ae*P,R.ae.max*R.ae.e/100)+Math.min(rqap*P,R.rqap.max*R.rqap.e/100));
+  const fedA=Math.max(0,brk(A-(rrq2*P)-(rrq*P*(1/R.rrq.t)),R.fed.br)-K)*(1-R.fed.ab/100),qcA=Math.max(0,brk(A-(rrq2*P)-(rrq*P*(1/R.rrq.t)),R.qc.br)-0.14*R.qc.bpa);
+  const S=pset();const c={brut:r2(g),rrq:r2(rrq),rrq2:r2(rrq2),rqap:r2(rqap),ae:r2(ae),impF:ovr.impF!=null&&ovr.impF!==''?cents(ovr.impF):r2(fedA/P),impQ:ovr.impQ!=null&&ovr.impQ!==''?cents(ovr.impQ):r2(qcA/P),
+    eRrq:r2(rrq+rrq2),eRqap:r2(ins*R.rqap.r/100),eAe:r2(aeR),fss:r2(g*S.fss/100),cnt:r2(cap(R.cnt.max,g)*R.cnt.t/100),cnesst:r2(g*S.cnesst/100)};
+  c.ded=c.rrq+c.rrq2+c.rqap+c.ae+c.impF+c.impQ;c.net=c.brut-c.ded;c.emp=c.eRrq+c.eRqap+c.eAe+c.fss+c.cnt+c.cnesst;c.estF=r2(fedA/P);c.estQ=r2(qcA/P);return c}
+function payLines(c){const S=pset();return[{a:S.sal,d:c.brut,c:0},{a:S.chg,d:c.emp,c:0},{a:S.das,d:0,c:c.ded+c.emp},{a:S.net,d:0,c:c.net}].filter(l=>l.d||l.c)}
+function renderPayEmp(){const E=C.emp||[];$('pyEmpList').innerHTML=E.length?E.map(e=>`<tr><td><strong>${esc(e.nom)}</strong></td><td>${e.act?'Oui (exempt d’AE)':'Non'}</td><td>${esc(FREQ[e.freq]||'')}</td><td class="num">${e.def?fmtN(e.def):''}</td><td><button class="sm danger" data-pyedel="${esc(e.id)}">Retirer</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Aucun employé. Ajoutez l’actionnaire ou un employé ci-dessous.</td></tr>';
+  $('pyEmp').innerHTML=E.map(e=>`<option value="${esc(e.id)}">${esc(e.nom)}</option>`).join('')}
+async function renderPay(){const S=pset();renderPayEmp();
+  $('pySal').innerHTML=$('pyChg').innerHTML=$('pyDas').innerHTML=$('pyNet').innerHTML='<option value="">— choisir —</option>'+OPTS;$('pySal').value=S.sal;$('pyChg').value=S.chg;$('pyDas').value=S.das;$('pyNet').value=S.net;$('pyFss').value=S.fss;$('pyCn').value=S.cnesst;
+  if(!$('pyDate').value)$('pyDate').value=new Date().toISOString().slice(0,10);
+  const R=prOf(+$('pyDate').value.slice(0,4));$('pyRates').innerHTML=`<tr><td>RRQ</td><td>${R.rrq.t} % (employé et employeur) entre ${fmtN(R.rrq.exe*100)} $ et ${fmtN(R.rrq.mga*100)} $; 2e cotisation supplémentaire ${R.rrq.t2} % jusqu’à ${fmtN(R.rrq.mga2*100)} $</td></tr>
+    <tr><td>RQAP</td><td>${String(R.rqap.e).replace('.',',')} % employé, ${String(R.rqap.r).replace('.',',')} % employeur, jusqu’à ${fmtN(R.rqap.max*100)} $</td></tr><tr><td>Assurance-emploi (Québec)</td><td>${String(R.ae.e).replace('.',',')} % employé, ${String(R.ae.r).replace('.',',')} % employeur, jusqu’à ${fmtN(R.ae.max*100)} $ (actionnaire à plus de 40 % : exclu)</td></tr>
+    <tr><td>FSS</td><td>${String(S.fss).replace('.',',')} % de la masse salariale (1,65 % si masse salariale de 1 M$ ou moins, hors secteurs primaire et manufacturier)</td></tr><tr><td>Normes du travail (CNT)</td><td>0,06 % jusqu’à ${fmtN(R.cnt.max*100)} $ (payée avec le Sommaire 1)</td></tr><tr><td>CNESST</td><td>${String(S.cnesst).replace('.',',')} % (taux propre à l’employeur, voir l’avis de cotisation)</td></tr>
+    <tr><td>Impôt fédéral</td><td>Paliers ${R.fed.br.map(b=>b[1]+' %').join(', ')}; montant personnel ${fmtN(R.fed.bpa*100)} $; abattement du Québec ${String(R.fed.ab).replace('.',',')} %</td></tr><tr><td>Impôt du Québec</td><td>Paliers ${R.qc.br.map(b=>String(b[1]).replace('.',',')+' %').join(', ')}; montant personnel ${fmtN(R.qc.bpa*100)} $</td></tr>`;
+  await loadPay();const x=curEx(),L=PAY.filter(p=>!x||(p.date>=x.deb&&p.date<=x.fin)),nm=id=>(C.emp||[]).find(e=>e.id===id)?.nom||'?';
+  $('pyList').innerHTML=L.length?L.map(p=>`<tr><td class="d">${esc(p.date)}</td><td>${esc(nm(p.emp))}</td><td class="num">${fmtN(p.c.brut)}</td><td class="num">${fmtN(p.c.ded)}</td><td class="num"><strong>${fmtN(p.c.net)}</strong></td><td class="num">${fmtN(p.c.emp)}</td><td>${lk(p.date)?'<span class="pill">Fermé</span>':`<button class="sm danger" data-pydel="${esc(p.id)}">Supprimer</button>`}</td></tr>`).join('')
+    +`<tr class="tot"><td colspan="2">Total de l’exercice</td><td class="num">${fmtN(L.reduce((s,p)=>s+p.c.brut,0))}</td><td class="num">${fmtN(L.reduce((s,p)=>s+p.c.ded,0))}</td><td class="num">${fmtN(L.reduce((s,p)=>s+p.c.net,0))}</td><td class="num">${fmtN(L.reduce((s,p)=>s+p.c.emp,0))}</td><td></td></tr>`
+    :'<tr><td colspan="7" class="empty">Aucune paie dans cet exercice.</td></tr>';payPrev()}
+function payPrev(){const e=(C.emp||[]).find(x=>x.id===$('pyEmp').value);if(!e||!$('pyBrut').value||!$('pyDate').value){$('pyCalc').innerHTML='<p class="note">Choisissez l’employé, la date et le salaire brut pour voir le calcul.</p>';$('pySave').disabled=true;return}
+  const c=payCalc(e,$('pyDate').value,cents($('pyBrut').value),{impF:$('pyImpF').value,impQ:$('pyImpQ').value});$('pySave').disabled=false;
+  const r=(l,v,k='')=>`<tr${k?` class="${k}"`:''}><td${k?'':' class="ind"'}>${l}</td><td class="num">${fmtN(v)||'0,00'}</td></tr>`;
+  $('pyCalc').innerHTML=`<div class="two"><table class="rep"><tr class="sec"><td>Retenues de l’employé</td><td></td></tr>${r('Salaire brut',c.brut,'sub')}${r('Impôt fédéral'+($('pyImpF').value?' (saisi)':' (estimé)'),c.impF)}${r('Impôt du Québec'+($('pyImpQ').value?' (saisi)':' (estimé)'),c.impQ)}${r('RRQ',c.rrq)}${c.rrq2?r('RRQ — 2e cotisation supplémentaire',c.rrq2):''}${r('RQAP',c.rqap)}${r('Assurance-emploi'+(e.act?' (exclu)':''),c.ae)}${r('Total des retenues',c.ded,'sub')}${r('Salaire net',c.net,'tot')}</table>
+    <table class="rep"><tr class="sec"><td>Cotisations de l’employeur</td><td></td></tr>${r('RRQ',c.eRrq)}${r('RQAP',c.eRqap)}${r('Assurance-emploi',c.eAe)}${r('FSS',c.fss)}${r('Normes du travail',c.cnt)}${r('CNESST',c.cnesst)}${r('Total employeur',c.emp,'sub')}${r('DAS à remettre (retenues + employeur)',c.ded+c.emp,'tot')}</table></div>`}
+['pyEmp','pyDate','pyBrut','pyImpF','pyImpQ'].forEach(id=>$(id).addEventListener('input',payPrev));$('pyEmp').addEventListener('change',()=>{const e=(C.emp||[]).find(x=>x.id===$('pyEmp').value);if(e?.def&&!$('pyBrut').value)$('pyBrut').value=(e.def/100).toFixed(2);payPrev()});
+$('pyEmpAdd').onclick=()=>{const nom=$('pyEN').value.trim();if(!nom){$('pyEMsg').textContent='Nom requis.';return}C.emp=[...(C.emp||[]),{id:'e'+Date.now().toString(36),nom:nom.slice(0,80),act:$('pyEA').checked,freq:+$('pyEF').value,def:cents($('pyED').value)}];saveClient();$('pyEN').value='';$('pyED').value='';$('pyEMsg').textContent='Ajouté.';renderPayEmp();payPrev()};
+$('tPay').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.pyedel){if(PAY.some(p=>p.emp===b.dataset.pyedel)){b.textContent='A des paies';return}C.emp=(C.emp||[]).filter(x=>x.id!==b.dataset.pyedel);saveClient();renderPayEmp();return}
+  if(b.dataset.pydel)confirm2(b,'',async()=>{const id=b.dataset.pydel,p=PAY.find(x=>x.id===id);try{if(local){delete(LOCAL.pay||{})[C.id+'/'+id];if(p?.je)delete(LOCAL.je||{})[C.id+'/'+p.je]}else{await payCol().doc(id).delete();if(p?.je)await(await jeCol()).doc(p.je).delete()}}catch(err){}LED=null;renderPay()})});
+$('pySet').onclick=()=>{C.paie={...(C.paie||{}),sal:$('pySal').value,chg:$('pyChg').value,das:$('pyDas').value,net:$('pyNet').value,fss:parseFloat(String($('pyFss').value).replace(',','.'))||0,cnesst:parseFloat(String($('pyCn').value).replace(',','.'))||0};saveClient();$('pySMsg').textContent='Enregistré.';renderPay()};
+$('pySave').onclick=async()=>{const e=(C.emp||[]).find(x=>x.id===$('pyEmp').value),date=$('pyDate').value;if(!e||!date)return;
+  if(lk(date)){$('pyMsg').textContent='Cette date est dans un exercice fermé.';return}const S=pset();if(!S.sal||!S.chg||!S.das||!S.net){$('pyMsg').textContent='Choisissez d’abord les 4 comptes dans « Comptes et taux » ci-dessous.';$('pySetBox').open=true;return}
+  await loadPay();const c=payCalc(e,date,cents($('pyBrut').value),{impF:$('pyImpF').value,impQ:$('pyImpQ').value});const id='p'+Date.now().toString(36),jid='paie-'+id;
+  const je={date,ref:'PAIE-'+date.slice(5).replace('-',''),desc:('Paie — '+e.nom).slice(0,120),type:'',ex:exOf(date),paie:id,lines:payLines(c),updated:new Date().toISOString()};
+  const doc={date,emp:e.id,freq:e.freq,c,je:jid,updated:new Date().toISOString()};
+  try{if(local){LOCAL.pay=LOCAL.pay||{};LOCAL.pay[C.id+'/'+id]=doc;LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/'+jid]=je}else{await payCol().doc(id).set(doc);await(await jeCol()).doc(jid).set(je)}
+    LED=null;$('pyMsg').textContent=`Paie enregistrée : net ${fmtN(c.net)} $, DAS ${fmtN(c.ded+c.emp)} $. L’écriture ${je.ref} est passée au journal.`;$('pyBrut').value='';$('pyImpF').value='';$('pyImpQ').value='';renderPay()}
+  catch(err){$('pyMsg').textContent='Enregistrement impossible.'}};
+
+/* --- rapports : DAS, TPS/TVQ --- */
+async function dasHtml(f,t){await loadPay();const L=PAY.filter(p=>(!f||p.date>=f)&&(!t||p.date<=t)),nm=id=>(C.emp||[]).find(e=>e.id===id)?.nom||'?';
+  const M=new Map();L.forEach(p=>{const k=p.date.slice(0,7);M.set(k,[...(M.get(k)||[]),p])});const S=(A,k)=>A.reduce((s,p)=>s+(typeof k==='function'?k(p.c):p.c[k]||0),0);
+  const due=m=>{const[y,mm]=m.split('-').map(Number);return `15 ${new Date(mm===12?y+1:y,mm%12,15).toLocaleDateString('fr-CA',{month:'long',year:'numeric'})}`};
+  const rows=[...M].sort().map(([m,A])=>{const arc=S(A,'impF')+S(A,'ae')+S(A,'eAe'),rq=S(A,'impQ')+S(A,'rrq')+S(A,'rrq2')+S(A,'eRrq')+S(A,'rqap')+S(A,'eRqap')+S(A,'fss')+S(A,'cnesst');
+    return{m,A,arc,rq,html:`<tr><td>${esc(moisLbl(m))}</td><td class="num">${fmtN(S(A,'brut'))}</td><td class="num">${fmtN(S(A,'impF'))}</td><td class="num">${fmtN(S(A,'ae')+S(A,'eAe'))}</td><td class="num"><strong>${fmtN(arc)}</strong></td><td class="num">${fmtN(S(A,'impQ'))}</td><td class="num">${fmtN(S(A,'rrq')+S(A,'rrq2')+S(A,'eRrq'))}</td><td class="num">${fmtN(S(A,'rqap')+S(A,'eRqap'))}</td><td class="num">${fmtN(S(A,'fss'))}</td><td class="num">${fmtN(S(A,'cnesst'))}</td><td class="num"><strong>${fmtN(rq)}</strong></td><td>${esc(due(m))}</td></tr>`}});
+  const tot=k=>rows.reduce((s,r)=>s+r[k],0);const E=[...new Set(L.map(p=>p.emp))];
+  return `<h2>Retenues à la source (DAS) du ${esc(f)} au ${esc(t)}</h2><p class="note">Remises mensuelles (remettant régulier) : au plus tard le 15 du mois suivant. ARC : impôt fédéral et assurance-emploi. Revenu Québec : impôt du Québec, RRQ, RQAP, FSS et CNESST. La cotisation aux normes du travail (CNT) se paie avec le Sommaire 1 en février.</p>
+  <div class="scroll"><table class="rep"><tr class="sec"><td>Mois</td><td class="num">Salaires bruts</td><td class="num">Impôt fédéral</td><td class="num">AE (empl. + employeur)</td><td class="num">Total ARC</td><td class="num">Impôt Québec</td><td class="num">RRQ (×2)</td><td class="num">RQAP (×2)</td><td class="num">FSS</td><td class="num">CNESST</td><td class="num">Total Revenu Québec</td><td>Échéance</td></tr>
+  ${rows.map(r=>r.html).join('')||'<tr><td colspan="12">Aucune paie dans cette période.</td></tr>'}<tr class="tot"><td>Total</td><td class="num">${fmtN(S(L,'brut'))}</td><td class="num">${fmtN(S(L,'impF'))}</td><td class="num">${fmtN(S(L,'ae')+S(L,'eAe'))}</td><td class="num">${fmtN(tot('arc'))}</td><td class="num">${fmtN(S(L,'impQ'))}</td><td class="num">${fmtN(S(L,'rrq')+S(L,'rrq2')+S(L,'eRrq'))}</td><td class="num">${fmtN(S(L,'rqap')+S(L,'eRqap'))}</td><td class="num">${fmtN(S(L,'fss'))}</td><td class="num">${fmtN(S(L,'cnesst'))}</td><td class="num">${fmtN(tot('rq'))}</td><td></td></tr></table></div>
+  <h2 style="margin-top:18px">Sommaire par employé (feuillets T4 et RL-1)</h2><div class="scroll"><table class="rep"><tr class="sec"><td>Employé</td><td class="num">Revenus d’emploi</td><td class="num">Impôt fédéral</td><td class="num">Impôt Québec</td><td class="num">RRQ</td><td class="num">RQAP</td><td class="num">AE</td><td class="num">CNT (employeur)</td></tr>
+  ${E.map(id=>{const A=L.filter(p=>p.emp===id);return `<tr><td>${esc(nm(id))}</td><td class="num">${fmtN(S(A,'brut'))}</td><td class="num">${fmtN(S(A,'impF'))}</td><td class="num">${fmtN(S(A,'impQ'))}</td><td class="num">${fmtN(S(A,'rrq')+S(A,'rrq2'))}</td><td class="num">${fmtN(S(A,'rqap'))}</td><td class="num">${fmtN(S(A,'ae'))}</td><td class="num">${fmtN(S(A,'cnt'))}</td></tr>`}).join('')||'<tr><td colspan="8">—</td></tr>'}</table></div>`}
+function txDetHtml(E,f,t){const ac=[C.tpsV,C.tvqV,C.tpsA,C.tvqA];const L=E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)&&e.lines.some(l=>ac.includes(l[0]))).sort((a,b)=>a.date.localeCompare(b.date));
+  const g=(e,a)=>e.lines.filter(l=>l[0]===a).reduce((s,l)=>s+l[1],0);let T=[0,0,0,0,0];
+  const rows=L.map(e=>{const base=-e.lines.filter(l=>!ac.includes(l[0])&&String(l[0])[0]!=='1'&&String(l[0])[0]!=='2').reduce((s,l)=>s+l[1],0),v=[-g(e,C.tpsV),-g(e,C.tvqV),g(e,C.tpsA),g(e,C.tvqA)];T[0]+=v[0];T[1]+=v[1];T[2]+=v[2];T[3]+=v[3];
+    return `<tr><td class="d">${esc(e.date)}</td><td>${esc(e.ref||'')}</td><td>${esc(e.desc||'')}</td><td class="num">${fmtN(Math.abs(base))}</td>${v.map(x=>`<td class="num">${fmtN(x)}</td>`).join('')}</tr>`}).join('');
+  return `<h2>TPS/TVQ détaillé du ${esc(f)} au ${esc(t)}</h2><p class="note">Chaque opération qui touche les comptes de taxes : perçues (${esc(C.tpsV)}, ${esc(C.tvqV)}) et payées (${esc(C.tpsA)}, ${esc(C.tvqA)}).</p>
+  <div class="scroll"><table class="rep"><tr class="sec"><td>Date</td><td>Réf.</td><td>Description</td><td class="num">Montant avant taxes</td><td class="num">TPS perçue</td><td class="num">TVQ perçue</td><td class="num">CTI (TPS payée)</td><td class="num">RTI (TVQ payée)</td></tr>${rows||'<tr><td colspan="8">Aucune opération taxable dans la période.</td></tr>'}
+  <tr class="tot"><td colspan="4">Total</td>${T.slice(0,4).map(x=>`<td class="num">${fmtN(x)||'0,00'}</td>`).join('')}</tr></table></div>`}
+function txSumHtml(E,f,t){const inR=e=>(!f||e.date>=f)&&(!t||e.date<=t);const fl=a=>E.filter(inR).reduce((s,e)=>s+e.lines.filter(l=>l[0]===a).reduce((x,l)=>x+l[1],0),0);
+  const tpsV=-fl(C.tpsV),tvqV=-fl(C.tvqV),cti=fl(C.tpsA),rti=fl(C.tvqA);const rev=-E.filter(inR).reduce((s,e)=>s+e.lines.filter(l=>String(l[0])[0]==='4').reduce((x,l)=>x+l[1],0),0);
+  const r=(n,l,v,k='')=>`<tr${k?` class="${k}"`:''}><td style="width:70px">${n}</td><td>${l}</td><td class="num">${fmtN(v)||'0,00'}</td></tr>`;
+  return `<h2>TPS/TVQ sommaire du ${esc(f)} au ${esc(t)}</h2><p class="note">Les montants à reporter dans la déclaration (méthode régulière). Les ventes viennent des comptes de produits (4xxx); validez la part détaxée ou exonérée avant de produire.</p>
+  <div class="two"><table class="rep"><tr class="sec"><td colspan="3">TPS/TVH (ARC)</td></tr>${r('101','Ventes et autres recettes',rev)}${r('105','TPS perçue',tpsV)}${r('108','Crédits de taxe sur les intrants (CTI)',cti)}${r('109',tpsV-cti>=0?'Taxe nette à remettre':'Remboursement net',Math.abs(tpsV-cti),'tot')}</table>
+  <table class="rep"><tr class="sec"><td colspan="3">TVQ (Revenu Québec)</td></tr>${r('203','Ventes et autres recettes',rev)}${r('205','TVQ perçue',tvqV)}${r('206','Remboursements de la taxe sur les intrants (RTI)',rti)}${r('209',tvqV-rti>=0?'Taxe nette à remettre':'Remboursement net',Math.abs(tvqV-rti),'tot')}</table></div>
+  <p class="note">Les repas et frais de représentation ne donnent droit qu’à 50 % des CTI et RTI.</p>`}
+
 /* ---------- accueil du dossier ---------- */
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
@@ -1627,23 +1710,24 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
     const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
     $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
+$('expChg').onclick=()=>setTab('rev');
 $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;
   let m=b.dataset.mo,src=b.dataset.src;const g=b.dataset.go||'';if(g.startsWith('mo:')){[,m,src]=g.split(':')}else if(g){setTab(g);return}
   if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
   $('pMois').value=m;if(src&&[...$('pSrc').options].some(o=>o.value===src))$('pSrc').value=src;setTab('rev');openPeriod()});
 
 /* ---------- sauvegarde ---------- */
-const SUBS=['periodes','ecritures','factures','missions'];
+const SUBS=['periodes','ecritures','factures','missions','paies'];
 $('bkExp').onclick=async()=>{const say=t=>$('bkMsg').textContent=t;say('Préparation…');
   try{const out={format:'tenue-livres-v1',date:new Date().toISOString(),clients:[]};
     const L=local?Object.entries(LOCAL.clients).map(([id,d])=>({id,d})):(await db.collection('clients').get()).docs.map(x=>({id:x.id,d:x.data()}));
-    for(const{id,d}of L){const c={id,data:d};for(const sub of SUBS){if(local){const src=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je||{}):sub==='missions'?(LOCAL.mis||{}):(LOCAL.inv||{});c[sub]=Object.entries(src).filter(([k])=>k.startsWith(id+'/')).map(([k,v])=>({id:k.split('/')[1],data:v}))}
+    for(const{id,d}of L){const c={id,data:d};for(const sub of SUBS){if(local){const src=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je||{}):sub==='missions'?(LOCAL.mis||{}):sub==='paies'?(LOCAL.pay||{}):(LOCAL.inv||{});c[sub]=Object.entries(src).filter(([k])=>k.startsWith(id+'/')).map(([k,v])=>({id:k.split('/')[1],data:v}))}
         else c[sub]=(await db.collection('clients').doc(id).collection(sub).get()).docs.map(x=>({id:x.id,data:x.data()}))}out.clients.push(c);say(`Lecture : ${out.clients.length}/${L.length} dossier(s)…`)}
     const json=JSON.stringify(out);if(downloads)await downloads.save({filename:`sauvegarde_dossiers_${new Date().toISOString().slice(0,10)}.json`,data:json});else await navigator.clipboard.writeText(json);
     say(`${out.clients.length} dossier(s) exporté(s).`)}catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Exportation impossible.')}};
 $('bkImp').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const say=t=>$('bkMsg').textContent=t;
   try{const j=JSON.parse(await f.text());if(j.format!=='tenue-livres-v1')throw 0;let n=0;
-    for(const c of j.clients){if(local){LOCAL.clients[c.id]=c.data;for(const sub of SUBS)(c[sub]||[]).forEach(x=>{const t=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je=LOCAL.je||{}):sub==='missions'?(LOCAL.mis=LOCAL.mis||{}):(LOCAL.inv=LOCAL.inv||{});t[c.id+'/'+x.id]=x.data})}
+    for(const c of j.clients){if(local){LOCAL.clients[c.id]=c.data;for(const sub of SUBS)(c[sub]||[]).forEach(x=>{const t=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je=LOCAL.je||{}):sub==='missions'?(LOCAL.mis=LOCAL.mis||{}):sub==='paies'?(LOCAL.pay=LOCAL.pay||{}):(LOCAL.inv=LOCAL.inv||{});t[c.id+'/'+x.id]=x.data})}
       else{await db.collection('clients').doc(c.id).set(c.data);for(const sub of SUBS)for(const x of c[sub]||[])await db.collection('clients').doc(c.id).collection(sub).doc(x.id).set(x.data)}
       n++;say(`Import : ${n}/${j.clients.length} dossier(s)…`)}
     say(`${n} dossier(s) importé(s).`);renderList()}catch(err){say('Fichier de sauvegarde invalide ou import impossible.')}};

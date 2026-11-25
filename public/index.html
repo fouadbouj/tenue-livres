@@ -216,8 +216,10 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <button data-t="rev" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Transactions<em class="cnt" id="navTodo" hidden></em></button>
       <button data-t="inv" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6"/></svg>Factures</button>
       <button data-t="je" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Écritures</button>
+      <button data-t="pay" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Paie</button>
       <button data-t="rec" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Conciliation</button>
       <button data-t="rep" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Rapports</button>
+      <button data-t="exp" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Export Sage 50</button>
       <span class="sg">Fin d'exercice</span>
       <button data-t="mis" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Mission de compilation</button>
       <span class="sg">Configuration</span>
@@ -345,8 +347,20 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div id="aiBox" hidden><h2 style="margin-top:16px">Revue de l'IA</h2><ul class="chk" id="aiChk"></ul></div>
     </details>
 
-    <details class="panel fold" id="sumPanel">
-      <summary><span><strong>Sommaire et export vers Sage 50</strong><small>Totaux par compte, fichier d’import et fin de la période</small></span></summary>
+  </section>
+
+  <!-- Périodes -->
+  <section id="tPer" hidden>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Périodes de l'exercice</h2><label class="row" style="gap:6px"><input type="checkbox" id="perAll"> Tous les exercices</label></div>
+      <div class="scroll"><table class="stack"><thead><tr><th>Mois</th><th>Compte</th><th class="num">Transactions</th><th class="num">À classer</th><th>Statut</th><th></th></tr></thead><tbody id="plist"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Export Sage 50 -->
+  <section id="tExp" hidden>
+    <div class="panel"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">Mois ouvert : <span id="expPer">—</span></h2><p class="note" style="margin:4px 0 0">L’export porte sur le mois ouvert dans Transactions.</p></div><button class="sm" id="expChg">Changer de mois</button></div></div>
+    <div class="panel">
     <div class="two">
       <div>
         <h2>Sommaire par compte</h2>
@@ -367,14 +381,6 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <pre id="exPrev"></pre>
       </div>
     </div>
-    </details>
-  </section>
-
-  <!-- Périodes -->
-  <section id="tPer" hidden>
-    <div class="panel">
-      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Périodes de l'exercice</h2><label class="row" style="gap:6px"><input type="checkbox" id="perAll"> Tous les exercices</label></div>
-      <div class="scroll"><table class="stack"><thead><tr><th>Mois</th><th>Compte</th><th class="num">Transactions</th><th class="num">À classer</th><th>Statut</th><th></th></tr></thead><tbody id="plist"></tbody></table></div>
     </div>
     <div class="panel">
       <h2>Exporter plusieurs mois d'un coup</h2>
@@ -389,6 +395,53 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="warn" id="yWarn" hidden></div>
       <div class="msg" id="yMsg"></div>
     </div>
+  </section>
+
+  <!-- Paie -->
+  <section id="tPay" hidden>
+    <div class="panel">
+      <h2>Nouvelle paie</h2>
+      <div class="row" style="align-items:flex-end">
+        <label class="f">Employé<select id="pyEmp"></select></label>
+        <label class="f">Date de paie<input type="date" id="pyDate"></label>
+        <label class="f">Salaire brut<input id="pyBrut" inputmode="decimal" placeholder="0,00" style="width:140px"></label>
+        <label class="f">Impôt fédéral (facultatif)<input id="pyImpF" inputmode="decimal" placeholder="estimé" style="width:140px"></label>
+        <label class="f">Impôt du Québec (facultatif)<input id="pyImpQ" inputmode="decimal" placeholder="estimé" style="width:140px"></label>
+      </div>
+      <div id="pyCalc" style="margin-top:12px"></div>
+      <p class="note">Les impôts sont estimés selon les paliers 2026, annualisés selon la fréquence de paie. Pour un montant exact, calculez-le avec WinRAS ou le calculateur en ligne de l’ARC, puis inscrivez-le dans les champs « facultatif ».</p>
+      <div class="row"><button class="pri" id="pySave" disabled>Enregistrer la paie et passer l’écriture</button><span class="msg" id="pyMsg"></span></div>
+    </div>
+    <div class="panel">
+      <h2>Paies de l’exercice</h2>
+      <div class="scroll"><table class="stack"><thead><tr><th>Date</th><th>Employé</th><th class="num">Brut</th><th class="num">Retenues</th><th class="num">Net</th><th class="num">Charges employeur</th><th></th></tr></thead><tbody id="pyList"></tbody></table></div>
+      <p class="note">Le rapport des DAS (remises mensuelles et sommaire T4 / RL-1) est dans Rapports.</p>
+    </div>
+    <details class="panel fold">
+      <summary><span><strong>Employés</strong><small>L’actionnaire et les employés payés par la société</small></span></summary>
+      <div class="scroll"><table class="stack"><thead><tr><th>Nom</th><th>Actionnaire à plus de 40 %</th><th>Fréquence</th><th class="num">Salaire par paie</th><th></th></tr></thead><tbody id="pyEmpList"></tbody></table></div>
+      <div class="row" style="align-items:flex-end;margin-top:10px">
+        <label class="f">Nom<input id="pyEN" placeholder="Prénom Nom"></label>
+        <label class="f">Fréquence<select id="pyEF"><option value="1">Annuelle (ou prime unique)</option><option value="12" selected>Mensuelle</option><option value="24">Bimensuelle</option><option value="26">Aux deux semaines</option><option value="52">Hebdomadaire</option></select></label>
+        <label class="f">Salaire brut par paie<input id="pyED" inputmode="decimal" style="width:140px"></label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="pyEA" checked> Actionnaire à plus de 40 % (exclu de l’assurance-emploi)</label>
+        <button id="pyEmpAdd">Ajouter</button><span class="msg" id="pyEMsg"></span>
+      </div>
+    </details>
+    <details class="panel fold" id="pySetBox">
+      <summary><span><strong>Comptes et taux</strong><small>Comptes de l’écriture de paie, taux FSS et CNESST, taux 2026</small></span></summary>
+      <div class="mgrid">
+        <label class="f">Salaires (charge)<select id="pySal"></select></label>
+        <label class="f">Charges sociales de l’employeur<select id="pyChg"></select></label>
+        <label class="f">DAS à payer (passif)<select id="pyDas"></select></label>
+        <label class="f">Salaires nets à payer (ou banque)<select id="pyNet"></select></label>
+        <label class="f">Taux FSS (%)<input id="pyFss" inputmode="decimal"></label>
+        <label class="f">Taux CNESST (%)<input id="pyCn" inputmode="decimal"></label>
+      </div>
+      <div class="row" style="margin-top:10px"><button id="pySet">Enregistrer</button><span class="msg" id="pySMsg"></span></div>
+      <p class="note">Conseil : utilisez un compte « Salaires à payer » pour le net. Quand le dépôt de paie passe dans le relevé bancaire, classez-le dans ce compte; même chose pour la remise des DAS dans « DAS à payer ».</p>
+      <h3>Taux 2026 utilisés</h3><table class="rep"><tbody id="pyRates"></tbody></table>
+    </details>
   </section>
 
   <!-- Plan comptable -->
@@ -528,7 +581,9 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
           <button data-r="tb" aria-pressed="false">Balance de vérification</button>
           <button data-r="gl" aria-pressed="false">Grand livre</button>
           <button data-r="jr" aria-pressed="false">Journal général</button>
-          <button data-r="tx" aria-pressed="false">TPS/TVQ</button>
+          <button data-r="tx" aria-pressed="false">TPS/TVQ sommaire</button>
+          <button data-r="txd" aria-pressed="false">TPS/TVQ détaillé</button>
+          <button data-r="das" aria-pressed="false">DAS (paie)</button>
           <button data-r="ap" aria-pressed="false">Fournisseurs</button>
           <button data-r="ar" aria-pressed="false">Clients</button>
           <button data-r="gifi" aria-pressed="false">IGRF (T2)</button>
