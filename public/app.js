@@ -98,6 +98,7 @@ const setSave=(t,err)=>{$('saveState').textContent=t;$('saveState').style.color=
 /* ---------- liste des clients ---------- */
 function renderList(){
   if(local)CLIENTS=Object.entries(LOCAL.clients).map(([id,d])=>({id,...d}));
+  try{if(PENDING&&!C&&CLIENTS.some(x=>x.id===PENDING.c)){const p=PENDING;PENDING=null;setTimeout(async()=>{NAVQ=true;try{await openClient(p.c);setTab(p.t)}finally{NAVQ=false}try{history.replaceState(null,'',hashOf())}catch(e){}},0)}}catch(e){}
   const q=norm($('cq').value);const L=CLIENTS.filter(c=>!c.deleted&&(!q||norm(c.nom).includes(q))).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   $('clist').innerHTML=L.length?L.map(c=>`<tr class="click" data-id="${esc(c.id)}"><td><strong>${esc(c.nom)}</strong></td><td>${parsePlanText(c.plan).length} comptes</td><td>${(c.rules||[]).length}</td><td>${esc(moisLbl(c.last))}</td><td><button class="sm">Ouvrir</button></td></tr>`).join('')
     :`<tr><td colspan="5" class="empty">${CLIENTS.length?'Aucun client ne correspond.':'Aucun dossier pour l’instant. Créez le premier client ci-dessus.'}</td></tr>`;
@@ -126,7 +127,15 @@ async function openClient(id,isNew){
   mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true;$('pClear').hidden=false;$('pOpen').textContent='Ouvrir la période';$('rFrom').value=$('rTo').value='';
   await openPeriod();
 }
-$('back').onclick=()=>{if(P)savePerNow();C=null;P=null;$('vClient').hidden=true;$('vList').hidden=false;renderList()};
+$('back').onclick=()=>{if(P)savePerNow();C=null;P=null;$('vClient').hidden=true;$('vList').hidden=false;renderList();navPush()};
+/* ---------- historique du navigateur : le bouton Précédent reste dans la plateforme ---------- */
+let NAVQ=false,PENDING=null;
+const hashOf=()=>C?`#c=${encodeURIComponent(C.id)}&t=${tab}`:'#';
+function navPush(){if(NAVQ)return;const h=hashOf();if(location.hash===h||(h==='#'&&!location.hash))return;try{history.pushState(null,'',h)}catch(e){}}
+function parseHash(){const q=new URLSearchParams(location.hash.slice(1));return{c:q.get('c'),t:q.get('t')||'home'}}
+window.addEventListener('popstate',async()=>{const{c,t}=parseHash();NAVQ=true;
+  try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t)}}else setTab(t)}finally{NAVQ=false}});
+{const h=parseHash();if(h.c)PENDING=h}
 function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;enforceLock(P);P.multi?flushMulti():savePerFlush(P)}}
 function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(t=>t.st==='transit').length,updated:new Date().toISOString()};
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
@@ -186,7 +195,7 @@ function setTab(t){tab=t;const g=CFG.includes(t)?'set':t;document.querySelectorA
   for(const[k,id]of[['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
   if(t==='mis')renderMis();
   if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
-  if(t==='per')loadPeriods()}
+  if(t==='per')loadPeriods();navPush()}
 document.querySelectorAll('#side [data-t],#cfgNav [data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
 let PERS=[];
