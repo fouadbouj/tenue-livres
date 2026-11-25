@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="espace.css">
 <meta name="robots" content="noindex">
+<style>main,.top .in{max-width:1320px}</style>
 </head>
 <body>
 <header class="top"><div class="in">
@@ -19,13 +20,14 @@
   <form id="aF" style="display:grid;gap:12px"><label class="f"><b>Courriel</b><input type="email" id="aE" required autocomplete="username"></label><label class="f"><b>Mot de passe</b><input type="password" id="aP" required autocomplete="current-password"></label><button class="pri">Se connecter</button><div class="msg" id="aM"></div></form></div></div>
 <main id="app" hidden>
   <h1>Centre clients</h1>
-  <p class="sub">Rappels automatiques et documents des clients : TPS/TVQ (dépôt par lien) et impôts personnels (portail client).</p>
+  <p class="sub">Dossiers clients, contrats, échéances, tâches, documents et paiements.</p>
   <div class="info" id="toast" hidden style="background:#e6f5ec;margin:0 0 12px;display:flex;gap:12px;align-items:center;justify-content:space-between"></div>
-  <nav class="tabs" id="tabs"><button data-t="dem" aria-pressed="true">Documents à recevoir</button><button data-t="cli" aria-pressed="false">Clients TPS/TVQ</button><button data-t="pay" aria-pressed="false">Paiements</button><button data-t="pc" aria-pressed="false">Impôts personnels</button></nav>
-  <section id="tdem"></section><section id="tcli" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
+  <nav class="tabs" id="tabs"><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="cli" aria-pressed="false">Clients</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="dem" aria-pressed="false">Documents à recevoir</button><button data-t="pay" aria-pressed="false">Paiements</button><button data-t="pc" aria-pressed="false">Impôts personnels</button></nav>
+  <section id="tboard"></section><section id="tdem" hidden></section><section id="tcli" hidden></section><section id="ttache" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
+<script src="contrat.js"></script>
 <script src="centre.js"></script>
 </body>
 </html>

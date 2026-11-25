@@ -33,3 +33,9 @@ table{width:100%;border-collapse:collapse;font-size:15px}th{text-align:left;font
 .rep{border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0}.kv{display:grid;grid-template-columns:minmax(160px,260px) 1fr;gap:4px 14px;font-size:14.5px}.kv dt{color:var(--mute)}.kv dd{margin:0}
 #auth{display:grid;place-items:center;min-height:calc(100vh - 62px);padding:20px}#auth .card{width:min(440px,94vw)}
 footer{color:var(--mute);font-size:13px;text-align:center;padding:30px 16px}
+/* Centre clients : contrat, échéancier */
+.kgrid{display:grid;grid-template-columns:minmax(380px,1fr) minmax(420px,1.1fr);gap:24px}@media(max-width:1100px){.kgrid{grid-template-columns:1fr}}
+.ksv{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:2px 0}.ksv .opt{margin:0}.ksv input,.ksv select,.kq input,.kq select{padding:6px 8px;font-size:14px}
+.kq{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--soft);flex-wrap:wrap}.kq>span{font-size:14.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:14px}.kpi{background:var(--soft);border-radius:12px;padding:12px 16px}.kpi b{display:block;font-size:26px;color:var(--navy)}.kpi span{font-size:13.5px;color:var(--mute)}
+@media print{.top,#tabs,#toast,button,.who{display:none!important}main{padding:0}.card{box-shadow:none;border:0}}

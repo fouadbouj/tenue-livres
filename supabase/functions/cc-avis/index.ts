@@ -1,6 +1,7 @@
 // Fonction serveur « cc-avis » : avis par courriel liés aux documents publiés dans le portail client (espace Entreprise).
 // - { action: "publication", publication_id } (membre du cabinet) : avise le client qu'un document ou un paiement l'attend.
 // - { action: "paiement", publication_id } (client connecté au portail) : avise le cabinet (NOTIF_CABINET) qu'un client a payé.
+// - { action: "signature", publication_id } (client) : avise le cabinet qu'un contrat de services a été signé.
 // - { action: "rappels" } avec l'en-tête x-cron-secret : rappel 5 jours avant la date limite aux clients qui n'ont pas confirmé leur paiement.
 // Secrets : MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, COURRIEL_EXPEDITEUR (ou RESEND_API_KEY), CRON_SECRET ; facultatifs : NOTIF_CABINET, COURRIEL_EXPEDITEUR, COURRIEL_REPONSE, SITE_URL.
 // Le courriel au client ne contient ni le montant ni le code de paiement : le client les obtient dans son portail.
@@ -74,6 +75,22 @@ async function destinataires(admin: SupabaseClient, cli: { id: string; courriel:
 // deno-lint-ignore no-explicit-any
 function message(p: any, cli: any, rappel: boolean) {
   const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+  if (p.contrat_id) return {
+    sujet: `Votre contrat de services avec Boujrad CPA Inc. est prêt à signer`,
+    texte: `Bonjour${cli.contact ? " " + cli.contact : ""},
+
+Votre contrat de services professionnels avec Boujrad CPA Inc. est prêt.
+
+Pour le lire et le signer électroniquement, connectez-vous à votre portail client :
+${site}/portail.html
+(onglet « Entreprise », section « À payer et documents du cabinet », bouton « Lire et signer le contrat »)
+
+Si vous avez des questions avant de signer, écrivez-nous dans la section « Messages » du portail.
+
+Merci de votre confiance!
+
+Boujrad CPA Inc.`,
+  };
   const paie = p.montant > 0 && p.organisme !== "Aucun paiement";
   const quoi = p.titre + (p.periode ? ` (${p.periode})` : "");
   const sujet = paie
@@ -148,6 +165,19 @@ Deno.serve(async (req) => {
       await courriel(to, m.sujet, m.texte);
       await admin.from("cc_publications").update({ avise_le: new Date().toISOString() }).eq("id", p.id);
       return json({ ok: true, envoye_a: to });
+    }
+
+    if (body.action === "signature") {
+      const { data: acc } = await admin.from("cc_acces").select("id").eq("client_id", p.client_id).eq("user_id", user.id).maybeSingle();
+      if (!acc || !p.contrat_id) return json({ error: "non autorisé" }, 403);
+      const { data: k } = await admin.from("cc_contrats").select("*").eq("id", p.contrat_id).maybeSingle();
+      const notif = Deno.env.get("NOTIF_CABINET");
+      if (notif && k?.statut === "signé") {
+        const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+        await courriel([notif], `Contrat signé : ${p.cc_clients.nom} (${k.numero || ""})`,
+          `${p.cc_clients.nom} a signé électroniquement le contrat de services ${k.numero || ""}.\n\nSignataire : ${k.signe_nom}${k.signe_titre ? ", " + k.signe_titre : ""}\nDate : ${new Date(k.signe_le).toLocaleString("fr-CA", { timeZone: "America/Toronto" })}\nCompte du portail : ${user.email}\n\nDossier : ${site}/centre.html`);
+      }
+      return json({ ok: true });
     }
 
     if (body.action === "paiement") {
