@@ -42,6 +42,13 @@ create table if not exists public.cc_messages (
   created_at timestamptz not null default now()
 );
 
+-- Avis et suivi des paiements (ajout du 25 novembre 2026 : peut être réexécuté sans risque)
+alter table public.cc_publications add column if not exists organisme   text not null default 'Revenu Québec'; -- Revenu Québec, ARC ou Aucun paiement
+alter table public.cc_publications add column if not exists periode_fin date;        -- fin de la période (sert à regrouper le suivi des paiements)
+alter table public.cc_publications add column if not exists avise_le    timestamptz; -- courriel envoyé au client
+alter table public.cc_publications add column if not exists rappel_le   timestamptz; -- rappel avant la date limite
+alter table public.cc_publications add column if not exists paye_vu     boolean not null default false; -- le cabinet a vu la confirmation de paiement
+
 -- Entreprises auxquelles l'utilisateur connecté a accès
 create or replace function public.pc_mes_entreprises() returns setof uuid
   language sql stable security definer set search_path = public as
@@ -70,8 +77,8 @@ create or replace function public.pc_publication(p_id uuid, p_action text) retur
   language plpgsql security definer set search_path = public as
 $$ begin
   if p_action = 'vu' then update public.cc_publications set vu_le = coalesce(vu_le, now()) where id = p_id and client_id in (select public.pc_mes_entreprises());
-  elsif p_action = 'payé' then update public.cc_publications set paye_le = now(), vu_le = coalesce(vu_le, now()) where id = p_id and client_id in (select public.pc_mes_entreprises());
-  elsif p_action = 'non payé' then update public.cc_publications set paye_le = null where id = p_id and client_id in (select public.pc_mes_entreprises());
+  elsif p_action = 'payé' then update public.cc_publications set paye_le = now(), paye_vu = false, vu_le = coalesce(vu_le, now()) where id = p_id and client_id in (select public.pc_mes_entreprises());
+  elsif p_action = 'non payé' then update public.cc_publications set paye_le = null, paye_vu = false where id = p_id and client_id in (select public.pc_mes_entreprises());
   end if; end $$;
 
 alter table public.cc_acces        enable row level security;
@@ -111,3 +118,9 @@ create policy doc_ent_ajout on storage.objects for insert to authenticated
 create policy doc_ent_lire on storage.objects for select to authenticated
   using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'c'
          and (storage.foldername(name))[2] in (select x::text from public.pc_mes_entreprises() x));
+
+-- Rappel automatique aux clients qui n'ont pas confirmé leur paiement (5 jours avant la date limite), chaque matin.
+-- À exécuter une fois pg_cron et pg_net activés (remplacer <PROJET> et <CRON_SECRET>) :
+-- select cron.schedule('cc-avis-rappels', '0 13 * * *', $$
+--   select net.http_post(url := 'https://<PROJET>.supabase.co/functions/v1/cc-avis',
+--     headers := '{"Content-Type":"application/json","x-cron-secret":"<CRON_SECRET>"}'::jsonb, body := '{"action":"rappels"}'::jsonb) $$);

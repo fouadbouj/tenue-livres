@@ -20,8 +20,9 @@
 <main id="app" hidden>
   <h1>Centre clients</h1>
   <p class="sub">Rappels automatiques et documents des clients : TPS/TVQ (dépôt par lien) et impôts personnels (portail client).</p>
-  <nav class="tabs" id="tabs"><button data-t="dem" aria-pressed="true">Documents à recevoir</button><button data-t="cli" aria-pressed="false">Clients TPS/TVQ</button><button data-t="pc" aria-pressed="false">Impôts personnels</button></nav>
-  <section id="tdem"></section><section id="tcli" hidden></section><section id="tpc" hidden></section>
+  <div class="info" id="toast" hidden style="background:#e6f5ec;margin:0 0 12px;display:flex;gap:12px;align-items:center;justify-content:space-between"></div>
+  <nav class="tabs" id="tabs"><button data-t="dem" aria-pressed="true">Documents à recevoir</button><button data-t="cli" aria-pressed="false">Clients TPS/TVQ</button><button data-t="pay" aria-pressed="false">Paiements</button><button data-t="pc" aria-pressed="false">Impôts personnels</button></nav>
+  <section id="tdem"></section><section id="tcli" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>

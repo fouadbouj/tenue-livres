@@ -19,7 +19,10 @@ Sans cette fonction, le bouton « Ouvrir dans ma messagerie » prépare le courr
 
 Installation (une fois) :
 1. Supabase → SQL Editor : exécuter `supabase/portail_centre.sql`, puis `supabase/portail_entreprise.sql`.
-2. Edge Functions : créer `cc-depot` (désactiver « Enforce JWT verification ») et `cc-rappels` avec le code des dossiers correspondants.
+2. Edge Functions : créer `cc-depot` (désactiver « Enforce JWT verification »), `cc-rappels` et `cc-avis` (avis au client quand le cabinet publie un document à payer, avis au cabinet quand le client confirme son paiement, rappel 5 jours avant la date limite) avec le code des dossiers correspondants.
 3. Secrets des fonctions : `RESEND_API_KEY`, `CRON_SECRET` (une phrase secrète au choix), facultatif `NOTIF_CABINET` (courriel du cabinet averti à chaque dépôt), `SITE_URL` = `https://app.boujradcpa.com`.
 4. Database → Extensions : activer `pg_cron` et `pg_net`, puis exécuter la commande `cron.schedule` en bas de `portail_centre.sql` (avec l'adresse du projet et le secret).
 5. Authentication → Sign In / Providers → Email : réactiver « Confirm email » est recommandé pour le portail (les clients confirment leur courriel).
+
+### Rappel de paiement automatique
+Après pg_cron et pg_net, exécuter la commande `cron.schedule('cc-avis-rappels', …)` qui se trouve en commentaire à la fin de `supabase/portail_entreprise.sql`. Les avis au cabinet partent vers `NOTIF_CABINET` s'il est défini ; sinon, la notification apparaît seulement dans l'onglet Paiements du Centre clients.
