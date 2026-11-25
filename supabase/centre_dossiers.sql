@@ -108,3 +108,10 @@ create table if not exists public.cc_echeances (
 alter table public.cc_echeances enable row level security;
 drop policy if exists cc_ech_cabinet on public.cc_echeances;
 create policy cc_ech_cabinet on public.cc_echeances for all using (public.tl_est_membre()) with check (public.tl_est_membre());
+
+-- Sommaire mensuel des échéances envoyé au cabinet le 1er de chaque mois vers 8 h (heure de l'Est).
+-- Remplacer TA-PHRASE-CRON_SECRET par la valeur du secret CRON_SECRET, puis exécuter :
+-- select cron.schedule('cc-sommaire-mensuel', '10 13 1 * *', $c$
+--   select net.http_post(url := 'https://dluizzekoukuwskokyfz.supabase.co/functions/v1/cc-rappels',
+--     headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','TA-PHRASE-CRON_SECRET'),
+--     body := '{"sommaire":true}'::jsonb) $c$);

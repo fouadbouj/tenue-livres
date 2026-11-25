@@ -1,4 +1,5 @@
 // Fonction serveur « cc-rappels » : rappels automatiques du Centre clients (TPS/TVQ).
+// - { sommaire: true } : envoie au cabinet (NOTIF_CABINET) la liste des échéances du mois (cron le 1er du mois).
 // - Appel automatique quotidien (pg_cron) avec l'en-tête x-cron-secret = CRON_SECRET :
 //   crée les demandes des périodes terminées et envoie le premier courriel, puis un rappel aux 7 jours (3 rappels au plus).
 // - Appel manuel depuis l'intranet (membre connecté) : { demande_id } envoie le courriel tout de suite.
@@ -120,6 +121,83 @@ Boujrad CPA Inc.`;
   await envoyerCourriel({ to: [c.courriel!], subject: sujet, text: texte, replyTo: Deno.env.get("COURRIEL_REPONSE") });
 }
 
+
+// ---- Sommaire mensuel des échéances du cabinet (même calcul que l'onglet Échéancier du Centre clients) ----
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const court = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("fr-CA", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+function plusMois(fe: string, n: number) {
+  const [y, m, d] = fe.split("-").map(Number), fin = finMois(y, m).getUTCDate() === d;
+  return fin ? ymd(finMois(y, m + n)) : ymd(new Date(Date.UTC(y, m - 1 + n, Math.min(d, finMois(y, m + n).getUTCDate()))));
+}
+type Ob = { cle: string; type: string; titre: string; date: string; info: string; client_id: string };
+// deno-lint-ignore no-explicit-any
+function obligations(c: any, y1: number, y2: number): Ob[] {
+  const out: Ob[] = [], st = c.statut || "actif";
+  if (st !== "actif") return out;
+  const add = (cle: string, type: string, titre: string, date: string, info: string) => out.push({ cle, type, titre, date, info, client_id: c.id });
+  const mmdd = c.fin_exercice || "12-31", societe = c.type !== "particulier" && !/individuelle|personnes|Particulier/.test(c.forme || "");
+  for (let y = y1 - 1; y <= y2; y++) {
+    if (c.type !== "particulier") {
+      const fe = `${y}-${mmdd}`;
+      if (c.tps_tvq !== false) {
+        const M = +mmdd.slice(0, 2), pas = c.frequence === "mensuelle" ? 1 : c.frequence === "trimestrielle" ? 3 : 12;
+        for (let m = 1; m <= 12; m++) {
+          if (pas > 1 && ((m - M) % pas + pas) % pas !== 0) continue;
+          const fin = ymd(finMois(y, m));
+          add("tps:" + fin, "TPS/TVQ", "Déclaration et paiement de TPS/TVQ", ymd(pas === 12 ? finMois(y, m + 3) : finMois(y, m + 1)), `période se terminant le ${court(fin)}`);
+        }
+      }
+      if (societe) {
+        add("soldeqc:" + fe, "Impôt", "Solde d'impôt — Québec", plusMois(fe, 2), `exercice terminé le ${court(fe)}`);
+        add("soldefed:" + fe, "Impôt", "Solde d'impôt — fédéral", plusMois(fe, c.spcc_dpe ? 3 : 2), `exercice terminé le ${court(fe)}`);
+        add("t2:" + fe, "T2/CO-17", "Production T2 et CO-17", plusMois(fe, 6), `exercice terminé le ${court(fe)}`);
+      } else add("t1ind:" + y, "T1/TP-1", "Production T1 et TP-1 (travailleur autonome)", `${y + 1}-06-15`, `année ${y}`);
+    } else add("t1:" + y, "T1/TP-1", "Déclarations T1 et TP-1 et paiement", `${y + 1}-04-30`, `année ${y}`);
+    if (c.employeur) {
+      for (let m = 1; m <= 12; m++) add(`das:${y}-${String(m).padStart(2, "0")}`, "DAS", "Remise des DAS", `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-15`, `paies du mois ${m}/${y}`);
+      add("t4:" + y, "Relevés", "T4 et RL-1", ymd(finMois(y + 1, 2)), `année ${y}`);
+      add("cnesst:" + y, "Relevés", "Déclaration des salaires CNESST", `${y + 1}-03-15`, `année ${y}`);
+    }
+  }
+  const dep = c.depuis || c.ouverture;
+  return out.filter((o) => !dep || o.date >= dep);
+}
+// deno-lint-ignore no-explicit-any
+async function sommaire(admin: any) {
+  const notif = Deno.env.get("NOTIF_CABINET");
+  if (!notif) return { sommaire: "NOTIF_CABINET non défini" };
+  const auj = new Date(), y = auj.getUTCFullYear(), m = auj.getUTCMonth() + 1;
+  const deb = ymd(new Date(Date.UTC(y, m - 1, 1))), fin = ymd(finMois(y, m)), depuis6 = ymd(new Date(Date.UTC(y, m - 7, 1)));
+  const [{ data: cli }, { data: ech }, { data: pub }] = await Promise.all([
+    admin.from("cc_clients").select("*"), admin.from("cc_echeances").select("client_id,cle"), admin.from("cc_publications").select("client_id,periode_fin,paye_le,montant"),
+  ]);
+  const fait = (o: Ob) => (ech || []).some((e: { client_id: string; cle: string }) => e.client_id === o.client_id && e.cle === o.cle) ||
+    (o.type === "TPS/TVQ" && (pub || []).some((p: { client_id: string; periode_fin: string; paye_le: string; montant: number }) => p.client_id === o.client_id && p.periode_fin === o.cle.slice(4) && p.paye_le));
+  // deno-lint-ignore no-explicit-any
+  const nom = (id: string) => (cli || []).find((c: any) => c.id === id)?.nom || "?";
+  const tout = (cli || []).flatMap((c: unknown) => obligations(c, y - 1, y + 1));
+  const mois = tout.filter((o) => o.date >= deb && o.date <= fin).sort((a, b) => a.date.localeCompare(b.date));
+  const retard = tout.filter((o) => o.date < deb && o.date >= depuis6 && !fait(o)).sort((a, b) => a.date.localeCompare(b.date));
+  // deno-lint-ignore no-explicit-any
+  const fins = (cli || []).filter((c: any) => c.type !== "particulier" && (c.statut || "actif") === "actif" && +String(c.fin_exercice).slice(0, 2) === m);
+  const ligne = (o: Ob) => `- ${court(o.date)} · ${nom(o.client_id)} · ${o.titre} (${o.info})${fait(o) ? " — fait" : ""}`;
+  const nomMois = new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("fr-CA", { month: "long", year: "numeric", timeZone: "UTC" });
+  const parType = [...new Set(mois.map((o) => o.type))].map((t) => `${t} : ${mois.filter((o) => o.type === t).length}`).join(" · ");
+  const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+  const texte = `Échéances de ${nomMois}
+
+${mois.length} échéance(s) ce mois-ci${parType ? " (" + parType + ")" : ""}.
+${retard.length ? `\nEN RETARD (mois précédents, non marquées comme faites) : ${retard.length}\n${retard.map(ligne).join("\n")}\n` : ""}
+CE MOIS-CI
+${mois.map(ligne).join("\n") || "Aucune échéance."}
+${fins.length ? `\nFINS D'EXERCICE CE MOIS-CI (prévoir les documents de fin d'année)\n${fins.map((c: { nom: string; fin_exercice: string }) => `- ${c.nom} (${c.fin_exercice})`).join("\n")}\n` : ""}
+Rappel : solde d'impôt à 2 mois au Québec; au fédéral, 3 mois pour une SPCC qui a droit à la DPE, sinon 2 mois; T2 et CO-17 à 6 mois. Une échéance qui tombe un jour non ouvrable est reportée au jour ouvrable suivant.
+
+Échéancier complet et suivi : ${site}/centre.html`;
+  await envoyerCourriel({ to: [notif], subject: `Échéances de ${nomMois} — ${mois.length} à traiter${retard.length ? `, ${retard.length} en retard` : ""}`, text: texte });
+  return { sommaire: mois.length, retard: retard.length };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -147,6 +225,9 @@ Deno.serve(async (req) => {
       await admin.from("cc_demandes").update({ statut: d.statut === "à envoyer" ? "envoyée" : d.statut, rappels: d.rappels + 1, dernier_rappel: new Date().toISOString() }).eq("id", d.id);
       return json({ ok: true });
     }
+
+    // Sommaire mensuel des échéances (cron du 1er du mois, ou bouton du Centre clients)
+    if (body.sommaire) return json({ ok: true, ...(await sommaire(admin)) });
 
     // Tournée automatique
     const auj = new Date();
