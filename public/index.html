@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="fr-CA">
+<head>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tenue de livres du cabinet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: outil de travail de cabinet, net, dense, fiable comme un registre.
+   IDEA: le classeur de dossiers clients et la feuille de révision du comptable.
+   PICTURE: la liste des dossiers, puis la table de révision avec la jauge « à classer ».
+   COLOUR and TYPE: fond rose pâle, encre, sarcelle pour classé, bordeaux pour transitoire; Libre Franklin.
+   LAYOUT: barre d'en-tête, dossiers en liste, dossier ouvert en onglets. */
+:root{color-scheme:light dark;--bg:light-dark(#ffe3dc,#1c1512);--ink:light-dark(#1a1817,#f3e9e4);--panel:light-dark(#fffaf8,#2a201b);--line:light-dark(#efc9bf,#4a3a32);--mute:light-dark(#6b5f5a,#b8a69d);--teal:light-dark(#0d7680,#4fb8c1);--claret:light-dark(#990f3d,#ff7aa3);--soft:light-dark(#fff1ec,#33261f);--gold:light-dark(#a87a00,#e0b84a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Libre Franklin",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(18px,3vw,36px) max(4vw,14px);max-width:1240px;margin:0 auto}
+h1{font-weight:800;font-size:clamp(28px,4vw,40px);line-height:1.05;margin:0;text-wrap:balance}
+h2{font-size:20px;margin:0 0 10px;font-weight:800}
+.crumb{font-size:14px;color:var(--mute);margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.crumb button{min-height:34px;padding:2px 10px;font-size:14px}
+.top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:end}
+.sub{color:var(--mute);margin:6px 0 0;font-size:15px}
+.gauge{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.gauge .n{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;color:var(--mute)}
+.gauge b{display:block;font-size:26px;color:var(--ink);line-height:1.1;font-weight:800;white-space:nowrap}
+.gauge .todo b{color:var(--claret)}.gauge .ok b{color:var(--teal)}
+.bar{height:10px;border-radius:5px;background:var(--soft);overflow:hidden;margin-top:10px;display:flex}
+.bar i{display:block;height:100%;background:var(--teal);transition:width .3s}
+.bar i.t{background:var(--claret)}.bar i.s{background:var(--gold)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:16px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.drop.over{border-color:var(--teal);background:var(--soft)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+label.f{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:3px}
+input,select,textarea,button{font:inherit;font-size:16px;color:var(--ink)}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-height:44px}
+input[type=checkbox]{min-height:auto;width:22px;height:22px;accent-color:var(--teal)}
+textarea{width:100%;min-height:240px;font-size:14px}
+button{min-height:44px;padding:8px 16px;border-radius:6px;border:1px solid var(--ink);background:transparent;cursor:pointer;font-weight:600}
+button.pri{background:var(--teal);border-color:var(--teal);color:#fff}
+button.danger{border-color:var(--claret);color:var(--claret)}
+button.sm{min-height:34px;padding:4px 10px;font-size:14px}
+button:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{border-color:var(--line);font-weight:500}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+nav.tabs{margin-top:18px;border-bottom:2px solid var(--ink);padding-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-size:13px;color:var(--mute);font-weight:600;padding:6px 8px;border-bottom:2px solid var(--ink)}
+td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.d{white-space:nowrap}
+tr.transit td:first-child{box-shadow:inset 4px 0 var(--claret)}
+tr.suggere td:first-child{box-shadow:inset 4px 0 var(--gold)}
+tr.apparie td:first-child{box-shadow:inset 4px 0 var(--teal)}
+.apparie .why{color:var(--teal);font-weight:600}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--soft)}
+td select{width:100%;min-height:38px;padding:4px 6px;font-size:14px}
+.why{font-size:12px;color:var(--mute)}
+.transit .why{color:var(--claret);font-weight:600}.suggere .why{color:var(--gold);font-weight:600}
+.pos{color:var(--teal)}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:10px;background:var(--soft);border:1px solid var(--line);white-space:nowrap}
+.pill.ok{border-color:var(--teal);color:var(--teal)}.pill.todo{border-color:var(--claret);color:var(--claret)}
+.toast{position:sticky;bottom:12px;margin-top:12px;background:var(--ink);color:var(--bg);border-radius:10px;padding:12px 14px;display:none;gap:10px;align-items:center;flex-wrap:wrap;z-index:5}
+.toast.on{display:flex}
+.toast button{border-color:var(--bg);color:var(--bg)}
+.toast button.pri{background:var(--teal);border-color:var(--teal);color:#fff}
+.note{font-size:13px;color:var(--mute)}
+.msg{font-size:14px;margin-top:8px;min-height:1em}
+.msg.err{color:var(--claret)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;max-height:260px;overflow:auto;font-size:13px}
+.scroll{overflow-x:auto}
+.empty{padding:28px 8px;text-align:center;color:var(--mute)}
+.status{font-size:13px;color:var(--mute)}
+.chk{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.chk li{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);box-shadow:inset 4px 0 var(--mute)}
+.chk li.haut{box-shadow:inset 4px 0 var(--claret)}.chk li.moyen{box-shadow:inset 4px 0 var(--gold)}.chk li.bas{box-shadow:inset 4px 0 var(--teal)}
+.chk strong{display:block;font-size:15px}.chk span{font-size:14px;color:var(--mute)}
+.chk li.ok{box-shadow:inset 4px 0 var(--teal)}
+.warn{border:2px solid var(--claret);border-radius:8px;padding:10px 12px;margin-top:10px;background:var(--bg)}.warn strong{color:var(--claret)}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:18px;max-width:min(440px,92vw)}dialog::backdrop{background:rgba(0,0,0,.4)}
+.chatlog{display:grid;gap:8px;max-height:380px;overflow:auto;margin:10px 0;padding:2px}
+.bub{padding:10px 12px;border-radius:10px;max-width:85%;font-size:15px;white-space:pre-wrap}
+.bub.me{justify-self:end;background:var(--ink);color:var(--bg)}
+.bub.ai{justify-self:start;background:var(--bg);border:1px solid var(--line)}
+.prop{margin-top:8px;display:grid;gap:6px}.prop label{display:flex;gap:8px;align-items:flex-start;font-size:14px;white-space:normal}
+#mic[aria-pressed=true]{background:var(--claret);border-color:var(--claret);color:#fff}
+.bulk{position:sticky;bottom:12px;z-index:6;margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--panel);border:2px solid var(--teal);border-radius:10px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.15)}
+.bulk select{min-height:38px;font-size:14px;max-width:100%}
+.rep{width:100%;border-collapse:collapse;font-size:15px}.rep td{border-bottom:1px solid var(--line)}
+.rep .sec td{font-weight:800;font-size:16px;padding-top:16px;border-bottom:2px solid var(--ink)}
+.rep .grp td{font-weight:700;color:var(--mute);padding-top:10px}
+.rep .sub td{font-weight:700;border-top:1px solid var(--ink)}
+.rep .tot td{font-weight:800;border-top:2px solid var(--ink);border-bottom:3px double var(--ink)}
+.rep td.ind{padding-left:22px}.rep a{color:inherit;text-decoration:underline dotted;cursor:pointer}
+.ok-b{color:var(--teal);font-weight:700}.bad-b{color:var(--claret);font-weight:700}
+.fban{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:10px;font-size:14px}
+@media(max-width:800px){.top,.two{grid-template-columns:1fr}}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}}
+@media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+
+<!-- ===== Liste des clients ===== -->
+<div class="band" id="vList">
+  <div class="top">
+    <div>
+      <h1>Dossiers de tenue de livres</h1>
+      <p class="sub">Chaque client garde son plan comptable, ses règles de classement et ses périodes. Choisissez un dossier et déposez le mois à faire.</p>
+    </div>
+    <div class="panel" style="margin:0">
+      <form id="newForm" class="row">
+        <label class="f" style="flex:1">Nouveau client<input id="newName" placeholder="Nom du client" required></label>
+        <button class="pri" style="align-self:flex-end">Créer le dossier</button>
+      </form>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between">
+      <input id="cq" type="search" placeholder="Chercher un client…" aria-label="Chercher un client" style="flex:1;max-width:420px">
+      <span class="status" id="dbStatus">Connexion à la base de données…</span>
+    </div>
+    <div class="scroll"><table class="stack" style="margin-top:10px">
+      <thead><tr><th>Client</th><th>Plan comptable</th><th>Règles apprises</th><th>Dernière période</th><th></th></tr></thead>
+      <tbody id="clist"></tbody>
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>Sauvegarde et transfert</h2>
+    <p class="note">Exporte tous les dossiers (plans, règles, périodes, écritures, factures) dans un fichier JSON : sauvegarde, ou transfert vers la version site web du cabinet. L'import ajoute ou remplace les dossiers du fichier.</p>
+    <div class="row"><button id="bkExp">Exporter tous les dossiers</button><label class="f">Importer un fichier de sauvegarde<input type="file" id="bkImp" accept=".json"></label><span class="msg" id="bkMsg"></span></div>
+  </div>
+</div>
+
+<!-- ===== Dossier client ===== -->
+<div class="band" id="vClient" hidden>
+  <div class="crumb"><button id="back" class="sm">← Tous les dossiers</button><span id="saveState" class="status"></span></div>
+  <div class="top">
+    <div>
+      <h1 id="cName">Client</h1>
+      <p class="sub" id="cSub"></p>
+    </div>
+    <div class="gauge" aria-live="polite">
+      <div class="n">
+        <span>Période<b id="gPer">—</b></span>
+        <span>Transactions<b id="gTot">0</b></span>
+        <span class="ok">Classées<b id="gOk">0</b></span>
+        <span class="todo">À classer<b id="gTodo">0</b></span>
+      </div>
+      <div class="bar"><i id="bOk"></i><i class="s" id="bSug"></i><i class="t" id="bTodo"></i></div>
+    </div>
+  </div>
+  <nav class="tabs" aria-label="Sections du dossier">
+    <button data-t="rev" aria-pressed="true">Révision</button>
+    <button data-t="per" aria-pressed="false">Périodes</button>
+    <button data-t="plan" aria-pressed="false">Plan comptable</button>
+    <button data-t="rules" aria-pressed="false">Règles</button>
+    <button data-t="links" aria-pressed="false">Comptes liés</button>
+    <button data-t="inv" aria-pressed="false">Factures</button>
+    <button data-t="rec" aria-pressed="false">Conciliation</button>
+    <button data-t="je" aria-pressed="false">Écritures</button>
+    <button data-t="rep" aria-pressed="false">Rapports</button>
+    <button data-t="set" aria-pressed="false">Paramètres</button>
+  </nav>
+
+  <!-- Révision -->
+  <section id="tRev">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div class="row" style="align-items:flex-end">
+          <div class="tabs" role="group" aria-label="Étendue de la révision"><button data-mode="m" aria-pressed="true">Un mois</button><button data-mode="r" aria-pressed="false">Plusieurs mois</button></div>
+          <label class="f" id="lMois">Mois<input type="month" id="pMois"></label>
+          <label class="f" id="lFrom" hidden>Du mois<input type="month" id="rFrom"></label>
+          <label class="f" id="lTo" hidden>Au mois<input type="month" id="rTo"></label>
+          <label class="f">Compte du relevé<select id="pSrc"></select></label>
+          <button id="pOpen">Ouvrir la période</button>
+          <button id="pClear" class="danger sm" style="min-height:44px">Vider cette période</button>
+        </div>
+      </div>
+      <div class="drop" id="drop" style="margin-top:12px">
+        <div><strong>Déposez le relevé du mois (CSV, Excel ou PDF)</strong>
+          <div class="note">Les transactions s'ajoutent à la période ouverte. Les doublons exacts sont ignorés.</div></div>
+        <input type="file" id="file" accept=".csv,.txt,.pdf,.xlsx,.xls" multiple aria-label="Choisir un relevé">
+      </div>
+      <div id="mapBox" hidden>
+        <h2 style="margin-top:14px">Colonnes du fichier <span class="note" id="mapFile"></span></h2>
+        <div class="cols">
+          <label class="f">Date<select id="mDate"></select></label>
+          <label class="f">Description<select id="mDesc"></select></label>
+          <label class="f">Description (suite)<select id="mDesc2"></select></label>
+          <label class="f">Montant (signé)<select id="mAmt"></select></label>
+          <label class="f">ou Retrait / Débit<select id="mOut"></select></label>
+          <label class="f">et Dépôt / Crédit<select id="mIn"></select></label>
+          <label class="f">Solde (conciliation)<select id="mBal"></select></label>
+        </div>
+        <label class="row" style="gap:8px;margin-top:10px"><input type="checkbox" id="mInv"> Inverser le signe (cartes de crédit : achats en positif)</label>
+        <div class="scroll"><pre id="mPrev"></pre></div>
+        <div class="row"><button class="pri" id="mGo">Importer ces transactions</button><button id="mCancel">Annuler</button></div>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div class="panel" id="chatPanel">
+      <h2>Expliquer à l'IA</h2>
+      <p class="note">Dites-lui ce qu'elle ne peut pas deviner, par exemple : « Le propriétaire est Faraz, ses virements vont en avance à l'actionnaire. Marie Roy et Luc Bédard sont sous-traitants. » Elle propose des règles, vous les approuvez, et elles servent pour tous les mois de ce client.</p>
+      <div class="chatlog" id="chatLog"></div>
+      <form id="chatForm" class="row" style="align-items:flex-end">
+        <textarea id="chatIn" style="min-height:60px;flex:1" placeholder="Écrivez à l'IA…" aria-label="Message à l'IA"></textarea>
+        <button type="button" id="mic" hidden aria-pressed="false" title="Parler au lieu d'écrire"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg> <span id="micT">Parler</span></button>
+        <button class="pri" id="chatGo">Envoyer</button>
+      </form>
+      <div class="msg" id="chatMsg"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <div class="tabs" role="group" aria-label="Filtre">
+          <button data-f="todo" aria-pressed="true">À classer</button>
+          <button data-f="sug" aria-pressed="false">Suggérées par l'IA</button>
+          <button data-f="done" aria-pressed="false">Classées</button>
+          <button data-f="all" aria-pressed="false">Toutes</button>
+        </div>
+        <div class="row">
+          <input id="q" type="search" placeholder="Rechercher…" aria-label="Rechercher une transaction">
+          <button id="ask" class="sm" hidden>Classer les inconnus avec l'IA</button>
+          <button id="acceptSug" class="sm" hidden>Accepter les suggestions</button>
+        </div>
+      </div>
+      <div class="fban" id="fban" hidden><span id="fbanT"></span><button class="sm" id="fbanX">Tout afficher</button></div>
+      <div class="scroll" style="margin-top:10px">
+        <table class="stack" id="txTable">
+          <thead><tr><th style="width:36px"><input type="checkbox" id="selAll" aria-label="Tout sélectionner"></th><th>Date</th><th>Description</th><th class="num">Montant</th><th style="width:32%">Compte</th><th>Taxes incl.</th></tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>
+      <div class="bulk" id="bulk" hidden>
+        <strong id="bulkN"></strong>
+        <select id="bulkAcct" aria-label="Compte pour la sélection"></select>
+        <select id="bulkTax" aria-label="Taxes"><option value="">Taxes : inchangées</option><option value="1">Taxes incluses</option><option value="0">Sans taxes</option></select>
+        <button class="sm pri" id="bulkGo">Classer la sélection</button>
+        <button class="sm" id="bulkX">Désélectionner</button>
+        <button class="sm danger" id="bulkDel">Supprimer</button>
+      </div>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+
+    <div class="panel" id="chkPanel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Points à vérifier <span class="pill" id="chkN">0</span></h2>
+        <button id="aiRev" class="sm" hidden>Revue complète par l'IA</button>
+      </div>
+      <p class="note" style="margin:6px 0 0">Vérifications automatiques à chaque import. La revue par l'IA ajoute des propositions de classement et des questions à poser au client.</p>
+      <ul class="chk" id="chk"></ul>
+      <div id="aiBox" hidden><h2 style="margin-top:16px">Revue de l'IA</h2><ul class="chk" id="aiChk"></ul></div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>Sommaire par compte</h2>
+        <table class="stack"><thead><tr><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody id="sum"></tbody></table>
+      </div>
+      <div class="panel">
+        <h2>Exporter vers Sage 50</h2>
+        <p class="note">Une écriture de journal général par transaction. Dans Sage : Fichier &gt; Importation/Exportation &gt; Importer des transactions &gt; écritures de journal général. Faites une sauvegarde avant.</p>
+        <div class="row" style="margin-top:10px">
+          <button class="pri" id="finish">Terminer la période</button>
+          <button id="dl" hidden>Télécharger le .txt</button>
+          <button id="cp">Copier le fichier</button>
+          <button id="markDone">Marquer comme importée dans Sage</button>
+        </div>
+        <div class="warn" id="expIss" hidden></div>
+        <div class="warn" id="newAcc" hidden></div>
+        <div class="msg" id="exMsg"></div>
+        <pre id="exPrev"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Périodes -->
+  <section id="tPer" hidden>
+    <div class="panel">
+      <h2>Périodes de ce dossier</h2>
+      <div class="scroll"><table class="stack"><thead><tr><th>Mois</th><th>Compte</th><th class="num">Transactions</th><th class="num">À classer</th><th>Statut</th><th></th></tr></thead><tbody id="plist"></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>Exporter plusieurs mois d'un coup</h2>
+      <p class="note">Un seul fichier avec toutes les périodes choisies, pour un seul import dans Sage. Pratique pour rattraper un exercice complet.</p>
+      <div class="row" style="align-items:flex-end">
+        <label class="f">Compte<select id="ySrc"></select></label>
+        <label class="f">Du mois<input type="month" id="yFrom"></label>
+        <label class="f">Au mois<input type="month" id="yTo"></label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="ySkip" checked> Sauter les périodes déjà importées</label>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="pri" id="yDl" hidden>Télécharger</button><button id="yCp">Copier</button><button id="yMark">Marquer ces périodes comme importées</button></div>
+      <div class="warn" id="yWarn" hidden></div>
+      <div class="msg" id="yMsg"></div>
+    </div>
+  </section>
+
+  <!-- Plan comptable -->
+  <section id="tPlan" hidden>
+    <div class="panel">
+      <h2>Plan comptable</h2>
+      <div class="drop" id="planDrop">
+        <div><strong>Versez le plan comptable exporté de Sage</strong>
+          <div class="note">Excel, CSV ou PDF de la liste des comptes. Le numéro et le nom de chaque compte sont repris automatiquement.</div></div>
+        <input type="file" id="planFile" accept=".csv,.txt,.xlsx,.xls,.pdf" aria-label="Choisir le plan comptable">
+      </div>
+      <p class="note" style="margin-top:12px">Ou collez-le ici : un compte par ligne, le numéro puis le nom.</p>
+      <textarea id="planTxt" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><span class="msg" id="planMsg"></span></div>
+    </div>
+  </section>
+
+  <!-- Règles -->
+  <section id="tRules" hidden>
+    <div class="panel">
+      <h2>Règles apprises pour ce client (<span id="rCount">0</span>)</h2>
+      <p class="note">Elles passent avant tout le reste. Le motif le plus long l'emporte.</p>
+      <div class="row">
+        <input id="rP" placeholder="Motif, ex. GESTION LAVOIE" aria-label="Motif">
+        <select id="rA" aria-label="Compte"></select>
+        <label class="row" style="gap:6px"><input type="checkbox" id="rT"> Taxable</label>
+        <button id="rAdd">Ajouter</button>
+      </div>
+      <div class="scroll"><table class="stack" style="margin-top:10px"><thead><tr><th>Motif</th><th>Compte</th><th>Taxes</th><th></th></tr></thead><tbody id="rules"></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>Règles de base</h2>
+      <p class="note">Fournisseurs connus, associés au compte du plan dont le nom correspond (Carburant, Électricité…). Les virements Interac, dépôts, retraits et chèques sans nom connu vont toujours au compte transitoire.</p>
+      <div class="scroll"><table class="stack"><thead><tr><th>Motif</th><th>Compte trouvé</th><th>Taxes</th></tr></thead><tbody id="baseRules"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Factures -->
+  <section id="tInv" hidden>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <h2 style="margin:0">Factures (comptabilité d'exercice)</h2>
+        <div class="row" style="align-items:flex-end">
+          <label class="f">Type<select id="invType"><option value="achat">Achats (fournisseurs)</option><option value="vente">Ventes (clients)</option></select></label>
+          <button id="invNew" class="sm">Nouvelle facture</button>
+        </div>
+      </div>
+      <p class="note">Entrez les factures d'abord : l'IA les lit (PDF ou photo) et les inscrit aux comptes fournisseurs ou clients. Ensuite, quand le paiement passe dans un relevé bancaire, il est apparié à la facture, qui devient payée. Les transactions sans facture (frais bancaires, etc.) restent classées par le relevé.</p>
+      <div class="drop" id="invDrop" style="margin-top:10px"><div><strong>Déposez des factures</strong><div class="note">PDF ou photos, plusieurs à la fois.</div></div><input type="file" id="invFile" accept=".pdf,image/*" multiple aria-label="Choisir des factures"></div>
+      <div class="msg" id="invMsg"></div>
+      <form id="invForm" hidden class="panel" style="background:var(--bg)">
+        <div class="cols">
+          <label class="f">Type<select id="ifType"><option value="achat">Achat</option><option value="vente">Vente</option></select></label>
+          <label class="f">Fournisseur / client<input id="ifTiers" required></label>
+          <label class="f">Numéro<input id="ifNo"></label>
+          <label class="f">Date<input type="date" id="ifDate" required></label>
+          <label class="f">Échéance<input type="date" id="ifEch"></label>
+          <label class="f">Compte de dépense / revenu<select id="ifAcct"></select></label>
+          <label class="f">Avant taxes<input id="ifHt" inputmode="decimal"></label>
+          <label class="f">TPS<input id="ifTps" inputmode="decimal"></label>
+          <label class="f">TVQ<input id="ifTvq" inputmode="decimal"></label>
+          <label class="f">Total<input id="ifTot" inputmode="decimal" required></label>
+        </div>
+        <label class="f" style="margin-top:8px">Description<input id="ifDesc"></label>
+        <div class="row" style="margin-top:10px"><button class="pri">Enregistrer</button><button type="button" id="ifCancel">Annuler</button><span class="msg err" id="ifErr"></span></div>
+      </form>
+      <div class="row" style="margin-top:12px;justify-content:space-between">
+        <div class="tabs" role="group" aria-label="Filtre factures"><button data-if="ouv" aria-pressed="true">Ouvertes</button><button data-if="pay" aria-pressed="false">Payées</button><button data-if="all" aria-pressed="false">Toutes</button></div>
+        <input id="invQ" type="search" placeholder="Rechercher…" aria-label="Rechercher une facture">
+      </div>
+      <div class="scroll"><table class="stack" style="margin-top:10px"><thead><tr><th>Date</th><th>Tiers</th><th>No</th><th>Compte</th><th class="num">Total</th><th>Statut</th><th></th></tr></thead><tbody id="invList"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Conciliation -->
+  <section id="tRec" hidden>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <h2 style="margin:0">Conciliation bancaire</h2>
+        <div class="row" style="align-items:flex-end"><label class="f">Compte<select id="recSrc"></select></label><button id="recGo" class="pri">Vérifier</button></div>
+      </div>
+      <p class="note">Les soldes de début et de fin de chaque relevé sont repris automatiquement : colonne « Solde » du CSV, ou lus par l'IA dans le PDF. Pour chaque relevé, l'application vérifie que solde de début + transactions = solde de fin, que chaque relevé commence là où le précédent finit, et que le solde aux livres concorde.</p>
+      <div class="drop" id="recDrop" style="margin-top:10px"><div><strong>Verser les relevés pour leurs soldes seulement</strong><div class="note">Pour les relevés déjà importés : seuls les soldes de début et de fin sont repris, les transactions ne sont pas réimportées. CSV avec colonne « Solde », ou PDF (lu par l'IA).</div></div><input type="file" id="recFile" accept=".csv,.txt,.xlsx,.xls,.pdf" multiple aria-label="Choisir des relevés"></div>
+      <div class="msg" id="recMsg"></div>
+      <div id="recSum" style="margin-top:10px"></div>
+      <input type="file" id="fxFile" accept=".csv,.txt,.xlsx,.xls,.pdf" hidden>
+      <div id="fxBox" class="panel" hidden style="background:var(--bg)"></div>
+      <div class="scroll"><table class="stack" style="margin-top:10px"><thead><tr><th>Période du relevé</th><th class="num">Solde début</th><th class="num">Entrées</th><th class="num">Sorties</th><th class="num">Fin calculée</th><th class="num">Fin au relevé</th><th class="num">Écart</th><th>Statut</th><th></th></tr></thead><tbody id="recList"></tbody></table></div>
+      <h2 style="margin-top:18px">Ajouter un relevé à la main</h2>
+      <form id="recForm" class="row" style="align-items:flex-end">
+        <label class="f">Du<input type="date" id="rcDu" required></label><label class="f">Au<input type="date" id="rcAu" required></label>
+        <label class="f">Solde au début<input id="rcSd" inputmode="decimal" required style="width:140px"></label><label class="f">Solde à la fin<input id="rcSf" inputmode="decimal" required style="width:140px"></label>
+        <button class="sm">Ajouter</button>
+      </form>
+      <p class="note">Carte de crédit : entrez le solde dû en négatif (ex. -1 234,56).</p>
+    </div>
+  </section>
+
+  <!-- Écritures -->
+  <section id="tJe" hidden>
+    <div class="panel">
+      <h2>Soldes d'ouverture</h2>
+      <p class="note">Les soldes au début de l'exercice, repris du bilan ou de la balance de vérification de fin d'année précédente. Versez la balance de vérification exportée de Sage, ou écrivez un compte par ligne : numéro puis montant (positif = débit, négatif = crédit). Les comptes de revenus et de dépenses sont reportés dans les bénéfices non répartis.</p>
+      <div class="row" style="align-items:flex-end">
+        <label class="f">Date des soldes (début d'exercice)<input type="date" id="ouvDate"></label>
+        <label class="f">Verser une balance de vérification<input type="file" id="ouvFile" accept=".csv,.txt,.xlsx,.xls,.pdf"></label>
+      </div>
+      <textarea id="ouvTxt" spellcheck="false" style="min-height:160px;margin-top:10px" placeholder="1060 12 345,67&#10;2640 -10 000,00&#10;3560 -2 345,67"></textarea>
+      <div class="row" style="margin-top:8px"><button class="pri" id="ouvSave">Enregistrer les soldes</button><span class="msg" id="ouvMsg"></span></div>
+    </div>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Écritures de journal</h2><div class="row"><button id="jeNew" class="pri sm">Nouvelle écriture</button><button id="jePaie" class="sm">Paie de l'actionnaire</button></div></div>
+      <p class="note">Ajustements, amortissement, fin d'année, paie de l'actionnaire. Elles entrent dans le grand livre et les rapports avec les transactions bancaires.</p>
+      <div id="jeForm" hidden class="panel" style="background:var(--bg)">
+        <div class="row" style="align-items:flex-end">
+          <label class="f">Date<input type="date" id="jeDate"></label>
+          <label class="f">Référence<input id="jeRef" style="width:120px" placeholder="AJ-01"></label>
+          <label class="f" style="flex:1;min-width:200px">Description<input id="jeDesc"></label>
+        </div>
+        <div class="scroll"><table style="margin-top:10px"><thead><tr><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th><th></th></tr></thead><tbody id="jeLines"></tbody></table></div>
+        <div class="row" style="margin-top:8px;justify-content:space-between"><button class="sm" id="jeAdd">+ Ligne</button><strong id="jeBal"></strong></div>
+        <div class="row" style="margin-top:10px"><button class="pri" id="jeSave">Enregistrer l'écriture</button><button id="jeCancel">Annuler</button><span class="msg err" id="jeErr"></span></div>
+      </div>
+      <div class="scroll"><table class="stack" style="margin-top:12px"><thead><tr><th>Date</th><th>Réf.</th><th>Description</th><th class="num">Montant</th><th></th></tr></thead><tbody id="jeList"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Rapports -->
+  <section id="tRep" hidden>
+    <div class="panel">
+      <div class="row" style="align-items:flex-end;justify-content:space-between">
+        <div class="tabs" role="group" aria-label="Rapport">
+          <button data-r="bs" aria-pressed="true">Bilan</button>
+          <button data-r="is" aria-pressed="false">État des résultats</button>
+          <button data-r="tb" aria-pressed="false">Balance de vérification</button>
+          <button data-r="gl" aria-pressed="false">Grand livre</button>
+          <button data-r="jr" aria-pressed="false">Journal général</button>
+          <button data-r="tx" aria-pressed="false">TPS/TVQ</button>
+          <button data-r="ap" aria-pressed="false">Fournisseurs</button>
+          <button data-r="ar" aria-pressed="false">Clients</button>
+          <button data-r="gifi" aria-pressed="false">IGRF (T2)</button>
+        </div>
+      </div>
+      <div class="row" style="align-items:flex-end;margin-top:12px">
+        <label class="f">Du<input type="date" id="repFrom"></label>
+        <label class="f">Au<input type="date" id="repTo"></label>
+        <label class="f" id="repAccL" hidden>Compte<select id="repAcc"><option value="">Tous les comptes</option></select></label>
+        <button id="repGo" class="pri">Afficher</button>
+        <button id="repPdf" class="sm pri">PDF</button>
+        <button id="repCsv" class="sm">Excel (CSV)</button>
+        <button id="repCp" class="sm">Copier</button>
+      </div>
+      <div class="msg" id="repMsg"></div>
+      <div class="scroll" style="margin-top:10px"><div id="repOut"></div></div>
+    </div>
+  </section>
+
+  <!-- Comptes liés -->
+  <section id="tLinks" hidden>
+    <div class="panel">
+      <h2>Holding et comptes personnels du propriétaire</h2>
+      <p class="note">Versez les relevés des comptes qui reçoivent ou envoient des virements à ce client : sa holding, ses comptes personnels, ses placements. Ils ne vont pas dans les livres de ce client et ne sont jamais exportés. Ils servent seulement à reconnaître chaque virement : une sortie du compte courant qui correspond à un dépôt du même montant dans la holding, à 5 jours près, va dans le compte que vous choisissez ici.</p>
+      <form id="lnkForm" class="row" style="align-items:flex-end;margin-top:10px">
+        <label class="f" style="flex:1;min-width:180px">Nom du compte lié<input id="lnkNom" placeholder="ex. Holding Khodam inc." required></label>
+        <label class="f" style="flex:1;min-width:200px">Compte à utiliser dans les livres<select id="lnkAcct"></select></label>
+        <button class="pri">Ajouter</button>
+      </form>
+      <div class="scroll"><table class="stack" style="margin-top:12px"><thead><tr><th>Compte lié</th><th>Va dans</th><th>Relevés versés</th><th></th></tr></thead><tbody id="lnkList"></tbody></table></div>
+      <input type="file" id="lnkFile" accept=".csv,.txt,.xlsx,.xls,.pdf" multiple hidden>
+      <div class="row" style="margin-top:12px"><button id="lnkRun">Apparier la période ouverte</button><span class="msg" id="lnkMsg"></span></div>
+    </div>
+  </section>
+
+  <!-- Paramètres -->
+  <section id="tSet" hidden>
+    <div class="panel">
+      <h2>Paramètres du dossier</h2>
+      <div class="cols">
+        <label class="f">Nom du client<input id="sNom"></label>
+        <label class="f">Compte transitoire<select id="sTr"></select></label>
+        <label class="f">TPS payée (CTI)<select id="sTpsA"></select></label>
+        <label class="f">TVQ payée (RTI)<select id="sTvqA"></select></label>
+        <label class="f">TPS perçue<select id="sTpsV"></select></label>
+        <label class="f">TVQ perçue<select id="sTvqV"></select></label>
+        <label class="f">Début de l'exercice<input type="date" id="sExD"></label>
+        <label class="f">Fin de l'exercice<input type="date" id="sExF"></label>
+        <label class="f">Format de date Sage<select id="sDf"><option value="yy">mm-jj-aa (exigé par l'import Sage)</option><option value="yyyy">mm-jj-aaaa</option><option value="dmys">jj/mm/aaaa</option><option value="dmy">jj-mm-aaaa</option><option value="ymd">aaaa-mm-jj</option></select></label>
+      </div>
+      <label class="f" style="margin-top:10px">Notes pour l'IA (ex. « les virements à Jean Tremblay sont des salaires »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
+      <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
+    </div>
+    <div class="panel">
+      <h2>Fin d'exercice</h2>
+      <p class="note">Ferme l'exercice en cours : les soldes au dernier jour deviennent les soldes d'ouverture du suivant, et le bénéfice net est reporté dans les bénéfices non répartis. Les transactions restent consultables.</p>
+      <button id="yearEnd">Passer à l'exercice suivant</button><span class="msg" id="yeMsg" style="margin-left:10px"></span>
+    </div>
+    <div class="panel">
+      <h2>Recommencer à zéro</h2>
+      <p class="note">Efface toutes les périodes et transactions de ce client. Le plan comptable, les paramètres et les règles apprises sont gardés.</p>
+      <label class="row" style="gap:8px;margin-bottom:10px"><input type="checkbox" id="wipeRules"> Effacer aussi les règles apprises</label>
+      <button class="danger" id="wipe">Effacer toutes les périodes</button><span class="msg" id="wipeMsg" style="margin-left:10px"></span>
+    </div>
+    <div class="panel">
+      <h2>Supprimer le dossier</h2>
+      <p class="note">Retire le client de la liste. Ses périodes enregistrées restent dans la base mais ne sont plus visibles.</p>
+      <button class="danger" id="delC">Supprimer ce dossier</button>
+    </div>
+  </section>
+  <p class="note" style="margin-top:18px">Taxes incluses : le montant est ventilé en net, TPS 5 % et TVQ 9,975 %. Les repas ne donnent droit qu'à 50 % des CTI et RTI : ajustez dans Sage.</p>
+</div>
+
+<dialog id="finDlg"><div>
+  <h2 id="finT">Terminer la période</h2>
+  <ol id="finL" style="padding-left:20px;margin:8px 0 14px;display:grid;gap:10px"></ol>
+  <div class="row"><button class="pri" id="finDl">Télécharger le fichier</button><button id="finCp">Copier</button><button id="finX">Fermer</button></div>
+  <div class="msg" id="finMsg"></div>
+</div></dialog>
+<dialog id="accDlg"><form id="accForm" method="dialog">
+  <h2>Nouveau compte</h2>
+  <p class="note">Il sera ajouté au plan de ce client et signalé comme « à créer dans Sage » jusqu'à ce que vous confirmiez.</p>
+  <div class="row" style="align-items:flex-end"><label class="f" style="width:110px">Numéro<input id="accNo" required inputmode="numeric" pattern="[0-9A-Za-z-]{3,12}"></label><label class="f" style="flex:1">Nom<input id="accNm" required></label></div>
+  <div class="msg err" id="accErr"></div>
+  <div class="row" style="margin-top:10px"><button class="pri" value="ok">Créer et utiliser</button><button value="cancel" formnovalidate>Annuler</button></div>
+</form></dialog>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="cloud.js"></script>
+
+</body>
+</html>

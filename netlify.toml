@@ -1,0 +1,3 @@
+# Le logiciel est déjà construit dans public/ (python3 build.py src/index.html).
+[build]
+  publish = "public"

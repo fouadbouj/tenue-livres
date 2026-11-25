@@ -1,0 +1,1051 @@
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+const money=new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'});
+const fmt=c=>money.format(c/100);
+const AMBIG=/\b(INTERAC|VIREMENT|VIR|DEPOT|DEP|TRANSFERT|TRANSFER|E-TRANSFER|ETRANSFER|RETRAIT|GAB|DAB|ATM|CHEQUE|CHQ|PAIEMENT|PMT|PAIE|TRF|TFR)\b/;
+const MOISN=['janv.','févr.','mars','avr.','mai','juin','juill.','août','sept.','oct.','nov.','déc.'];
+const moisLbl=m=>{const[y,mm]=String(m||'').split('-');return mm?`${MOISN[+mm-1]} ${y}`:'—'};
+
+/* Catégories : retrouvent le bon compte dans n'importe quel plan */
+const CAT={carb:/CARBURANT|ESSENCE|\bGAZ\b|FUEL|COMBUSTIBLE|VEHICULE/,elec:/ELECTRICITE|HYDRO|ENERGIE|CHAUFFAGE|SERVICES PUBLICS/,tel:/TELECOM|TELEPHON|INTERNET|CELLULAIRE|COMMUNICATION/,fb:/FRAIS BANC|FRAIS DE BANQUE|FRAIS DE SERVICE|BANK/,int:/INTERET|FRAIS FINANCIERS/,rep:/REPAS|REPRESENTATION|DIVERTISSEMENT/,log:/LOGICIEL|ABONNEMENT|INFORMATIQUE/,four:/FOURNITURE|PAPETERIE|FRAIS DE BUREAU/,ass:/ASSURANCE/,imm:/IMMATRICUL|PERMIS|LICENCE/,veh:/ENTRETIEN.*VEHICULE|VEHICULE|DEPENSES? (DE |D')?(VEHICULE|AUTOMOBILE)|FRAIS DE VEHICULE|AUTOMOBILE/,pub:/PUBLICITE|MARKETING|PROMOTION/};
+const BASE=[["PETRO-CANADA","carb",1],["PETRO CANADA","carb",1],["ESSO","carb",1],["SHELL","carb",1],["ULTRAMAR","carb",1],["COUCHE-TARD","carb",1],["CREVIER","carb",1],["IRVING","carb",1],["HYDRO-QUEBEC","elec",1],["HYDRO QUEBEC","elec",1],["ENERGIR","elec",1],["VIDEOTRON","tel",1],["BELL CANADA","tel",1],["BELL MOBILITE","tel",1],["ROGERS","tel",1],["FIDO","tel",1],["TELUS","tel",1],["KOODO","tel",1],["FRAIS MENSUELS","fb",0],["FRAIS DE SERVICE","fb",0],["FRAIS BANCAIRES","fb",0],["FRAIS D'UTILISATION","fb",0],["INTERETS","int",0],["TIM HORTONS","rep",1],["MCDONALD","rep",1],["STARBUCKS","rep",1],["UBER EATS","rep",1],["ADOBE","log",1],["MICROSOFT","log",1],["GOOGLE","log",1],["INTUIT","log",1],["ZOOM","log",1],["BUREAU EN GROS","four",1],["STAPLES","four",1],["INTACT","ass",0],["DESJARDINS ASSURANCES","ass",0],["LA CAPITALE","ass",0],["BELAIR","ass",0],["SAAQ","imm",0],["CANADIAN TIRE","veh",1],["FACEBK","pub",1],["META ADS","pub",1]].map(([p,c,t])=>({p:norm(p),c,t:!!t}));
+const DEF_PLAN=`1060 Compte courant
+1090 Compte transitoire
+2140 Carte de crédit Visa
+2310 TPS perçue
+2315 TPS payée (CTI)
+2320 TVQ perçue
+2325 TVQ payée (RTI)
+3560 Retraits de l'actionnaire
+4020 Revenus de services
+4400 Intérêts gagnés
+5300 Frais de bureau
+5310 Électricité
+5320 Télécommunications
+5330 Loyer
+5340 Assurances
+5350 Frais bancaires
+5360 Intérêts et frais financiers
+5370 Carburant
+5380 Entretien de véhicule
+5390 Immatriculation et permis
+5400 Repas et représentation
+5410 Logiciels et abonnements
+5420 Fournitures
+5430 Honoraires professionnels
+5440 Publicité
+5450 Déplacements
+5460 Sous-traitance`;
+
+let db=null,sampleFn=null,downloads=null,local=false;
+let SEL=new Set(),idFilter=null,PREV=[],AIITEMS=[];let CLIENTS=[],C=null,PLAN=[],OPTS='',P=null,filter='todo',tab='rev',parsed=null,toastT=null,seq=0;
+const LOCAL={clients:{},periodes:{}};
+
+/* ---------- plan comptable ---------- */
+function parsePlanText(s){return String(s||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const m=l.match(/^(\S+)\s+(.*)$/);return m?[m[1],m[2]]:[l,'']})}
+function setPlan(){PLAN=parsePlanText(C.plan);OPTS=PLAN.map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('')}
+const accName=a=>{const p=PLAN.find(x=>x[0]===a);return p?p[1]:'(hors plan)'};
+const optsSel=v=>{let o='<option value="__new">+ Nouveau compte…</option>'+OPTS.replace(`value="${esc(v)}"`,`value="${esc(v)}" selected`);if(v&&!PLAN.some(p=>p[0]===v))o+=`<option selected value="${esc(v)}">${esc(v)} (hors plan)</option>`;return o};
+const newAccts=()=>C&&Array.isArray(C.sage)?PLAN.filter(p=>!C.sage.includes(p[0])):[];
+function usedNew(){if(!P)return[];const nw=new Map(newAccts());const used=new Set();P.tx.forEach(t=>lines(t).forEach(([a])=>{if(nw.has(a))used.add(a)}));return [...used].sort().map(a=>[a,nw.get(a)])}
+const isHeader=(n,t)=>/^(TOTAL|NET\b|SOUS-TOTAL)/.test(norm(t))||(/^\d{4}$/.test(n)&&+n%1000===0);
+const findAcc=(re,exp)=>{const L=PLAN.filter(([n,t])=>re.test(norm(t))&&!isHeader(n,t));return (exp?L.find(([n])=>/^[5-9]/.test(n)):L[0])?.[0]||''};
+function detectSpecial(c){const pl=parsePlanText(c.plan),f=re=>pl.find(([,t])=>re.test(norm(t)))?.[0]||'';
+  return {tr:f(/TRANSITOIRE|D'ATTENTE|EN SUSPENS|SUSPENSE|A CLASSER/)||c.tr||'',tpsA:f(/\bCTI\b/)||f(/TPS.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tpsA||'',tvqA:f(/\bRTI\b/)||f(/TVQ.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tvqA||'',tpsV:f(/TPS.*(PERCUE|A PAYER|FACTUREE)/)||c.tpsV||'',tvqV:f(/TVQ.*(PERCUE|A PAYER|FACTUREE)/)||c.tvqV||''}}
+const srcAccounts=()=>{const s=PLAN.filter(([n,t])=>/^[12]/.test(n)&&/BANQUE|ENCAISSE|COURANT|CHEQUE|CAISSE|EPARGNE|CARTE|VISA|MASTERCARD|AMEX|MARGE/.test(norm(t)));return s.length?s:(PLAN.filter(([n])=>/^[12]/.test(n)).length?PLAN.filter(([n])=>/^[12]/.test(n)):PLAN)};
+
+/* ---------- classement ---------- */
+const baseResolved=()=>BASE.map(r=>({...r,a:findAcc(CAT[r.c],true)}));
+function classify(t){
+  if(t.st==='manuel'||t.st==='suggere'||t.st==='facture')return;
+  const n=norm(t.desc);
+  const r=[...(C.rules||[])].sort((a,b)=>spec(b.p)-spec(a.p)||(b.d||'').localeCompare(a.d||'')||b.p.length-a.p.length).find(r=>r.p&&has(n,r.p)&&(!r.d||t.date>=r.d)&&(!r.s||r.s==='les deux'||(r.s==='sortie'?t.amt<0:t.amt>0)));
+  if(t.st==='apparie'){if(r&&r.a!==C.tr&&spec(r.p)>0)Object.assign(t,{acct:r.a,tax:r.t,st:'auto',why:'Règle du client : '+r.p,unk:false});return}
+  if(r){Object.assign(t,{acct:r.a,tax:r.t,st:'auto',why:'Règle du client : '+r.p,unk:false});return}
+  const b=baseResolved().filter(r=>r.a).sort((a,b)=>b.p.length-a.p.length).find(r=>n.includes(r.p));
+  if(b){Object.assign(t,{acct:b.a,tax:b.t,st:'auto',why:'Règle de base : '+b.p,unk:false});return}
+  t.acct=C.tr;t.tax=false;t.st='transit';
+  if(AMBIG.test(n)){t.why='Sans détail : à réviser';t.unk=false}else{t.why='Fournisseur inconnu';t.unk=true}
+}
+const GENW=/^(PAIEMENT|PAIEMENTS|PMT|DIVERS|DIV|VIREMENT|VIR|ENVOYE|RECU|DEPOT|RETRAIT|PAR|BANQUE|EN|DE|DU|LA|LE|DIRECT|INTERAC|FRAIS|POUR|TRANSFERT|CREDIT|DEBIT|ACHAT|SANS|CONTACT)$/;
+const spec=p=>p.split(' ').filter(w=>!GENW.test(w)).join('').replace(/[^A-Z0-9]/g,'').length;
+const has=(n,p)=>{if(n.includes(p))return true;const w=p.split(' ');if(w.some(x=>x.length<2)){const c=p.replace(/[^A-Z0-9]/g,'');return c.length>=3&&n.replace(/[^A-Z0-9]/g,'').includes(c)}return w.every(x=>n.includes(x))};
+const reclass=()=>{if(P)P.tx.forEach(classify)};
+const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
+
+/* ---------- base de données ---------- */
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+let cWriting=Promise.resolve();
+function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
+  if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
+  cWriting=cWriting.then(()=>db.collection('clients').doc(C.id).set(data)).then(()=>setSave('Enregistré')).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true))}
+let pTimer=null,pWriting=Promise.resolve();
+function flushMulti(p=P){p.parts.forEach(part=>{const tx=p.tx.filter(t=>t._m===part.mois);if(!tx.length&&!part.exists)return;part.exists=true;savePerFlush({...part,tx,chk:P.chk})});
+  const last=p.parts.filter(x=>x.exists).map(x=>x.mois).sort().pop();if(last&&(C.last||'')<last){C.last=last;saveClient()}
+  pWriting.then(()=>setSave(local?'Enregistré (session seulement)':'Enregistré'))}
+function savePer(){if(!P)return;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
+  pTimer=null;if(P.multi){flushMulti();return}
+  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:P.tx.length,todo:P.tx.filter(t=>t.st==='transit').length,updated:new Date().toISOString()};
+  const pid=P.mois+'_'+P.src;
+  if(local){LOCAL.periodes[C.id+'/'+pid]=snap;setSave('Enregistré (session seulement)');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}return}
+  pWriting=pWriting.then(()=>db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(snap)).then(()=>{setSave('Enregistré');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}}).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true));
+},900)}
+const setSave=(t,err)=>{$('saveState').textContent=t;$('saveState').style.color=err?'var(--claret)':''};
+
+/* ---------- liste des clients ---------- */
+function renderList(){
+  if(local)CLIENTS=Object.entries(LOCAL.clients).map(([id,d])=>({id,...d}));
+  const q=norm($('cq').value);const L=CLIENTS.filter(c=>!c.deleted&&(!q||norm(c.nom).includes(q))).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  $('clist').innerHTML=L.length?L.map(c=>`<tr class="click" data-id="${esc(c.id)}"><td><strong>${esc(c.nom)}</strong></td><td>${parsePlanText(c.plan).length} comptes</td><td>${(c.rules||[]).length}</td><td>${esc(moisLbl(c.last))}</td><td><button class="sm">Ouvrir</button></td></tr>`).join('')
+    :`<tr><td colspan="5" class="empty">${CLIENTS.length?'Aucun client ne correspond.':'Aucun dossier pour l’instant. Créez le premier client ci-dessus.'}</td></tr>`;
+}
+$('cq').oninput=renderList;
+$('clist').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(tr)openClient(tr.dataset.id)};
+$('newForm').onsubmit=e=>{e.preventDefault();const nom=$('newName').value.trim();if(!nom)return;
+  const id=local?'c'+Date.now():db.collection('clients').doc().id;
+  C={id,nom,plan:DEF_PLAN,rules:[],dfmt:'yy',notes:'',last:''};Object.assign(C,detectSpecial(C));C.src=PLAN[0]?.[0]||'1060';
+  setPlan();C.src=srcAccounts()[0]?.[0]||'';saveClient();$('newName').value='';
+  if(!local)CLIENTS.push({id,...cleanClient(C)});openClient(id,true)};
+
+/* ---------- ouverture d'un dossier ---------- */
+async function openClient(id,isNew){
+  const c=CLIENTS.find(x=>x.id===id)||(local&&LOCAL.clients[id]&&{id,...LOCAL.clients[id]});if(!c)return;
+  C=JSON.parse(JSON.stringify(c));C.id=id;setPlan();
+  $('vList').hidden=true;$('vClient').hidden=false;window.scrollTo(0,0);
+  $('cName').textContent=C.nom;$('cSub').textContent=`${PLAN.length} comptes au plan · ${(C.rules||[]).length} règles apprises · transitoire ${C.tr||'non défini'}`;
+  fillSelects();renderRules();renderSettings();renderChat();$('planTxt').value=C.plan;await loadInv();$('planMsg').textContent='';
+  const now=new Date(),pm=new Date(now.getFullYear(),now.getMonth()-1,1);
+  $('pMois').value=C.last||`${pm.getFullYear()}-${String(pm.getMonth()+1).padStart(2,'0')}`;
+  $('pSrc').value=C.src||$('pSrc').value;
+  setTab(isNew?'plan':'rev');
+  if(isNew)$('planMsg').textContent='Nouveau dossier : versez le plan comptable du client pour commencer.';
+  mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true;$('pClear').hidden=false;$('pOpen').textContent='Ouvrir la période';$('rFrom').value=$('rTo').value='';
+  await openPeriod();
+}
+$('back').onclick=()=>{if(P)savePerNow();C=null;P=null;$('vClient').hidden=true;$('vList').hidden=false;renderList()};
+function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;P.multi?flushMulti():savePerFlush(P)}}
+function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(t=>t.st==='transit').length,updated:new Date().toISOString()};
+  if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
+function fillSelects(){
+  $('pSrc').innerHTML=srcAccounts().map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
+  $('rA').innerHTML=OPTS;['sTr','sTpsA','sTvqA','sTpsV','sTvqV'].forEach(id=>$(id).innerHTML='<option value="">—</option>'+OPTS);
+}
+async function openPeriod(){
+  const mois=$('pMois').value,src=$('pSrc').value;if(!mois||!src){P=null;render();return}
+  if(P&&pTimer)savePerNow();
+  P={mois,src,tx:[],statut:'en cours'};render();
+  let d=null;
+  try{if(local)d=LOCAL.periodes[C.id+'/'+mois+'_'+src]||null;
+    else{const s=await db.collection('clients').doc(C.id).collection('periodes').doc(mois+'_'+src).get();d=s.exists?s.data():null}}
+  catch(e){msg('Impossible de lire cette période pour le moment.',true)}
+  if(P.mois!==mois||P.src!==src)return;
+  if(d){P.statut=d.statut;P.exported=d.exported;P.chk=d.chk||{};P.tx=(d.tx||[]).map(t=>({...t,id:++seq}));reclass();if(autoMatch())savePer()}
+  idFilter=null;AIITEMS=[];PREV=[];
+  try{const[y,m]=mois.split('-').map(Number);const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;let pd=null;
+    if(local)pd=LOCAL.periodes[C.id+'/'+pm+'_'+src]||null;else{const s=await db.collection('clients').doc(C.id).collection('periodes').doc(pm+'_'+src).get();pd=s.exists?s.data():null}
+    if(pd&&P.mois===mois)PREV=(pd.tx||[]).filter(t=>t.amt<0&&t.st!=='transit').map(t=>({k:keyOf(t.desc),desc:t.desc,amt:t.amt}))}catch(e){}
+  if(C.src!==src){C.src=src;saveClient()}
+  msg(d?'':`Période vide. Déposez le relevé de ${moisLbl(mois)} pour le compte ${src}.`);
+  render();
+}
+let mode='m';
+const openCur=()=>mode==='r'?openRange():openPeriod();
+$('pOpen').onclick=openCur;$('pMois').onchange=openPeriod;$('pSrc').onchange=openCur;$('rFrom').onchange=openRange;$('rTo').onchange=openRange;
+async function setMode(m){mode=m;document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===m));
+  $('lMois').hidden=m==='r';$('lFrom').hidden=$('lTo').hidden=m!=='r';$('pClear').hidden=m==='r';
+  $('pOpen').textContent=m==='r'?'Ouvrir ces mois':'Ouvrir la période';
+  if(m==='r'&&(!$('rFrom').value||!$('rTo').value)){let ms=[];try{if(local)ms=Object.keys(LOCAL.periodes).filter(k=>k.startsWith(C.id+'/')).map(k=>k.split('/')[1].split('_')[0]);
+      else{const sn=await db.collection('clients').doc(C.id).collection('periodes').get();ms=sn.docs.map(d=>d.data().mois)}}catch(e){}
+    ms.sort();const now=new Date();const def=`${now.getFullYear()-1}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    $('rFrom').value=ms[0]||def;$('rTo').value=ms[ms.length-1]||$('pMois').value}
+  openCur()}
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+let rangeTok=0;
+async function openRange(){let f=$('rFrom').value,t=$('rTo').value;const src=$('pSrc').value;if(!f||!t||!src)return;if(f>t)[f,t]=[t,f];
+  if(P&&pTimer)savePerNow();const tok=++rangeTok;
+  const months=[];let[y,m]=f.split('-').map(Number);const[ty,tm]=t.split('-').map(Number);
+  while((y<ty||(y===ty&&m<=tm))&&months.length<36){months.push(`${y}-${String(m).padStart(2,'0')}`);if(++m>12){m=1;y++}}
+  P={multi:true,mois:months[0],to:months[months.length-1],src,tx:[],parts:[],statut:'en cours'};idFilter=null;AIITEMS=[];PREV=[];msg('Chargement des mois…');render();
+  for(const mo of months){let d=null;try{d=await readPeriod(mo,src)}catch(e){}if(tok!==rangeTok)return;
+    P.parts.push({mois:mo,src,statut:d?.statut||'en cours',exported:d?.exported||'',exists:!!d});(d?.tx||[]).forEach(x=>P.tx.push({...x,id:++seq,_m:mo}))}
+  P.tx.forEach(classify);P.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);if(autoMatch())savePer();
+  P.statut=P.parts.some(p=>p.exists)&&P.parts.filter(p=>p.exists).every(p=>p.statut==='importée')?'importée':'en cours';
+  if(C.src!==src){C.src=src;saveClient()}
+  msg(`${P.tx.length} transaction(s) de ${moisLbl(months[0])} à ${moisLbl(months[months.length-1])}, sur ${P.parts.filter(p=>p.exists).length} mois avec des données. Les modifications sont enregistrées dans chaque mois.`);render()}
+
+/* ---------- onglets ---------- */
+function setTab(t){tab=t;document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
+  for(const[k,id]of[['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['set','tSet']])$(id).hidden=k!==t;
+  if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
+  if(t==='per')loadPeriods()}
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+
+let PERS=[];
+async function yearSel(){const src=$('ySrc').value,f=$('yFrom').value||'0000-00',t=$('yTo').value||'9999-99';
+  const L=PERS.filter(p=>p.src===src&&p.mois>=f&&p.mois<=t&&!($('ySkip').checked&&p.statut==='importée')).sort((a,b)=>a.mois.localeCompare(b.mois));
+  return L.map(p=>({...p,tx:(p.tx||[]).map(x=>({...x}))}))}
+async function yearFile(){const L=await yearSel();if(!L.length){$('yMsg').textContent='Aucune période dans cet intervalle.';return null}
+  L.forEach(p=>p.tx.forEach(classify));
+  const nw=new Map(newAccts()),used=new Set();L.forEach(p=>p.tx.forEach(t=>lines(t,p.src).forEach(([a])=>{if(nw.has(a))used.add(a)})));
+  $('yWarn').hidden=!used.size;if(used.size)$('yWarn').innerHTML=`<strong>Avant d'importer, créez ces comptes dans Sage :</strong> ${[...used].sort().map(a=>esc(a+' '+nw.get(a))).join(', ')}`;
+  const todo=L.reduce((s,p)=>s+p.tx.filter(t=>t.st==='transit').length,0),n=L.reduce((s,p)=>s+p.tx.length,0);
+  $('yMsg').textContent=`${L.length} période(s), ${n} écritures${todo?`, dont ${todo} au transitoire ${C.tr}`:''}.`;
+  return L.map(p=>buildFile(p)).filter(Boolean).join('')}
+$('yCp').onclick=async()=>{const f=await yearFile();if(f==null)return;try{await navigator.clipboard.writeText(f);$('yMsg').textContent+=' Copié.'}catch(e){$('yMsg').textContent+=' Copie refusée par le navigateur.'}};
+$('yDl').onclick=async()=>{const f=await yearFile();if(f==null)return;try{await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${$('yFrom').value}_a_${$('yTo').value}_${$('ySrc').value}_sage50.txt`,data:sageBytes(f)});$('yMsg').textContent+=' Fichier enregistré.'}catch(e){$('yMsg').textContent+=' Téléchargement annulé ou refusé.'}};
+$('yMark').onclick=async()=>{const L=await yearSel();if(!L.length)return;const day=new Date().toLocaleDateString('fr-CA');
+  L.forEach(p=>{p.tx=p.tx.map(t=>({...t,id:++seq}));p.statut='importée';p.exported=day;savePerFlush(p)});await pWriting;
+  if(P&&L.some(p=>p.mois===P.mois&&p.src===P.src)){P.statut='importée';P.exported=day}$('yMsg').textContent=`${L.length} période(s) marquée(s) comme importées.`;loadPeriods()};
+async function loadPeriods(){
+  $('plist').innerHTML='<tr><td colspan="6" class="empty">Chargement…</td></tr>';let L=[];
+  try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);
+    else{const s=await db.collection('clients').doc(C.id).collection('periodes').get();L=s.docs.map(d=>d.data())}PERS=L;
+    const srcs=[...new Set(L.map(p=>p.src))];const keep=$('ySrc').value;$('ySrc').innerHTML=srcs.map(x=>`<option value="${esc(x)}">${esc(x+' '+accName(x))}</option>`).join('');if(srcs.includes(keep))$('ySrc').value=keep;
+    const ms=L.map(p=>p.mois).sort();if(!$('yFrom').value&&ms.length){$('yFrom').value=ms[0];$('yTo').value=ms[ms.length-1]}$('yDl').hidden=!downloads;}
+  catch(e){$('plist').innerHTML='<tr><td colspan="6" class="empty">Lecture impossible pour le moment.</td></tr>';return}
+  L.sort((a,b)=>b.mois.localeCompare(a.mois)||a.src.localeCompare(b.src));
+  $('plist').innerHTML=L.length?L.map(p=>`<tr><td>${esc(moisLbl(p.mois))}</td><td>${esc(p.src)} ${esc(accName(p.src))}</td><td class="num">${+p.n||0}</td><td class="num">${+p.todo||0}</td><td>${p.statut==='importée'?'<span class="pill ok">Importée dans Sage</span>':p.todo?'<span class="pill todo">À réviser</span>':'<span class="pill">Prête</span>'}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="sm" data-m="${esc(p.mois)}" data-s="${esc(p.src)}">Ouvrir</button><button class="sm danger" data-del="${esc(p.mois+'_'+p.src)}">Supprimer</button></div></td></tr>`).join('')
+    :'<tr><td colspan="6" class="empty">Aucune période encore. Déposez un premier relevé dans Révision.</td></tr>';
+}
+$('plist').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;$('pMois').value=b.dataset.m;
+  if(![...$('pSrc').options].some(o=>o.value===b.dataset.s))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(b.dataset.s)}">${esc(b.dataset.s)}</option>`);
+  $('pSrc').value=b.dataset.s;setTab('rev');openPeriod()};
+
+/* ---------- révision ---------- */
+function visible(){if(!P)return[];if(idFilter)return P.tx.filter(t=>idFilter.ids.has(t.id));const q=norm($('q').value);
+  return P.tx.filter(t=>(filter==='all'||(filter==='todo'&&t.st==='transit')||(filter==='sug'&&t.st==='suggere')||(filter==='done'&&t.st!=='transit'&&t.st!=='suggere'))&&(!q||norm(t.desc).includes(q)||String(t.acct).includes(q)))}
+function render(){
+  const tx=P?P.tx:[];const v=visible();
+  $('tb').innerHTML=v.length?v.map(t=>`<tr class="${t.st}" data-id="${t.id}">
+    <td><input type="checkbox" data-k="sel" aria-label="Sélectionner" ${SEL.has(t.id)?'checked':''}></td>
+    <td class="d">${esc(t.date)}</td><td>${esc(t.desc)}<div class="why">${esc(t.why||'')}</div></td>
+    <td class="num ${t.amt>0?'pos':''}">${esc(fmt(t.amt))}</td>
+    <td><select data-k="acct" aria-label="Compte">${optsSel(t.acct)}</select></td>
+    <td><input type="checkbox" data-k="tax" aria-label="Taxes incluses" ${t.tax?'checked':''}></td></tr>`).join('')
+    :`<tr><td colspan="6" class="empty">${!tx.length?'Aucune transaction dans cette période.':filter==='todo'?'Rien au transitoire. La période est prête à exporter.':'Rien à afficher.'}</td></tr>`;
+  const tot=tx.length,todo=tx.filter(t=>t.st==='transit').length,sug=tx.filter(t=>t.st==='suggere').length;
+  $('gPer').textContent=P?(P.multi&&P.to!==P.mois?`${moisLbl(P.mois)} – ${moisLbl(P.to)}`:moisLbl(P.mois)):'—';$('gTot').textContent=tot;$('gOk').textContent=tot-todo-sug;$('gTodo').textContent=todo;
+  $('bOk').style.width=tot?((tot-todo-sug)/tot*100)+'%':'0';$('bSug').style.width=tot?(sug/tot*100)+'%':'0';$('bTodo').style.width=tot?(todo/tot*100)+'%':'0';
+  const unk=tx.filter(t=>t.st==='transit'&&t.unk).length;
+  $('ask').hidden=!sampleFn||!unk;$('ask').textContent=`Classer les ${unk} inconnus avec l'IA`;
+  $('acceptSug').hidden=!sug;$('acceptSug').textContent=`Accepter les ${sug} suggestions`;
+  $('fban').hidden=!idFilter;if(idFilter)$('fbanT').textContent='Filtre : '+idFilter.title;
+  renderSummary();renderExport();renderChecks();renderBulk();
+}
+function lines(t,src){
+  const L=[[src||P.src,t.amt]];const g=-t.amt;
+  if(t.tax&&t.acct!==C.tr){const gross=Math.abs(g),n0=Math.round(gross/1.14975),tps=Math.round(n0*0.05),tvq=Math.round(n0*0.09975),net=gross-tps-tvq;
+    if(g>0)L.push([t.acct,net],[C.tpsA,tps],[C.tvqA,tvq]);else L.push([t.acct,-net],[C.tpsV,-tps],[C.tvqV,-tvq])}
+  else L.push([t.acct,g]);return L}
+function renderSummary(){const m=new Map();(P?P.tx:[]).forEach(t=>lines(t).forEach(([a,c])=>{const o=m.get(a)||[0,0];c>0?o[0]+=c:o[1]-=c;m.set(a,o)}));
+  $('sum').innerHTML=[...m].sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([a,[d,c]])=>`<tr><td>${esc(a)} ${esc(accName(a))}${a===C.tr?' <span class="pill todo">transitoire</span>':''}</td><td class="num">${d?esc(fmt(d)):''}</td><td class="num">${c?esc(fmt(c)):''}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">Aucune transaction.</td></tr>'}
+const sageDate=iso=>{const[y,m,d]=iso.split('-');return C.dfmt==='dmys'?`${d}/${m}/${y}`:C.dfmt==='dmy'?`${d}-${m}-${y}`:C.dfmt==='ymd'?`${y}-${m}-${d}`:`${m}-${d}-${C.dfmt==='yyyy'?y:y.slice(2)}`};
+function buildFile(p=P){if(!p)return'';return p.tx.map((t,i)=>{const src=('REL'+t.date.slice(5).replace('-','')+'-'+(i+1)).slice(0,20);
+  return `${sageDate(t.date)},"${src}","${t.desc.replace(/["\r\n]/g,' ').slice(0,75)}"\r\n`+lines(t,p.src).filter(l=>l[1]).map(([a,c])=>`${a},${(c/100).toFixed(2)}`).join('\r\n')}).join('\r\n')+'\r\n'}
+const CP={8364:128,8218:130,402:131,8222:132,8230:133,8224:134,8225:135,710:136,8240:137,352:138,8249:139,338:140,381:142,8216:145,8217:146,8220:147,8221:148,8226:149,8211:150,8212:151,732:152,8482:153,353:154,8250:155,339:156,382:158,376:159};
+const sageBytes=str=>{const b=new Uint8Array(str.length);for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);b[i]=c<128||(c>159&&c<256)?c:(CP[c]||63)}return b};
+function exportIssues(tx,src){const I=[];const[d,f]=exRange();const nw=new Set(newAccts().map(p=>p[0]));
+  tx.forEach(t=>{const L=lines(t,src);if(d&&t.date<d)I.push(`${t.date} ${t.desc} : avant le début de l'exercice (${d})`);if(f&&t.date>f)I.push(`${t.date} ${t.desc} : après la fin de l'exercice (${f})`);
+    if(t.acct===src)I.push(`${t.date} ${t.desc} : classé dans le compte du relevé lui-même (${src})`);
+    L.forEach(([a])=>{const p=PLAN.find(q=>q[0]===a);if(!p)I.push(`${t.date} ${t.desc} : compte ${a} absent du plan`);else if(isHeader(p[0],p[1]))I.push(`${t.date} ${t.desc} : compte de titre ou de total ${a}`)});
+    if(L.reduce((s,l)=>s+l[1],0))I.push(`${t.date} ${t.desc} : écriture non balancée`)});return I}
+function renderNewAcc(){const iss=P?exportIssues(P.tx,P.src):[];$('expIss').hidden=!iss.length;if(iss.length)$('expIss').innerHTML=`<strong>Sage refusera ces écritures, à corriger avant l'export :</strong><ul style="margin:6px 0">${iss.slice(0,12).map(x=>`<li>${esc(x)}</li>`).join('')}${iss.length>12?`<li>… et ${iss.length-12} autre(s)</li>`:''}</ul>`;const un=usedNew(),el=$('newAcc');el.hidden=!un.length;if(!un.length)return;
+  el.innerHTML=`<strong>Avant d'importer, créez ces comptes dans Sage :</strong><ul style="margin:6px 0">${un.map(([n,t])=>`<li>${esc(n)} ${esc(t)}</li>`).join('')}</ul><button class="sm" id="newAccOk">C'est fait, ils existent dans Sage</button>`;
+  $('newAccOk').onclick=()=>{un.forEach(([n])=>{if(!C.sage.includes(n))C.sage.push(n)});saveClient();render()}}
+function renderExport(){renderNewAcc();const f=buildFile(),ls=f.trimEnd().split(/\r?\n/);$('exPrev').textContent=f?ls.slice(0,12).join('\n')+(ls.length>12?'\n…':''):'';
+  const todo=P?P.tx.filter(t=>t.st==='transit').length:0,sug=P?P.tx.filter(t=>t.st==='suggere').length:0;
+  $('exMsg').textContent=P?.statut==='importée'?`Marquée comme importée dans Sage le ${P.exported||''}.`:[todo&&`${todo} transaction(s) iront au compte transitoire ${C.tr}.`,sug&&`${sug} suggestion(s) de l'IA pas encore vérifiée(s).`].filter(Boolean).join(' ');
+  $('markDone').disabled=!P||!P.tx.length}
+
+function showToast(html,acts){const el=$('toast');el.innerHTML=html;el.classList.add('on');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{acts[b.dataset.a]?.();el.classList.remove('on')});
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),14000)}
+$('tb').addEventListener('change',e=>{
+  const tr=e.target.closest('tr');if(!tr)return;const t=P.tx.find(x=>x.id==tr.dataset.id);if(!t)return;
+  if(e.target.dataset.k==='sel'){e.target.checked?SEL.add(t.id):SEL.delete(t.id);renderBulk();return}
+  if(e.target.dataset.k==='tax'){t.tax=e.target.checked;if(t.st==='auto'){t.st='manuel';t.why='Ajusté à la main'}render();savePer();return}
+  if(e.target.value==='__new'){e.target.value=t.acct;newAccount(t);return}
+  if(t.inv){const iv=INV.find(i=>i.id===t.inv);if(iv){delete iv.pay;saveInv(iv).catch(()=>{})}t.inv=''}
+  const a=e.target.value;Object.assign(t,{acct:a,st:'manuel',why:'Classé à la main',unk:false});
+  afterManual(t,a);
+});
+let dlgTx=null,planFromFile=false;
+let dlgCb=null;
+function newAccount(t,cb){dlgTx=t;dlgCb=cb||null;$('accNo').value='';$('accNm').value='';$('accErr').textContent='';try{$('accDlg').showModal()}catch(e){$('accDlg').setAttribute('open','')}$('accNo').focus()}
+$('accForm').addEventListener('submit',e=>{if(e.submitter?.value==='cancel'){dlgTx=null;if(dlgCb){const cb=dlgCb;dlgCb=null;cb(null)}return}
+  const no=$('accNo').value.trim(),nm=$('accNm').value.trim().replace(/\s+/g,' ');
+  if(!no||!nm){e.preventDefault();$('accErr').textContent='Numéro et nom requis.';return}
+  if(PLAN.some(p=>p[0]===no)){e.preventDefault();$('accErr').textContent=`Le compte ${no} existe déjà : ${accName(no)}.`;return}
+  addAccount(no,nm);const t=dlgTx;dlgTx=null;if(dlgCb){const cb=dlgCb;dlgCb=null;cb(no)}
+  if(t){Object.assign(t,{acct:no,st:'manuel',why:'Classé à la main',unk:false});afterManual(t,no)}});
+function addAccount(no,nm){if(!Array.isArray(C.sage))C.sage=PLAN.map(p=>p[0]);
+  const L=PLAN.concat([[no,nm]]).sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true}));C.plan=L.map(p=>p.join(' ')).join('\n');
+  setPlan();fillSelects();renderSettings();renderRules();$('planTxt').value=C.plan;saveClient();render()}
+function afterManual(t,a){
+  if(!P.tx.some(x=>x.st==='transit')&&!P.tx.some(x=>x.st==='suggere')){render();savePer();const un=usedNew();showToast(`<span>Tout est classé.${un.length?` N'oubliez pas : ${un.length} compte(s) à créer dans Sage (${esc(un.map(x=>x[0]).join(', '))}).`:''}</span><button class="sm pri" data-a="f">Terminer la période</button>`,{f:openFinish});return}
+  const p=keyOf(t.desc);const others=P.tx.filter(x=>x!==t&&x.st!=='manuel'&&has(norm(x.desc),p));
+  render();savePer();if(a===C.tr||!p)return;
+  showToast(`<span>Retenir pour ce client : « ${esc(p)} » → ${esc(a)} ${esc(accName(a))}${others.length?`, et l'appliquer aux ${others.length} autres semblables`:''} ?</span><button class="sm pri" data-a="y">Retenir la règle</button><button class="sm" data-a="n">Juste celle-ci</button>`,
+    {y:()=>{C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a,t:!!t.tax});others.forEach(x=>{if(x.st==='suggere')x.st='transit'});reclass();saveClient();renderRules();render();savePer()}});
+}
+document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
+$('q').oninput=render;
+$('acceptSug').onclick=()=>{P.tx.filter(t=>t.st==='suggere').forEach(t=>{const p=keyOf(t.desc);if(p&&!(C.rules||[]).some(r=>r.p===p))C.rules.push({p,a:t.acct,t:!!t.tax});Object.assign(t,{st:'auto',why:'Règle du client : '+p})});saveClient();renderRules();render();savePer()};
+
+/* ---------- lecture de fichiers ---------- */
+const loadScript=src=>new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+function decode(buf){let s=new TextDecoder('utf-8').decode(buf);if(s.includes(String.fromCharCode(0xFFFD)))s=new TextDecoder('windows-1252').decode(buf);return s.replace(/^﻿/,'')}
+function parseCSV(text){const first=text.split(/\r?\n/).slice(0,8).join('\n');const d=[';',',','\t'].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cell+='"';i++}else q=false}else cell+=c}
+    else if(c==='"')q=true;else if(c===d){row.push(cell);cell=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row.map(x=>x.trim()));row=[];cell=''}
+    else cell+=c}
+  row.push(cell);if(row.some(x=>x.trim()))rows.push(row.map(x=>x.trim()));return rows}
+async function readXlsx(f){if(!window.XLSX)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'yyyy-mm-dd',defval:''}).map(r=>r.map(x=>String(x).trim())).filter(r=>r.some(Boolean))}
+async function pdfPages(f){const V='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  if(!window.pdfjsLib){await loadScript(V+'pdf.worker.min.js');await loadScript(V+'pdf.min.js');pdfjsLib.GlobalWorkerOptions.workerSrc=V+'pdf.worker.min.js'}
+  const doc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;const pages=[];
+  for(let p=1;p<=doc.numPages;p++){const tc=await(await doc.getPage(p)).getTextContent();const rows=new Map();
+    tc.items.forEach(it=>{const y=Math.round(it.transform[5]/3);(rows.get(y)||rows.set(y,[]).get(y)).push(it)});
+    pages.push([...rows].sort((a,b)=>b[0]-a[0]).map(([,it])=>it.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim()).filter(Boolean).join('\n'))}
+  return pages}
+const rowsOf=async f=>/\.xlsx?$/i.test(f.name)?readXlsx(f):parseCSV(decode(await f.arrayBuffer()));
+
+/* ---------- relevés : colonnes ---------- */
+const MOIS={JAN:1,JANV:1,FEV:2,FEB:2,MAR:3,MARS:3,AVR:4,APR:4,MAI:5,MAY:5,JUN:6,JUIN:6,JUL:7,JUIL:7,AOU:8,AUG:8,SEP:9,SEPT:9,OCT:10,NOV:11,DEC:12};
+const isDate=s=>/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(s)||/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(s)||/^\d{1,2}\s+[A-Za-zéû]{3,5}\.?\s+\d{4}$/.test(s);
+function toISO(s,order){let m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);if(m){let[a,b,y]=[+m[1],+m[2],m[3]];if(y.length===2)y='20'+y;const[dd,mm]=order==='MDY'?[b,a]:[a,b];return `${y}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`}
+  m=norm(s).match(/^(\d{1,2})\s+([A-Z]{3,5})\.?\s+(\d{4})$/);if(m&&MOIS[m[2]])return `${m[3]}-${String(MOIS[m[2]]).padStart(2,'0')}-${m[1].padStart(2,'0')}`;return null}
+function toCents(s){if(s==null)return null;let x=String(s).replace(/[\s $]/g,'').replace(/CAD/i,'');if(!x)return null;
+  let neg=false;if(/^\(.*\)$/.test(x)){neg=true;x=x.slice(1,-1)}if(/-$/.test(x)){neg=true;x=x.slice(0,-1)}if(x.startsWith('-')){neg=true;x=x.slice(1)}
+  if(x.includes(',')&&x.includes('.'))x=x.lastIndexOf(',')>x.lastIndexOf('.')?x.replace(/\./g,'').replace(',','.'):x.replace(/,/g,'');
+  else if(x.includes(','))x=/,\d{1,2}$/.test(x)?x.replace(',','.'):x.replace(/,/g,'');
+  if(!/^\d*\.?\d+$/.test(x))return null;const c=Math.round(parseFloat(x)*100);return neg?-c:c}
+function guess(rows){const hasHead=!rows[0].some(isDate);const head=hasHead?rows[0]:null;const body=(hasHead?rows.slice(1):rows).slice(0,60);
+  const n=Math.max(...rows.map(r=>r.length));const st=[];
+  for(let c=0;c<n;c++){const v=body.map(r=>r[c]||'');const fl=v.filter(Boolean);
+    st.push({c,h:norm(head?.[c]||''),date:v.filter(isDate).length/body.length,num:fl.filter(x=>toCents(x)!==null&&!/^\d{5,}$/.test(x)).length/Math.max(1,fl.length),fill:fl.length/body.length,len:fl.reduce((s,x)=>s+x.length,0)/Math.max(1,fl.length),dec:fl.some(x=>/[.,]\d{2}$/.test(x))})}
+  const by=re=>st.find(s=>re.test(s.h))?.c??-1;
+  let date=by(/^DATE|DATE (DE )?TRANS|POSTED|TRANSACTION DATE/);if(date<0)date=[...st].sort((a,b)=>b.date-a.date)[0].c;
+  let desc=by(/DESCRIPTION|LIBELLE|DETAIL|MARCHAND|MERCHANT|PAYEE/);if(desc<0)desc=[...st].filter(s=>s.num<.5&&s.c!==date).sort((a,b)=>b.len-a.len)[0]?.c??-1;
+  let out=by(/RETRAIT|DEBIT|WITHDRAW|SORTIE|ACHAT/),inn=by(/DEPOT|CREDIT|DEPOSIT|ENTREE|PAIEMENT/),amt=by(/^MONTANT|AMOUNT/);
+  if(amt<0&&out<0){const nums=st.filter(s=>s.num>.9&&s.dec&&s.c!==date&&!/SOLDE|BALANCE/.test(s.h));const sp=nums.filter(s=>s.fill<.95);
+    if(sp.length>=2){out=sp[0].c;inn=sp[1].c}else if(nums.length)amt=nums[0].c}
+  let order='DMY';for(const r of body){const m=(r[date]||'').match(/^(\d{1,2})[-/.](\d{1,2})[-/.]/);if(m){if(+m[2]>12){order='MDY';break}if(+m[1]>12)break}}
+  let bal=by(/SOLDE|BALANCE/);if(bal<0){const full=st.filter(s=>s.num>.9&&s.dec&&s.fill>=.95&&![date,amt,out,inn].includes(s.c));if(full.length)bal=full[full.length-1].c}
+  return {head,body:hasHead?rows.slice(1):rows,n,date,desc,desc2:-1,amt,out,inn,bal,order}}
+function showMap(g,name){parsed=g;const o=`<option value="-1">—</option>`+Array.from({length:g.n},(_,c)=>`<option value="${c}">${esc(g.head?.[c]||'Colonne '+(c+1))}${g.body[0]?.[c]?' : '+esc(String(g.body[0][c]).slice(0,24)):''}</option>`).join('');
+  for(const[id,k]of[['mDate','date'],['mDesc','desc'],['mDesc2','desc2'],['mAmt','amt'],['mOut','out'],['mIn','inn'],['mBal','bal']]){$(id).innerHTML=o;$(id).value=g[k]??-1}
+  $('mInv').checked=/CARTE|VISA|MASTERCARD|AMEX/.test(norm(accName(P.src)));$('mapFile').textContent=name;$('mapBox').hidden=false;preview()}
+function mapped(g=parsed){const [cD,cS,cS2,cA,cO,cI]=['mDate','mDesc','mDesc2','mAmt','mOut','mIn'].map(id=>+$(id).value),inv=$('mInv').checked,res=[];
+  for(const r of g.body){const date=toISO(r[cD]||'',g.order);if(!date)continue;let c;
+    if(cA>=0)c=toCents(r[cA]);else{const o=toCents(r[cO]),i=toCents(r[cI]);if(o===null&&i===null)continue;c=(i?Math.abs(i):0)-(o?Math.abs(o):0)}
+    if(c===null||c===0)continue;if(inv)c=-c;res.push({date,desc:[r[cS],cS2>=0?r[cS2]:''].filter(Boolean).join(' ').replace(/\s+/g,' ')||'(sans description)',amt:c})}
+  return res}
+function preview(){const m=queue.length>1?queue.flatMap(q=>mapped(q.g)):mapped();$('mPrev').textContent=m.length?m.slice(0,6).map(t=>`${t.date}   ${fmt(t.amt).padStart(14)}   ${t.desc}`).join('\n')+`\n… ${m.length} transactions reconnues`:'Aucune transaction reconnue avec ces colonnes.'}
+['mDate','mDesc','mDesc2','mAmt','mOut','mIn','mInv'].forEach(id=>$(id).onchange=preview);
+$('mGo').onclick=()=>{const Q=queue.length?queue:[{name:'',g:parsed}];const per=Q.map(q=>({name:q.name,m:mapped(q.g)}));const m=per.flatMap(x=>x.m);
+  const bad=per.filter(x=>!x.m.length&&x.name).map(x=>x.name);if(!m.length){msg('Aucune transaction reconnue. Vérifiez les colonnes.',true);return}
+  const sts=Q.map(q=>stmtOfCsv(q.g,q.name)).filter(Boolean);
+  $('mapBox').hidden=true;queue=[];importAny(m).then(()=>{if(sts.length){sts.forEach(addStmt);saveClient();msg($('msg').textContent+` Soldes repris pour la conciliation : ${sts.length} relevé(s).`)}if(bad.length)msg($('msg').textContent+` Rien de reconnu dans : ${bad.join(', ')} (colonnes différentes? importez ce fichier seul).`,true)})};
+$('mCancel').onclick=()=>{$('mapBox').hidden=true};
+const msg=(t,err)=>{$('msg').textContent=t;$('msg').className='msg'+(err?' err':'')};
+
+function mergeInto(p,list){
+  const have=new Map();p.tx.forEach(t=>{const k=t.date+'|'+t.desc+'|'+t.amt;have.set(k,(have.get(k)||0)+1)});
+  let added=0,dup=0;const seen=new Map();
+  for(const x of list){const k=x.date+'|'+x.desc+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);if(s<=(have.get(k)||0)){dup++;continue}
+    const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
+  p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  if(added&&p.statut==='importée')p.statut='en cours';
+  return {added,dup}}
+async function readPeriod(m,src){if(local)return LOCAL.periodes[C.id+'/'+m+'_'+src]||null;const s=await db.collection('clients').doc(C.id).collection('periodes').doc(m+'_'+src).get();return s.exists?s.data():null}
+async function importAny(list){
+  if(P.multi){const L=list.map(x=>({...x,_m:x.date.slice(0,7)}));L.forEach(x=>{if(!P.parts.some(p=>p.mois===x._m))P.parts.push({mois:x._m,src:P.src,statut:'en cours',exported:'',exists:false})});
+    P.parts.sort((a,b)=>a.mois.localeCompare(b.mois));const{added,dup}=mergeInto(P,L);P.parts.forEach(p=>{if(p.statut==='importée'&&L.some(x=>x._m===p.mois))p.statut='en cours'});
+    msg(`${added} transaction(s) ajoutée(s)${dup?`, ${dup} doublon(s) ignoré(s)`:''}.`);autoMatch();AIITEMS=[];render();savePer();
+    if(sampleFn&&P.tx.some(t=>t.st==='transit'&&t.unk))await askAI(true);return}
+  const by=new Map();list.forEach(x=>{const m=x.date.slice(0,7);by.set(m,[...(by.get(m)||[]),x])});
+  const months=[...by.keys()].sort();
+  if(months.length===1&&months[0]===P.mois)return addTx(list);
+  savePerNow();msg(`Répartition en ${months.length} mois…`);
+  const src=P.src,cur=P,ps=[];let added=0,dup=0;
+  for(const m of months){let p=cur.mois===m?cur:null;
+    if(!p){p={mois:m,src,tx:[],statut:'en cours'};try{const d=await readPeriod(m,src);if(d){p.statut=d.statut;p.exported=d.exported;p.tx=(d.tx||[]).map(t=>({...t,id:++seq}));p.tx.forEach(classify)}}catch(e){}}
+    const r=mergeInto(p,by.get(m));added+=r.added;dup+=r.dup;ps.push(p)}
+  let n=0;if(sampleFn&&ps.some(p=>p.tx.some(t=>t.st==='transit'&&t.unk))){msg(`${added} transactions réparties sur ${months.length} mois. L'IA classe les fournisseurs inconnus…`);n=await aiSuggest(ps.flatMap(p=>p.tx))}
+  ps.forEach(p=>savePerFlush(p));
+  const last=months[months.length-1];if((C.last||'')<last){C.last=last;saveClient()}
+  await pWriting;
+  $('pMois').value=months[0];await openPeriod();
+  msg(`${added} transaction(s) réparties sur ${months.length} mois (${moisLbl(months[0])} à ${moisLbl(last)})${dup?`, ${dup} doublon(s) ignoré(s)`:''}.${n?` L'IA a proposé un compte pour ${n} transaction(s).`:''} Chaque mois est une période : voyez l'onglet Périodes, ou exportez l'exercice d'un coup.`);
+}
+async function addTx(list){
+  const {added,dup}=mergeInto(P,list);
+  msg(`${added} transaction(s) ajoutée(s)${dup?`, ${dup} doublon(s) ignoré(s)`:''}.`);
+  autoMatch();AIITEMS=[];render();savePer();
+  if(sampleFn&&P.tx.some(t=>t.st==='transit'&&t.unk))await askAI(true);
+  const n=checks().filter(c=>c.lvl!=='ok').length;if(n)msg($('msg').textContent+` ${n} point(s) à vérifier plus bas.`);
+}
+
+async function handle(files){
+  if(!P){msg('Choisissez d’abord le mois et le compte du relevé.',true);return}
+  for(const f of files.filter(f=>/\.pdf$/i.test(f.name))){try{await readStatementPdf(f)}catch(e){msg('Lecture impossible de '+f.name+'.',true)}}
+  queue=[];
+  for(const f of files.filter(f=>!/\.pdf$/i.test(f.name))){
+    try{const rows=await rowsOf(f);if(rows.length<2){msg(f.name+' : fichier vide ou illisible.',true);continue}queue.push({name:f.name,g:guess(rows)})}
+    catch(e){msg('Lecture impossible de '+f.name+'.',true)}}
+  if(queue.length)showMap(queue[0].g,queue.length>1?`${queue[0].name} et ${queue.length-1} autre(s) fichier(s), mêmes colonnes`:queue[0].name);
+}
+let queue=[];
+async function readStatementPdf(f){
+  if(!sampleFn){msg('La lecture de PDF demande l’IA, qui n’est pas disponible ici. Exportez le relevé en CSV depuis le site de la banque.',true);return}
+  const out=await pdfTx(f,msg);
+  if(!out.length){msg('Aucune transaction trouvée dans ce PDF. Essayez le CSV.',true);return}
+  await importAny(out);msg($('msg').textContent+' Lu par l’IA dans le PDF : comparez le total avec le relevé.');
+  if(out._st){addStmt(out._st);saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
+}
+async function pdfTx(f,say){
+  say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];
+  for(let i=0;i<pages.length;i+=3){say(`L'IA lit les pages ${i+1} à ${Math.min(i+3,pages.length)} sur ${pages.length}…`);
+    const r=await sampleFn.json(`Voici le texte d'un relevé bancaire ou de carte de crédit canadien. Page 1 pour contexte (période, année) :\n${pages[0].slice(0,1500)}\n\n--- PAGES À EXTRAIRE ---\n${pages.slice(i,i+3).join('\n\n')}\n\nExtrais CHAQUE transaction de ces pages seulement. Ignore soldes, totaux, sommaires et reports. Réponds uniquement avec un tableau JSON : [{"date":"AAAA-MM-JJ","description":"texte tel quel","montant":-12.34}]. montant négatif = sortie d'argent (retrait, achat, frais), positif = entrée (dépôt, remboursement, paiement reçu sur la carte). Déduis l'année de la période du relevé. [] s'il n'y a aucune transaction.`,{modelTier:'default'});
+    (Array.isArray(r)?r:[]).forEach(x=>{const d=toISO(String(x.date||''));const c=Math.round(Number(x.montant)*100);if(d&&c)out.push({date:d,desc:String(x.description||'').slice(0,120),amt:c})})}
+  try{const s=await sampleFn.json(`Texte de la première et de la dernière page d'un relevé bancaire ou de carte de crédit canadien :\n${pages[0].slice(0,2500)}\n...\n${pages[pages.length-1].slice(-2500)}\n\nDonne la période et les soldes. Réponds uniquement en JSON : {"du":"AAAA-MM-JJ","au":"AAAA-MM-JJ","solde_debut":1234.56,"solde_fin":1234.56,"carte":false}. Pour une carte de crédit, carte=true et les soldes sont les montants dus (positifs). null si introuvable.`,{modelTier:'default'});
+    const du=toISO(String(s?.du||'')),au=toISO(String(s?.au||''));if(du&&au&&s.solde_debut!=null&&s.solde_fin!=null){const sg=s.carte?-1:1;out._st={src:P?.src||'',du,au,sd:sg*Math.round(Number(s.solde_debut)*100),sf:sg*Math.round(Number(s.solde_fin)*100),nom:f.name,via:'IA'}}}catch(e){}
+  return out;
+}
+$('file').onchange=e=>{handle([...e.target.files]);e.target.value=''};
+function dropzone(el,fn){['dragenter','dragover'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('over')}));
+  ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('over')}));el.addEventListener('drop',e=>fn([...e.dataTransfer.files]))}
+dropzone($('drop'),handle);
+
+/* ---------- IA : fournisseurs inconnus ---------- */
+async function aiSuggest(txs){
+  const descs=[...new Set(txs.filter(t=>t.st==='transit'&&t.unk).map(t=>t.desc))].slice(0,150);if(!descs.length)return 0;
+  const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nPour chaque description de transaction bancaire ci-dessous, donne le compte de dépense ou de revenu le plus probable dans CE plan (numéro exact). Si c'est un nom de personne, un virement ou trop vague pour savoir, mets null. taxable = true si la dépense porte normalement TPS/TVQ au Québec.\n${descs.map((k,i)=>i+'. '+k).join('\n')}\n\nRéponds uniquement avec un tableau JSON : [{"i":0,"compte":"5310","taxable":true}]`,{modelTier:'default'});
+  const ok=new Set(PLAN.map(p=>p[0]));let n=0;
+  (Array.isArray(r)?r:[]).forEach(x=>{const d=descs[x.i];const a=x.compte==null?null:String(x.compte);if(d==null||!a||!ok.has(a)||a===C.tr)return;
+    txs.filter(t=>t.desc===d&&t.st==='transit').forEach(t=>{Object.assign(t,{acct:a,tax:!!x.taxable,st:'suggere',why:'Suggéré par l’IA : à vérifier',unk:false});n++})});
+  return n}
+async function askAI(auto){
+  if(!P.tx.some(t=>t.st==='transit'&&t.unk))return;
+  $('ask').disabled=true;$('ask').textContent='L’IA classe…';if(auto)msg($('msg').textContent+' L’IA classe les fournisseurs inconnus…');
+  try{const n=await aiSuggest(P.tx);
+    msg(`${auto?$('msg').textContent.replace(' L’IA classe les fournisseurs inconnus…',''):''} ${n?`L'IA a proposé un compte pour ${n} transaction(s) : voyez l'onglet « Suggérées par l'IA ».`:'L’IA n’a rien pu classer avec assez de certitude.'}`.trim());
+    savePer();
+  }catch(e){msg(e.code==='rate_limited'?'Trop de demandes à l’IA, réessayez dans une minute.':e.code==='not_granted'?'Accès à l’IA refusé.':'Classement par l’IA impossible pour le moment.',true)}
+  $('ask').disabled=false;render();
+}
+$('ask').onclick=()=>askAI(false);
+
+/* ---------- points à vérifier ---------- */
+const EXEMPT=/ASSURANCE|FRAIS BANC|FRAIS DE BANQUE|INTERET|SALAIRE|IMMATRICUL|PERMIS|TAXES MUNICIPALES|TAXES FONCIERES|DONS|AMENDE|PENALITE|RETRAIT|ACTIONNAIRE|EMPRUNT|PRET/;
+const TAXABLE=new RegExp([CAT.carb,CAT.elec,CAT.tel,CAT.log,CAT.four,CAT.pub,CAT.veh].map(r=>r.source).join('|'));
+const BIGSKIP=/LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC/;
+const dd=(a,b)=>Math.abs((new Date(a)-new Date(b))/864e5);
+function checks(){
+  if(!P||!P.tx.length)return[];const tx=P.tx,out=[],add=(lvl,title,detail,list)=>out.push({lvl,title,detail,ids:(list||[]).map(t=>t.id)});
+  const nm=t=>norm(accName(t.acct)),sumA=l=>l.reduce((s,t)=>s+Math.abs(t.amt),0);
+  const tr=tx.filter(t=>t.st==='transit');
+  const dep=tr.filter(t=>t.amt>0);
+  if(dep.length)add('haut',`Dépôts non identifiés : ${dep.length} (${fmt(sumA(dep))})`,'Ventes taxables? Prêt? Apport de l’actionnaire? Remboursement de taxes? À savoir avant de déclarer les ventes et la TPS/TVQ perçue.',dep);
+  const out_=tr.filter(t=>t.amt<0);
+  if(out_.length)add('haut',`Sorties au transitoire : ${out_.length} (${fmt(sumA(out_))})`,'Classez-les avant l’export, ou exportez-les au transitoire et régularisez dans Sage plus tard.',out_);
+  const un=usedNew();if(un.length){const set=new Set(un.map(x=>x[0]));add('haut',`Comptes à créer dans Sage avant l'import : ${un.map(x=>x[0]).join(', ')}`,un.map(x=>x.join(' ')).join(' · ')+'. Créez-les dans Sage avec le même numéro, puis confirmez dans « Exporter vers Sage 50 ».',tx.filter(t=>set.has(t.acct)))}
+  const sug=tx.filter(t=>t.st==='suggere');if(sug.length)add('moyen',`Suggestions de l'IA à confirmer : ${sug.length}`,'Vérifiez le compte proposé, puis « Accepter les suggestions » pour en faire des règles.',sug);
+  const gab=tx.filter(t=>/\b(RETRAIT|GAB|DAB|ATM)\b/.test(norm(t.desc))&&t.amt<0);
+  if(gab.length)add('moyen',`Retraits en argent comptant : ${gab.length} (${fmt(sumA(gab))})`,'Sans pièce justificative, ça va généralement en retraits ou avances à l’actionnaire. Demandez au client.',gab);
+  const grp=new Map();tr.filter(t=>AMBIG.test(norm(t.desc))&&t.amt<0).forEach(t=>{const k=t.amt;grp.set(k,[...(grp.get(k)||[]),t])});
+  const prevAmts=new Set(PREV.map(p=>p.amt));
+  tr.filter(t=>AMBIG.test(norm(t.desc))&&t.amt<0&&prevAmts.has(t.amt)&&(grp.get(t.amt)||[]).length<2).forEach(t=>grp.set(t.amt,[t,t]));
+  for(const[a,l]of grp){const u=[...new Set(l)];if(l.length>=2||(Math.abs(a)>=50000&&Math.abs(a)%10000===0))add('moyen',`Virement récurrent ou rond : ${fmt(a)}${u.length>1?` × ${u.length}`:''}`,'Souvent un loyer, un salaire ou un remboursement de prêt. Demandez au client, classez-le, puis retenez la règle.',u)}
+  const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3)dups.push([a,b])}
+  dups.forEach(([a,b])=>add('moyen',`Doublon possible : ${a.desc}`,`${fmt(a.amt)} le ${a.date} et le ${b.date}. Double paiement?`,[a,b]));
+  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&!BIGSKIP.test(nm(t)));
+  big.forEach(t=>add('moyen',`Dépense importante : ${t.desc} (${fmt(t.amt)})`,'Plus de 1 500 $ : obtenez la facture et vérifiez si c’est une immobilisation à amortir plutôt qu’une dépense.',[t]));
+  const self=tx.filter(t=>t.acct===(t.src||P.src));if(self.length)add('haut',`Classé dans le compte du relevé lui-même : ${self.length}`,`Ces transactions vont dans ${P.src} ${accName(P.src)}, le compte de banque du relevé : l'écriture s'annule. Choisissez le bon compte.`,self);
+  const hdr=tx.filter(t=>{const p=PLAN.find(q=>q[0]===t.acct);return p&&isHeader(p[0],p[1])});if(hdr.length)add('haut',`Compte de titre ou de total : ${hdr.length}`,`Sage refuse les écritures dans ${[...new Set(hdr.map(t=>t.acct+' '+accName(t.acct)))].join(', ')}. Choisissez un compte détaillé.`,hdr);
+  const exTax=tx.filter(t=>t.tax&&EXEMPT.test(nm(t)));
+  if(exTax.length)add('haut',`Taxes ventilées sur des comptes exemptés : ${exTax.length}`,'Assurances, frais bancaires, intérêts, permis : pas de CTI ni de RTI. Décochez « Taxes incl. ».',exTax);
+  const noTax=tx.filter(t=>!t.tax&&t.amt<0&&t.st!=='transit'&&TAXABLE.test(nm(t))&&!EXEMPT.test(nm(t)));
+  if(noTax.length)add('bas',`Taxes non ventilées : ${noTax.length}`,'Ces dépenses portent normalement la TPS et la TVQ. Cochez « Taxes incl. » si le fournisseur est inscrit.',noTax);
+  const rep=tx.filter(t=>t.tax&&t.amt<0&&CAT.rep.test(nm(t)));
+  if(rep.length){const taxes=rep.reduce((s,t)=>{const g=Math.abs(t.amt),n0=Math.round(g/1.14975);return s+Math.round(n0*0.05)+Math.round(n0*0.09975)},0);
+    add('bas','Repas : CTI et RTI limités à 50 %',`Taxes ventilées sur les repas : ${fmt(taxes)}. Environ ${fmt(Math.round(taxes/2))} doit retourner en dépense : ajustez dans Sage.`,rep)}
+  if(PREV.length){const now=new Set(tx.map(t=>keyOf(t.desc)));const miss=[...new Map(PREV.filter(p=>p.k&&!AMBIG.test(norm(p.desc))&&!now.has(p.k)).map(p=>[p.k,p])).values()];
+    if(miss.length)add('bas',`Paiements du mois précédent absents : ${miss.length}`,miss.slice(0,8).map(p=>`${p.desc} (${fmt(p.amt)})`).join(' · ')+'. Payés autrement, ou facture manquante?',[])}
+  const rank={haut:0,moyen:1,bas:2};out.sort((a,b)=>rank[a.lvl]-rank[b.lvl]);
+  if(!out.length)out.push({lvl:'ok',title:'Rien à signaler',detail:'Tout est classé et aucune anomalie n’a été détectée.',ids:[]});
+  return out;
+}
+let CHK=[];
+function itemHtml(c,i,pre){return `<li class="${c.lvl}"><div><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span></div>${c.ids.length?`<button class="sm" data-c="${pre}${i}">Voir</button>`:''}</li>`}
+function renderChecks(){CHK=checks();const n=CHK.filter(c=>c.lvl!=='ok').length+AIITEMS.length;$('chkN').textContent=n;
+  $('chk').innerHTML=P&&P.tx.length?CHK.map((c,i)=>itemHtml(c,i,'c')).join(''):'<li><div><span>Déposez un relevé pour voir les vérifications.</span></div></li>';
+  $('aiBox').hidden=!AIITEMS.length;$('aiChk').innerHTML=AIITEMS.map((c,i)=>itemHtml(c,i,'a')).join('');
+  $('aiRev').hidden=!sampleFn||!P||!P.tx.length}
+document.getElementById('chkPanel').addEventListener('click',e=>{const k=e.target.closest('button[data-c]')?.dataset.c;if(!k)return;
+  const c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;idFilter={ids:new Set(c.ids),title:c.title};render();$('txTable').scrollIntoView({behavior:'smooth',block:'start'})});
+$('fbanX').onclick=()=>{idFilter=null;render()};
+$('aiRev').onclick=async()=>{
+  const b=$('aiRev');b.disabled=true;b.textContent='L’IA révise la période…';
+  const rows=P.tx.map((t,i)=>`${i} | ${t.date} | ${t.desc} | ${(t.amt/100).toFixed(2)} | ${t.acct} ${accName(t.acct)} | ${t.tax?'taxes incl.':'sans taxes'}${t.st==='transit'?' | TRANSITOIRE':''}`).join('\n');
+  try{const r=await sampleFn.json(`Tu es un technicien comptable expérimenté au Québec qui révise la tenue de livres de « ${C.nom} » pour ${moisLbl(P.mois)}, compte ${P.src} ${accName(P.src)}.\nPlan comptable :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`Notes du cabinet : ${C.notes}\n`:''}\nTransactions (index | date | description | montant, négatif = sortie | compte | taxes) :\n${rows}\n\nDonne au plus 8 points de révision utiles et concrets : classements probablement erronés (avec le compte que tu proposes, numéro du plan), transactions au transitoire dont tu peux deviner la nature, traitement TPS/TVQ douteux, éléments inhabituels, et questions précises à poser au client. Pas de généralités ni de répétitions. Réponds uniquement avec un tableau JSON : [{"niveau":"haut|moyen|bas","titre":"court","detail":"une ou deux phrases","lignes":[0,3]}]`,{modelTier:'complex'});
+    AIITEMS=(Array.isArray(r)?r:[]).slice(0,8).map(x=>({lvl:['haut','moyen','bas'].includes(x.niveau)?x.niveau:'moyen',title:String(x.titre||'').slice(0,140),detail:String(x.detail||'').slice(0,400),ids:(Array.isArray(x.lignes)?x.lignes:[]).map(i=>P.tx[+i]?.id).filter(Boolean)})).filter(x=>x.title);
+    if(!AIITEMS.length)AIITEMS=[{lvl:'ok',title:'L’IA n’a rien relevé de particulier.',detail:'',ids:[]}];
+  }catch(e){AIITEMS=[{lvl:'moyen',title:'Revue par l’IA impossible pour le moment',detail:e.code==='rate_limited'?'Trop de demandes, réessayez dans une minute.':'Réessayez plus tard.',ids:[]}]}
+  b.disabled=false;b.textContent='Revue complète par l’IA';render();$('aiBox').scrollIntoView({behavior:'smooth',block:'nearest'})};
+
+/* ---------- sélection multiple ---------- */
+function renderBulk(){if(!P){SEL.clear()}else{const ids=new Set(P.tx.map(t=>t.id));for(const id of SEL)if(!ids.has(id))SEL.delete(id)}
+  const v=visible();$('selAll').checked=v.length>0&&v.every(t=>SEL.has(t.id));$('selAll').indeterminate=!$('selAll').checked&&v.some(t=>SEL.has(t.id));
+  $('bulk').hidden=!SEL.size;if(!SEL.size)return;const sel=P.tx.filter(t=>SEL.has(t.id));
+  $('bulkN').textContent=`${sel.length} sélectionnée(s) · ${fmt(sel.reduce((s,t)=>s+t.amt,0))}`;
+  if(!$('bulkAcct').options.length||$('bulkAcct').dataset.v!==OPTS.length+''){$('bulkAcct').innerHTML='<option value="">Choisir le compte…</option><option value="__new">+ Nouveau compte…</option>'+OPTS;$('bulkAcct').dataset.v=OPTS.length+''}}
+$('selAll').onchange=()=>{const v=visible();if($('selAll').checked)v.forEach(t=>SEL.add(t.id));else v.forEach(t=>SEL.delete(t.id));render()};
+$('bulkX').onclick=()=>{SEL.clear();render()};
+$('bulkDel').onclick=e=>confirm2(e.currentTarget,'',()=>{const n=SEL.size;P.tx.filter(t=>SEL.has(t.id)&&t.inv).forEach(t=>{const iv=INV.find(i=>i.id===t.inv);if(iv){delete iv.pay;saveInv(iv).catch(()=>{})}});
+  P.tx=P.tx.filter(t=>!SEL.has(t.id));SEL.clear();LED=null;render();savePer();msg(`${n} transaction(s) supprimée(s).`);$('bulkDel').textContent='Supprimer'});
+$('bulkAcct').onchange=()=>{if($('bulkAcct').value==='__new')newAccount(null,no=>{$('bulkAcct').dataset.v='';renderBulk();$('bulkAcct').value=no||''})};
+$('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}
+  const sel=P.tx.filter(t=>SEL.has(t.id));sel.forEach(t=>{Object.assign(t,{acct:a,st:'manuel',why:'Classé en lot',unk:false});if(tx!=='')t.tax=tx==='1'});
+  SEL.clear();render();savePer();
+  const keys=[...new Set(sel.map(t=>keyOf(t.desc)).filter(Boolean))];
+  showToast(`<span>${sel.length} transaction(s) classée(s) dans ${esc(a)} ${esc(accName(a))}.${keys.length&&keys.length<=3?` Retenir pour ce client : ${keys.map(k=>'« '+esc(k)+' »').join(', ')} ?`:''}</span>${keys.length&&keys.length<=3?'<button class="sm pri" data-a="y">Retenir</button><button class="sm" data-a="n">Non</button>':''}`,
+    {y:()=>{keys.forEach(p=>{C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a,t:tx==='1'})});reclass();saveClient();renderRules();render();savePer()}})};
+
+/* ---------- factures ---------- */
+let INV=[],invF='ouv',invEdit=null;
+const cfAcc=()=>C.cf||findAcc(/COMPTES FOURNISSEURS|FOURNISSEURS A PAYER|COMPTES A PAYER/)||'2100';
+const ccAcc=()=>C.cc||findAcc(/COMPTES CLIENTS|CLIENTS A RECEVOIR|COMPTES A RECEVOIR/)||'1200';
+const addDays=(d,n)=>{const x=new Date(d+'T12:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
+async function invCol(){return db?db.collection('clients').doc(C.id).collection('factures'):null}
+async function loadInv(){INV=[];try{if(local)INV=Object.entries(LOCAL.inv||{}).filter(([k])=>k.startsWith(C.id+'/')).map(([k,v])=>({id:k.split('/')[1],...v}));
+  else{const s=await(await invCol()).get();INV=s.docs.map(d=>({id:d.id,...d.data()}))}}catch(e){}INV.sort((a,b)=>b.date.localeCompare(a.date));return INV}
+async function saveInv(i){const{id,...doc}=i;doc.updated=new Date().toISOString();
+  if(local){LOCAL.inv=LOCAL.inv||{};const k=id||'i'+Date.now()+Math.random().toString(36).slice(2,6);LOCAL.inv[C.id+'/'+k]=doc;i.id=k;return}
+  const col=await invCol();const ref=id?col.doc(id):col.doc();i.id=ref.id;await ref.set(doc)}
+function invLines(i){const cf=cfAcc(),cc=ccAcc();let L=i.type==='achat'?[[i.acct,i.ht],[C.tpsA,i.tps],[C.tvqA,i.tvq],[cf,-i.total]]:[[cc,i.total],[i.acct,-i.ht],[C.tpsV,-i.tps],[C.tvqV,-i.tvq]];
+  L=L.filter(l=>l[1]);const s=L.reduce((a,l)=>a+l[1],0);if(s){const k=L.findIndex(l=>l[0]===i.acct);if(k>=0)L[k][1]-=s}return L}
+function matchInvoices(txs){if(!INV.length)return 0;const cf=cfAcc(),cc=ccAcc();
+  txs.forEach(t=>{if(t.st==='facture'&&!INV.some(i=>i.id===t.inv)){t.st='transit';t.inv='';classify(t)}});
+  const used=new Set(txs.filter(t=>t.st==='facture').map(t=>t.inv));let n=0;const ch=[];
+  INV.filter(i=>!used.has(i.id)&&!i.pay&&i.total).forEach(inv=>{const want=inv.type==='achat'?-inv.total:inv.total;const tw=norm(inv.tiers).split(' ').filter(w=>w.length>2&&!GENW.test(w));
+    const sc=t=>tw.filter(w=>norm(t.desc).includes(w)).length*1000-dd(t.date,inv.date);
+    const c=txs.filter(t=>t.amt===want&&['transit','auto','suggere'].includes(t.st)&&t.date>=addDays(inv.date,-5)&&t.date<=addDays(inv.date,150)).sort((a,b)=>sc(b)-sc(a))[0];
+    if(!c)return;Object.assign(c,{acct:inv.type==='achat'?cf:cc,tax:false,st:'facture',inv:inv.id,unk:false,why:`Paiement de la facture ${inv.no||''} ${inv.tiers}`.replace(/\s+/g,' ')});inv.pay={date:c.date,desc:c.desc};ch.push(inv);n++});
+  ch.forEach(i=>saveInv(i).catch(()=>{}));return n}
+function renderInv(){const q=norm($('invQ').value);$('ifAcct').innerHTML=OPTS;
+  const L=INV.filter(i=>(invF==='all'||(invF==='ouv'&&!i.pay)||(invF==='pay'&&i.pay))&&(!q||norm(i.tiers+' '+(i.no||'')).includes(q)));
+  $('invList').innerHTML=L.length?L.map(i=>`<tr><td class="d">${esc(i.date)}</td><td><strong>${esc(i.tiers)}</strong><div class="why">${i.type==='achat'?'Achat':'Vente'}${i.desc?' · '+esc(i.desc):''}</div></td><td>${esc(i.no||'')}</td><td>${esc(i.acct)} ${esc(accName(i.acct))}</td><td class="num">${fmtN(i.total)}</td><td>${i.pay?`<span class="pill ok">Payée le ${esc(i.pay.date)}</span>`:`<span class="pill todo">Ouverte</span>${i.ech&&i.ech<new Date().toISOString().slice(0,10)?'<div class="why" style="color:var(--claret)">Échue</div>':''}`}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="sm" data-ie="${esc(i.id)}">Modifier</button>${i.pay?`<button class="sm" data-iu="${esc(i.id)}">Non payée</button>`:''}<button class="sm danger" data-del="inv-${esc(i.id)}">Supprimer</button></div></td></tr>`).join('')
+    :'<tr><td colspan="7" class="empty">Aucune facture.</td></tr>'}
+document.querySelectorAll('[data-if]').forEach(b=>b.onclick=()=>{invF=b.dataset.if;document.querySelectorAll('[data-if]').forEach(x=>x.setAttribute('aria-pressed',x===b));renderInv()});
+$('invQ').oninput=renderInv;
+function invOpen(i){invEdit=i||null;$('invForm').hidden=false;$('ifErr').textContent='';$('ifAcct').innerHTML=OPTS;
+  $('ifType').value=i?.type||$('invType').value;$('ifTiers').value=i?.tiers||'';$('ifNo').value=i?.no||'';$('ifDate').value=i?.date||'';$('ifEch').value=i?.ech||'';
+  $('ifAcct').value=i?.acct||'';$('ifHt').value=i?(i.ht/100).toFixed(2):'';$('ifTps').value=i?(i.tps/100).toFixed(2):'';$('ifTvq').value=i?(i.tvq/100).toFixed(2):'';$('ifTot').value=i?(i.total/100).toFixed(2):'';$('ifDesc').value=i?.desc||'';
+  $('invForm').scrollIntoView({behavior:'smooth',block:'nearest'})}
+$('invNew').onclick=()=>invOpen();$('ifCancel').onclick=()=>{$('invForm').hidden=true};
+$('invForm').onsubmit=async e=>{e.preventDefault();const tot=cents($('ifTot').value),tps=cents($('ifTps').value),tvq=cents($('ifTvq').value);let ht=cents($('ifHt').value);if(!ht)ht=tot-tps-tvq;
+  if(!tot||!$('ifAcct').value){$('ifErr').textContent='Total et compte requis.';return}
+  const i={...(invEdit||{}),type:$('ifType').value,tiers:$('ifTiers').value.trim(),no:$('ifNo').value.trim(),date:$('ifDate').value,ech:$('ifEch').value,acct:$('ifAcct').value,ht,tps,tvq,total:tot,desc:$('ifDesc').value.trim()};
+  if(invEdit&&invEdit.total!==tot)delete i.pay;
+  try{await saveInv(i);if(!invEdit)INV.unshift(i);else Object.assign(invEdit,i);$('invForm').hidden=true;afterInv()}catch(err){$('ifErr').textContent='Enregistrement impossible.'}};
+function afterInv(){INV.sort((a,b)=>b.date.localeCompare(a.date));if(P&&matchInvoices(P.tx)){render();savePer()}LED=null;renderInv()}
+$('invList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.ie){invOpen(INV.find(i=>i.id===b.dataset.ie));return}
+  if(b.dataset.iu){const i=INV.find(x=>x.id===b.dataset.iu);if(i){delete i.pay;saveInv(i);renderInv()}return}
+  if(b.dataset.del?.startsWith('inv-'))confirm2(b,'',async()=>{const id=b.dataset.del.slice(4);try{if(local)delete LOCAL.inv[C.id+'/'+id];else await(await invCol()).doc(id).delete()}catch(err){}INV=INV.filter(i=>i.id!==id);if(P&&P.tx.some(t=>t.inv===id)){matchInvoices(P.tx);render();savePer()}LED=null;renderInv()})});
+async function readInvoice(f,type){let text='',imgs=null;
+  if(/\.pdf$/i.test(f.name))text=(await pdfPages(f)).join('\n\n').slice(0,12000);
+  else{const lim=sampleFn.limits?await sampleFn.limits().catch(()=>null):null;if(!lim?.images)throw new Error('photos');imgs=[f]}
+  const prompt=`Facture ${type==='achat'?'reçue d’un fournisseur par':'émise à un client par'} l'entreprise « ${C.nom} » (Québec). Plan comptable :\n${PLAN.filter(([n])=>/^[45-9]/.test(n)).map(p=>p.join(' ')).join('\n')}\n${text?'\nTexte de la facture :\n'+text:'\nLa facture est dans l’image jointe.'}\n\nRéponds uniquement en JSON : {"tiers":"nom du ${type==='achat'?'fournisseur':'client'}","numero":"","date":"AAAA-MM-JJ","echeance":"AAAA-MM-JJ ou null","avant_taxes":0.00,"tps":0.00,"tvq":0.00,"total":0.00,"description":"5 mots max","compte":"numéro du plan le plus probable (${type==='achat'?'dépense':'revenu'})"}`;
+  const r=await sampleFn.json(prompt,imgs?{images:imgs,modelTier:'default'}:{modelTier:'default'});
+  const c=v=>Math.round(Number(v||0)*100);const tot=c(r?.total);if(!tot)throw new Error('vide');const tps=c(r.tps),tvq=c(r.tvq);let ht=c(r.avant_taxes);if(!ht)ht=tot-tps-tvq;
+  const acct=PLAN.some(p=>p[0]===String(r.compte))?String(r.compte):'';
+  return{type,tiers:String(r.tiers||'').slice(0,80)||'(inconnu)',no:String(r.numero||'').slice(0,30),date:toISO(String(r.date||''))||new Date().toISOString().slice(0,10),ech:toISO(String(r.echeance||''))||'',acct:acct||C.tr,ht,tps,tvq,total:tot,desc:String(r.description||'').slice(0,60),src:f.name}}
+async function handleInv(files){if(!sampleFn){$('invMsg').textContent='La lecture des factures demande l’IA, indisponible ici. Utilisez « Nouvelle facture ».';return}
+  const type=$('invType').value;let ok=0,bad=[];
+  for(const [k,f] of files.entries()){$('invMsg').textContent=`L'IA lit ${f.name} (${k+1}/${files.length})…`;
+    try{const i=await readInvoice(f,type);const dup=INV.find(x=>x.tiers===i.tiers&&x.total===i.total&&x.date===i.date);if(dup){bad.push(f.name+' (déjà entrée)');continue}await saveInv(i);INV.unshift(i);ok++}
+    catch(err){bad.push(f.name+(err.message==='photos'?' (photos non prises en charge ici : utilisez un PDF)':''))}}
+  afterInv();$('invMsg').textContent=`${ok} facture(s) lue(s) et inscrite(s). Vérifiez le compte de chacune.${bad.length?' Non lues : '+bad.join(', ')+'.':''}`}
+$('invFile').onchange=e=>{const f=[...e.target.files];e.target.value='';handleInv(f)};dropzone($('invDrop'),handleInv);
+function agingHtml(type,to){const L=INV.filter(i=>i.type===type&&i.date<=to&&(!i.pay||i.pay.date>to));const by=new Map();
+  L.forEach(i=>{const age=dd(i.ech||i.date,to)*(to>=(i.ech||i.date)?1:-1);const b=age<=30?0:age<=60?1:age<=90?2:3;const o=by.get(i.tiers)||[0,0,0,0,0];o[b]+=i.total;o[4]+=i.total;by.set(i.tiers,o)});
+  const T=[0,0,0,0,0];let x='';[...by].sort((a,b)=>b[1][4]-a[1][4]).forEach(([n,o])=>{o.forEach((v,k)=>T[k]+=v);x+=`<tr><td>${esc(n)}</td>${o.map(v=>`<td class="num">${fmtN(v)}</td>`).join('')}</tr>`});
+  return `<h2>${type==='achat'?'Comptes fournisseurs':'Comptes clients'} au ${esc(to)} : âge des comptes</h2><table class="rep"><tr class="sec"><td>${type==='achat'?'Fournisseur':'Client'}</td><td class="num">0-30 j</td><td class="num">31-60 j</td><td class="num">61-90 j</td><td class="num">90+ j</td><td class="num">Total</td></tr>${x||'<tr><td colspan="6" class="empty">Aucune facture ouverte.</td></tr>'}<tr class="tot"><td>Total</td>${T.map(v=>`<td class="num">${fmtN(v)||'0,00'}</td>`).join('')}</tr></table>`}
+
+/* ---------- conciliation ---------- */
+function stmtOfCsv(g,nom){const cB=+$('mBal').value;if(cB<0)return null;const[cD,cA,cO,cI]=['mDate','mAmt','mOut','mIn'].map(id=>+$(id).value),inv=$('mInv').checked;const R=[];
+  for(const r of g.body){const date=toISO(r[cD]||'',g.order);if(!date)continue;let c;if(cA>=0)c=toCents(r[cA]);else{const o=toCents(r[cO]),i=toCents(r[cI]);if(o===null&&i===null)continue;c=(i?Math.abs(i):0)-(o?Math.abs(o):0)}
+    let b=toCents(r[cB]);if(c==null||b==null)continue;if(inv){c=-c;b=-b}R.push({date,c,b})}
+  if(R.length<1)return null;const asc=R[0].date<=R[R.length-1].date;const F=asc?R[0]:R[R.length-1],L=asc?R[R.length-1]:R[0];
+  return{src:P.src,du:F.date,au:L.date,sd:F.b-F.c,sf:L.b,nom,via:'CSV'}}
+function addStmt(st){if(!st)return;C.stmts=(C.stmts||[]).filter(x=>!(x.src===st.src&&x.du===st.du&&x.au===st.au));C.stmts.push(st);C.stmts.sort((a,b)=>a.src.localeCompare(b.src)||a.du.localeCompare(b.du))}
+function initRec(){const srcs=[...new Set([...srcAccounts().map(p=>p[0]),...(C.stmts||[]).map(s=>s.src)])];
+  $('recSrc').innerHTML=srcs.map(a=>`<option value="${esc(a)}">${esc(a+' '+accName(a))}</option>`).join('');$('recSrc').value=C.src&&srcs.includes(C.src)?C.src:srcs[0]||'';runRec()}
+$('recGo').onclick=()=>runRec(true);$('recSrc').onchange=()=>runRec();
+async function runRec(force){const src=$('recSrc').value;$('recList').innerHTML='<tr><td colspan="9" class="empty">Calcul…</td></tr>';
+  try{if(!LED||force)LED=await loadLedger()}catch(e){$('recList').innerHTML='<tr><td colspan="9" class="empty">Lecture impossible.</td></tr>';return}
+  const S=(C.stmts||[]).filter(x=>x.src===src).sort((a,b)=>a.du.localeCompare(b.du));
+  const tx=LED.filter(e=>e.kind==='rel'&&e.src===src).map(e=>({date:e.date,amt:(e.lines.find(l=>l[0]===src)||[0,0])[1]}));
+  let ok=0,prev=null;const rows=S.map((s,i)=>{let T=tx.filter(t=>t.date>=s.du&&t.date<=s.au),share='';
+    const sh=new Set();if(S[i-1]&&S[i-1].au===s.du)sh.add(s.du);if(S[i+1]&&S[i+1].du===s.au)sh.add(s.au);
+    if(sh.size){const core=T.filter(t=>!sh.has(t.date)),B=T.filter(t=>sh.has(t.date));const tgt=s.sf-s.sd-core.reduce((a,t)=>a+t.amt,0);
+      if(B.reduce((a,t)=>a+t.amt,0)!==tgt&&B.length<=18){for(let m=0;m<(1<<B.length);m++){let x=0;for(let k=0;k<B.length;k++)if(m>>k&1)x+=B[k].amt;if(x===tgt){T=core.concat(B.filter((_,k)=>m>>k&1));share=` Certaines transactions du ${[...sh].join(' et du ')} sont sur le relevé voisin (jour partagé).`;break}}}}const inn=T.filter(t=>t.amt>0).reduce((a,t)=>a+t.amt,0),out=T.filter(t=>t.amt<0).reduce((a,t)=>a+t.amt,0);
+    const calc=s.sd+inn+out,diff=s.sf-calc;const gap=prev&&prev.sf!==s.sd?` Le relevé précédent finit à ${fmtN(prev.sf)}.`:'';const hole=prev&&dd(prev.au,s.du)>1?` Trou du ${prev.au} au ${s.du}.`:'';prev=s;if(!diff&&!gap&&!hole)ok++;
+    return `<tr><td class="d">${esc(s.du)} au ${esc(s.au)}<div class="why">${esc(s.nom||'')} · ${esc(s.via||'manuel')}</div></td><td class="num">${fmtN(s.sd)||'0,00'}</td><td class="num">${fmtN(inn)}</td><td class="num">${fmtN(-out)}</td><td class="num">${fmtN(calc)||'0,00'}</td><td class="num">${fmtN(s.sf)||'0,00'}</td><td class="num">${diff?`<span class="bad-b">${fmtN(diff)}</span>`:''}</td><td>${diff?`<span class="pill todo">Ne balance pas</span>`:'<span class="pill ok">Concilié</span>'}${gap||hole?`<div class="why" style="color:var(--claret)">${esc(gap+hole)}</div>`:''}${share&&!diff?`<div class="why">${esc(share)}</div>`:''}${diff?`<div class="why">${diff>0?'Il manque des entrées ou il y a des sorties en trop':'Il manque des sorties ou il y a des entrées en trop'} de ${fmtN(Math.abs(diff))} $.${T.length?'':' Aucune transaction importée pour cette période.'}</div>`:''}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${diff?`<button class="sm pri" data-fx="${i}">Trouver l'écart</button>`:''}<button class="sm danger" data-del="st-${i}">Retirer</button></div></td></tr>`});
+  $('recList').innerHTML=rows.join('')||'<tr><td colspan="9" class="empty">Aucun relevé avec soldes pour ce compte. Importez un CSV avec la colonne « Solde », un PDF, ou ajoutez-le à la main ci-dessous.</td></tr>';
+  const last=S[S.length-1];let book='';
+  if(last){const B=balances(LED,null,last.au);const bv=B.get(src)||0;book=bv===last.sf?`<span class="ok-b">Solde aux livres au ${last.au} : ${fmtN(bv)} $ = relevé.</span>`:`<span class="bad-b">Solde aux livres au ${last.au} : ${fmtN(bv)} $, relevé : ${fmtN(last.sf)} $ (écart ${fmtN(last.sf-bv)} $).</span> <span class="note">Vérifiez le solde d'ouverture du compte ${esc(src)} dans Écritures, ou un relevé manquant.</span>`}
+  const out=tx.filter(t=>!S.some(s=>t.date>=s.du&&t.date<=s.au)).length;
+  $('recSum').innerHTML=S.length?`<p><strong>${ok} relevé(s) sur ${S.length} concilié(s).</strong> ${book}${out?` <span class="note">${out} transaction(s) hors des périodes de relevés.</span>`:''}</p>`:'';
+  $('recList').querySelectorAll('[data-fx]').forEach(b=>b.onclick=()=>{FX={st:S[+b.dataset.fx],src};$('fxFile').click()});
+  $('recList').querySelectorAll('[data-del^="st-"]').forEach(b=>b.onclick=()=>confirm2(b,'',()=>{const s=S[+b.dataset.del.slice(3)];C.stmts=C.stmts.filter(x=>x!==s);saveClient();runRec()}))}
+function stmtAuto(g,nom,src){if(g.bal==null||g.bal<0)return null;const inv=/^2/.test(src);const R=[];
+  for(const r of g.body){const date=toISO(r[g.date]||'',g.order);if(!date)continue;let c;if(g.amt>=0)c=toCents(r[g.amt]);else{const o=toCents(r[g.out]),i=toCents(r[g.inn]);if(o===null&&i===null)continue;c=(i?Math.abs(i):0)-(o?Math.abs(o):0)}
+    let b=toCents(r[g.bal]);if(c==null||b==null)continue;if(inv){c=-c;b=-b}R.push({date,c,b})}
+  if(!R.length)return null;const asc=R[0].date<=R[R.length-1].date;const F=asc?R[0]:R[R.length-1],L=asc?R[R.length-1]:R[0];return{src,du:F.date,au:L.date,sd:F.b-F.c,sf:L.b,nom,via:'CSV'}}
+async function recFiles(files){const src=$('recSrc').value;let ok=0,bad=[];
+  for(const [k,f] of files.entries()){$('recMsg').textContent=`Lecture de ${f.name} (${k+1}/${files.length})…`;
+    try{let st=null;if(/\.pdf$/i.test(f.name)){if(!sampleFn)throw 0;const pages=await pdfPages(f);
+        const s=await sampleFn.json(`Texte de la première et de la dernière page d'un relevé bancaire ou de carte de crédit canadien :\n${pages[0].slice(0,2500)}\n...\n${pages[pages.length-1].slice(-2500)}\n\nDonne la période et les soldes. Réponds uniquement en JSON : {"du":"AAAA-MM-JJ","au":"AAAA-MM-JJ","solde_debut":1234.56,"solde_fin":1234.56,"carte":false}. Pour une carte de crédit, carte=true et les soldes sont les montants dus (positifs). Un solde débiteur (découvert) est négatif.`,{modelTier:'default'});
+        const du=toISO(String(s?.du||'')),au=toISO(String(s?.au||''));if(du&&au&&s.solde_debut!=null&&s.solde_fin!=null){const sg=s.carte?-1:1;st={src,du,au,sd:sg*Math.round(Number(s.solde_debut)*100),sf:sg*Math.round(Number(s.solde_fin)*100),nom:f.name,via:'IA'}}}
+      else{const rows=await rowsOf(f);if(rows.length>1)st=stmtAuto(guess(rows),f.name,src)}
+      if(st){addStmt(st);ok++}else bad.push(f.name)}catch(e){bad.push(f.name)}}
+  saveClient();$('recMsg').textContent=`${ok} relevé(s) ajouté(s) à la conciliation du compte ${src}.${bad.length?` Soldes introuvables dans : ${bad.join(', ')} (ajoutez-les à la main ci-dessous).`:''}`;runRec(true)}
+$('recFile').onchange=e=>{const f=[...e.target.files];e.target.value='';recFiles(f)};dropzone($('recDrop'),recFiles);
+let FX=null;
+async function addToPeriods(list,src){const by=new Map();list.forEach(x=>{const m=x.date.slice(0,7);by.set(m,[...(by.get(m)||[]),x])});let n=0;
+  for(const[m,L]of by){let p={mois:m,src,tx:[],statut:'en cours'};const d=await readPeriod(m,src);if(d){p={...p,...d,tx:(d.tx||[]).map(t=>({...t,id:++seq}))}}
+    n+=mergeInto(p,L).added;savePerFlush(p)}await pWriting;LED=null;if(P&&P.src===src)P.multi?openRange():openPeriod();return n}
+$('fxFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||!FX)return;const{st,src}=FX;const box=$('fxBox');box.hidden=false;box.innerHTML='<p class="note">Lecture du relevé…</p>';
+  try{let T=[];if(/\.pdf$/i.test(f.name)){if(!sampleFn)throw 0;T=await pdfTx(f,t=>box.innerHTML=`<p class="note">${esc(t)}</p>`)}else{const rows=await rowsOf(f);T=autoMap(guess(rows));if(/^2/.test(src))T=T.map(x=>({...x,amt:-x.amt}))}
+    T=T.filter(x=>x.date>=st.du&&x.date<=st.au);if(!LED)LED=await loadLedger();
+    const A=LED.filter(e=>e.kind==='rel'&&e.src===src&&e.date>=st.du&&e.date<=st.au).map(e=>({date:e.date,desc:e.desc,amt:(e.lines.find(l=>l[0]===src)||[0,0])[1],mois:e.mois}));
+    const pool=[...A];const miss=[];T.forEach(x=>{let k=pool.findIndex(a=>a.amt===x.amt&&a.date===x.date);if(k<0)k=pool.findIndex(a=>a.amt===x.amt&&dd(a.date,x.date)<=3);if(k>=0)pool.splice(k,1);else miss.push(x)});
+    const SS=(C.stmts||[]).filter(x=>x.src===src&&x!==st);const shd=new Set(SS.flatMap(x=>[x.du,x.au]).filter(d=>d===st.du||d===st.au));
+    const extra=pool.filter(x=>!shd.has(x.date)),onOther=pool.filter(x=>shd.has(x.date));const sum=l=>l.reduce((s,x)=>s+x.amt,0);const tSum=sum(T),relCalc=st.sd+tSum;
+    const row=x=>`<tr><td class="d">${esc(x.date)}</td><td>${esc(x.desc)}</td><td class="num">${esc(fmtN(x.amt))}</td></tr>`;
+    box.innerHTML=`<h2>Écart du relevé ${esc(st.du)} au ${esc(st.au)}</h2>
+      <p>Le relevé contient ${T.length} transaction(s), l'application ${A.length}. ${relCalc!==st.sf?`<span class="bad-b">Attention : même le relevé lu ne balance pas (${fmtN(st.sd)} + ${fmtN(tSum)} ≠ ${fmtN(st.sf)}). Les soldes saisis sont peut-être mal lus : corrigez-les (Retirer, puis Ajouter à la main).</span>`:''}</p>
+      ${miss.length?`<h2>Manquantes dans l'application (${miss.length}, ${fmtN(sum(miss))} $)</h2><table class="rep">${miss.map(row).join('')}</table><button class="pri sm" id="fxAdd" style="margin-top:8px">Ajouter ces ${miss.length} transaction(s)</button>`:'<p class="ok-b">Aucune transaction manquante.</p>'}
+      ${extra.length?`<h2 style="margin-top:12px">En trop dans l'application (${extra.length}, ${fmtN(sum(extra))} $)</h2><p class="note">Absentes de ce relevé : doublon, mauvaise date, ou transaction d'un autre compte. Ouvrez la période pour la supprimer ou la corriger.</p><table class="rep">${extra.map(x=>`<tr><td class="d">${esc(x.date)}</td><td><a data-open="${esc(x.mois+'|'+src+'|'+x.desc)}">${esc(x.desc)}</a></td><td class="num">${esc(fmtN(x.amt))}</td></tr>`).join('')}</table>`:'<p class="ok-b">Aucune transaction en trop.</p>'}
+      ${onOther.length?`<p class="note" style="margin-top:8px">${onOther.length} transaction(s) du ${[...shd].join(' / ')} ne sont pas sur ce relevé mais sur le relevé voisin qui partage cette date : c'est normal.</p>`:''}
+      <button class="sm" id="fxClose" style="margin-top:8px">Fermer</button>`;
+    $('fxClose').onclick=()=>{box.hidden=true};
+    if($('fxAdd'))$('fxAdd').onclick=async()=>{$('fxAdd').disabled=true;const n=await addToPeriods(miss,src);box.innerHTML=`<p class="ok-b">${n} transaction(s) ajoutée(s) et classée(s) par les règles. Vérifiez-les dans Révision.</p>`;runRec(true)};
+    box.querySelectorAll('[data-open]').forEach(a=>a.onclick=()=>{const[m,s2,desc]=a.dataset.open.split('|');setTab('rev');$('pMois').value=m;$('pSrc').value=s2;filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()});
+  }catch(err){box.innerHTML='<p class="msg err">Lecture du relevé impossible.</p>'}};
+$('recForm').onsubmit=e=>{e.preventDefault();const sd=toCents($('rcSd').value.replace(/\s/g,'')),sf=toCents($('rcSf').value.replace(/\s/g,''));if(sd==null||sf==null)return;
+  addStmt({src:$('recSrc').value,du:$('rcDu').value,au:$('rcAu').value,sd,sf,nom:'',via:'manuel'});saveClient();e.target.reset();runRec()};
+
+/* ---------- grand livre ---------- */
+const cents=s=>{const c=toCents(s);return c==null?0:c};
+const fmtN=c=>c?new Intl.NumberFormat('fr-CA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(c/100):'';
+const accType=a=>{const d=String(a)[0];return d==='1'?'A':d==='2'?'P':d==='3'?'C':d==='4'?'R':'D'};
+function exRange(){const d=C.exDeb||(C.ouv&&C.ouv.date)||'',f=C.exFin||'';if(d&&f)return[d,f];
+  if(d){const x=new Date(d+'T12:00');x.setFullYear(x.getFullYear()+1);x.setDate(x.getDate()-1);return[d,x.toISOString().slice(0,10)]}
+  return['',''];}
+async function jeCol(){return db?db.collection('clients').doc(C.id).collection('ecritures'):null}
+let JE=[];
+async function loadJe(){JE=[];try{if(local)JE=Object.entries(LOCAL.je||{}).filter(([k])=>k.startsWith(C.id+'/')).map(([k,v])=>({id:k.split('/')[1],...v}));
+  else{const s=await(await jeCol()).get();JE=s.docs.map(d=>({id:d.id,...d.data()}))}}catch(e){}JE.sort((a,b)=>a.date.localeCompare(b.date));return JE}
+async function loadLedger(){
+  if(P&&pTimer)savePerNow();await pWriting;
+  let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);
+    else{const s=await db.collection('clients').doc(C.id).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){throw e}
+  const E=[];
+  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t);E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:t.desc,lines:lines(t,p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,todo:t.st==='transit'})}));
+  await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv'}));
+  (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id}));
+  E.sort((a,b)=>a.date.localeCompare(b.date));
+  return E}
+function balances(E,from,to,ouvTo=to){/* soldes au "to" ; pour revenus/charges : depuis le début d'exercice ou "from" */
+  const[exD]=exRange();const m=new Map();const add=(a,c)=>m.set(a,(m.get(a)||0)+c);
+  const ouv=C.ouv&&(!ouvTo||C.ouv.date<=ouvTo)?C.ouv:null;const re=findAcc(/NON REPARTIS|NON DISTRIBUES|BENEFICES REPORTES|SURPLUS/)||'3560';
+  if(ouv)Object.entries(ouv.s||{}).forEach(([a,c])=>{if(+String(a)[0]>=4)add(re,c);else add(a,c)});
+  const isStart=from||exD||'';
+  E.forEach(e=>{if(to&&e.date>to)return;if(ouv&&e.date<ouv.date)return;e.lines.forEach(([a,c])=>{if(+String(a)[0]>=4&&isStart&&e.date<isStart)add(re,c);else add(a,c)})});
+  return m}
+function groups(acctSet,first){/* regroupe les comptes du plan par sections Sage (totaux) */
+  const pl=PLAN.filter(([n])=>first.includes(String(n)[0]));const out=[];let cur={title:'',items:[]};
+  pl.forEach(([n,t])=>{if(/^TOTAL/.test(norm(t))){cur.title=t.replace(/^total\s*[-:]?\s*/i,'');out.push(cur);cur={title:'',items:[]};return}
+    if(acctSet.has(n))cur.items.push(n)});
+  out.push(cur);[...acctSet].filter(a=>first.includes(String(a)[0])&&!PLAN.some(p=>p[0]===a)).forEach(a=>out[out.length-1].items.push(a));
+  return out.filter(g=>g.items.length)}
+let REP='bs',LED=null;
+function initRep(){const[d,f]=exRange();if(!$('repFrom').value)$('repFrom').value=d;if(!$('repTo').value)$('repTo').value=f||new Date().toISOString().slice(0,10);
+  $('repAcc').innerHTML='<option value="">Tous les comptes</option>'+OPTS;if(!d)$('repMsg').textContent='Indiquez le début et la fin de l’exercice dans Paramètres (ou les soldes d’ouverture dans Écritures).';runRep()}
+document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';runRep()});
+$('repGo').onclick=()=>runRep(true);
+async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p>';
+  try{if(!LED||force)LED=await loadLedger()}catch(e){$('repOut').innerHTML='<p class="msg err">Lecture des données impossible.</p>';return}
+  const f=$('repFrom').value,t=$('repTo').value,E=LED;
+  const todo=E.filter(e=>e.todo&&(!f||e.date>=f)&&(!t||e.date<=t)).length;
+  const tr=t=>`<tr${t[2]?` class="${t[2]}"`:''}>${t[0]}</tr>`;
+  const link=a=>`<a data-gl="${esc(a)}">${esc(a)} ${esc(accName(a))}</a>`;
+  let h='',warn=todo?`<p class="msg err">${todo} transaction(s) encore au compte transitoire ${esc(C.tr)} dans cette période.</p>`:'';
+  if(REP==='bs'){const B=balances(E,null,t);const[exD]=exRange();const ni=[...balances(E,f||exD,t)].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
+    const sect=(title,first,sign)=>{const set=new Set([...B].filter(([a,c])=>c&&first.includes(String(a)[0])).map(([a])=>a));let tot=0;let x=`<tr class="sec"><td colspan="2">${title}</td></tr>`;
+      groups(set,first).forEach(g=>{let st=0;if(g.title)x+=`<tr class="grp"><td colspan="2">${esc(g.title)}</td></tr>`;g.items.forEach(a=>{const v=sign*B.get(a);st+=v;x+=`<tr><td class="ind">${link(a)}</td><td class="num">${fmtN(v)}</td></tr>`});if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td><td class="num">${fmtN(st)}</td></tr>`;tot+=st});
+      return[x,tot]};
+    const[a,ta]=sect('Actif','1',1),[p,tp]=sect('Passif','2',-1);let[c,tc]=sect('Avoir des actionnaires','3',-1);
+    c+=`<tr><td class="ind">Bénéfice net (perte) de l'exercice</td><td class="num">${fmtN(ni)}</td></tr>`;tc+=ni;
+    const ok=Math.abs(ta-tp-tc)<1;
+    h=`<h2>Bilan au ${esc(t)}</h2><table class="rep">${a}<tr class="tot"><td>Total de l'actif</td><td class="num">${fmtN(ta)}</td></tr>${p}<tr class="sub"><td>Total du passif</td><td class="num">${fmtN(tp)}</td></tr>${c}<tr class="sub"><td>Total de l'avoir</td><td class="num">${fmtN(tc)}</td></tr><tr class="tot"><td>Total du passif et de l'avoir</td><td class="num">${fmtN(tp+tc)}</td></tr></table>
+      <p class="${ok?'ok-b':'bad-b'}">${ok?'Le bilan balance.':`Écart de ${fmtN(ta-tp-tc)} $ : vérifiez les soldes d'ouverture.`}</p>`}
+  if(REP==='is'){const B=balances(E,f,t);const set=new Set([...B].filter(([a,c])=>c&&+String(a)[0]>=4).map(([a])=>a));
+    const sect=(title,first,sign)=>{let tot=0,x=`<tr class="sec"><td colspan="2">${title}</td></tr>`;groups(set,first).forEach(g=>{let st=0;if(g.title)x+=`<tr class="grp"><td colspan="2">${esc(g.title)}</td></tr>`;g.items.forEach(a=>{const v=sign*B.get(a);st+=v;x+=`<tr><td class="ind">${link(a)}</td><td class="num">${fmtN(v)}</td></tr>`});if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td><td class="num">${fmtN(st)}</td></tr>`;tot+=st});return[x,tot]};
+    const[r,tr_]=sect('Revenus','4',-1),[d,td]=sect('Dépenses','56789',1);
+    h=`<h2>État des résultats du ${esc(f)} au ${esc(t)}</h2><table class="rep">${r}<tr class="sub"><td>Total des revenus</td><td class="num">${fmtN(tr_)}</td></tr>${d}<tr class="sub"><td>Total des dépenses</td><td class="num">${fmtN(td)}</td></tr><tr class="tot"><td>Bénéfice net (perte)</td><td class="num">${fmtN(tr_-td)}</td></tr></table>`}
+  if(REP==='tb'){const B=balances(E,null,t);const[exD]=exRange();const I=balances(E,f||exD,t);let D=0,K=0,x='';
+    const all=new Map([...[...B].filter(([a])=>+String(a)[0]<4),...[...I].filter(([a])=>+String(a)[0]>=4)]);
+    [...all].filter(([,c])=>c).sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true})).forEach(([a,c])=>{c>0?D+=c:K-=c;x+=`<tr><td>${link(a)}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`});
+    h=`<h2>Balance de vérification au ${esc(t)}</h2><table class="rep"><tr class="sec"><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${x}<tr class="tot"><td>Total</td><td class="num">${fmtN(D)}</td><td class="num">${fmtN(K)}</td></tr></table><p class="${D===K?'ok-b':'bad-b'}">${D===K?'Débits = crédits.':'Débits et crédits ne balancent pas.'}</p>`}
+  if(REP==='gl'){const sel=$('repAcc').value;const B0=f?balances(E,exRange()[0]||f,new Date(new Date(f+'T12:00')-864e5).toISOString().slice(0,10),f):new Map();
+    const accs=sel?[sel]:[...new Set([...E.flatMap(e=>e.lines.map(l=>l[0])),...[...B0].filter(([,c])=>c).map(([a])=>a)])].sort((a,b)=>String(a).localeCompare(String(b),'fr',{numeric:true}));let x='';
+    accs.forEach(a=>{const rows=[];E.forEach(e=>{if((f&&e.date<f)||(t&&e.date>t))return;e.lines.forEach(([b,c])=>{if(b===a)rows.push([e,c])})});
+      let sb=B0.get(a)||0;if(!rows.length&&!sb)return;
+      x+=`<tr class="sec"><td colspan="6">${esc(a)} ${esc(accName(a))}</td></tr><tr class="grp"><td colspan="5">Solde d'ouverture</td><td class="num">${fmtN(sb)}</td></tr>`;let D=0,K=0;
+      rows.forEach(([e,c])=>{sb+=c;c>0?D+=c:K-=c;x+=`<tr><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td>${e.kind==='rel'?`<a data-open="${esc(e.mois+'|'+e.src+'|'+e.desc)}">${esc(e.desc)}</a>`:esc(e.desc)}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td><td class="num">${fmtN(sb)}</td></tr>`});
+      x+=`<tr class="sub"><td colspan="3">Total ${esc(a)}</td><td class="num">${fmtN(D)}</td><td class="num">${fmtN(K)}</td><td class="num">${fmtN(sb)}</td></tr>`});
+    h=`<h2>Grand livre du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="grp"><td>Date</td><td>Réf.</td><td>Description</td><td class="num">Débit</td><td class="num">Crédit</td><td class="num">Solde</td></tr>${x||'<tr><td colspan="6" class="empty">Aucune écriture.</td></tr>'}</table>`}
+  if(REP==='tx'){const fl=a=>E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).reduce((s,e)=>s+e.lines.filter(l=>l[0]===a).reduce((x,l)=>x+l[1],0),0);
+    const tpsV=-fl(C.tpsV),tvqV=-fl(C.tvqV),cti=fl(C.tpsA),rti=fl(C.tvqA);const rev=-E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).reduce((s,e)=>s+e.lines.filter(l=>String(l[0])[0]==='4').reduce((x,l)=>x+l[1],0),0);
+    const row=(a,b,c)=>`<tr><td>${a}</td><td class="num">${fmtN(b)||'0,00'}</td><td class="num">${fmtN(c)||'0,00'}</td></tr>`;
+    h=`<h2>TPS/TVQ du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td></td><td class="num">TPS</td><td class="num">TVQ</td></tr>${row(`Taxes perçues (${esc(C.tpsV)} / ${esc(C.tvqV)})`,tpsV,tvqV)}${row(`CTI / RTI (${esc(C.tpsA)} / ${esc(C.tvqA)})`,cti,rti)}<tr class="tot"><td>${tpsV-cti>=0?'Taxe nette à remettre':'Remboursement'}</td><td class="num">${fmtN(Math.abs(tpsV-cti))||'0,00'}</td><td class="num">${fmtN(Math.abs(tvqV-rti))||'0,00'}</td></tr></table>
+      <p class="note">Revenus totaux de la période (comptes 4xxx) : ${fmtN(rev)||'0,00'} $. Ces montants viennent des taxes ventilées (« Taxes incl. ») et des factures. Les repas ne donnent droit qu'à 50 % des CTI/RTI.</p>`}
+  if(REP==='ap'||REP==='ar'){await loadInv();h=agingHtml(REP==='ap'?'achat':'vente',t)}
+  if(REP==='gifi'){const[exD]=exRange();const B=balances(E,null,t),I=balances(E,f||exD,t);const G=C.gifi||{};
+    const acc=[...new Map([...[...B].filter(([a,c])=>c&&+String(a)[0]<4),...[...I].filter(([a,c])=>c&&+String(a)[0]>=4)])].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true}));
+    const sum=new Map();acc.forEach(([a,c])=>{const k=G[a]||'?';const v=['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c;sum.set(k,(sum.get(k)||0)+v)});
+    h=`<h2>Codes IGRF (annexes 100 et 125 de la T2) au ${esc(t)}</h2><div class="row" style="margin:6px 0 10px"><button class="sm" id="gifiAi" ${sampleFn?'':'disabled'}>Suggérer les codes avec l'IA</button><span class="note" id="gifiMsg">Corrigez un code directement dans la colonne IGRF.</span></div>
+      <table class="rep"><tr class="sec"><td>Compte</td><td>IGRF</td><td class="num">Montant</td></tr>${acc.map(([a,c])=>`<tr><td>${link(a)}</td><td><input data-gifi="${esc(a)}" value="${esc(G[a]||'')}" style="width:80px;min-height:32px;padding:2px 6px" inputmode="numeric"></td><td class="num">${fmtN(['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c)}</td></tr>`).join('')}</table>
+      <h2 style="margin-top:16px">Sommaire par code</h2><table class="rep"><tr class="sec"><td>Code IGRF</td><td class="num">Montant</td></tr>${[...sum].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`<tr><td>${k==='?'?'<span class="bad-b">Sans code</span>':esc(k)}</td><td class="num">${fmtN(v)}</td></tr>`).join('')}</table>`}
+  if(REP==='jr'){let x='';E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).forEach(e=>{x+=`<tr class="grp"><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td colspan="2">${esc(e.desc)}</td></tr>`;e.lines.forEach(([a,c])=>x+=`<tr><td></td><td class="ind" colspan="1">${esc(a)} ${esc(accName(a))}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`)});
+    h=`<h2>Journal général du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td>Date</td><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${x||'<tr><td colspan="4" class="empty">Aucune écriture.</td></tr>'}</table>`}
+  $('repOut').innerHTML=warn+h;$('repMsg').textContent=`${E.length} écritures dans le dossier · ${C.nom}`}
+$('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');if(g){REP='gl';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r==='gl'));$('repAccL').hidden=false;$('repAcc').value=g.dataset.gl;runRep();return}
+  const o=e.target.closest('[data-open]');if(o){const[m,src,desc]=o.dataset.open.split('|');setTab('rev');if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
+    $('pMois').value=m;if(![...$('pSrc').options].some(x=>x.value===src))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(src)}">${esc(src)}</option>`);$('pSrc').value=src;
+    filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()}});
+function repRows(){return[...$('repOut').querySelectorAll('tr')].map(r=>[...r.cells].map(c=>c.textContent.trim()))}
+const REPN={bs:'Bilan',is:'Etat des resultats',tb:'Balance de verification',gl:'Grand livre',jr:'Journal general',tx:'TPS-TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',gifi:'IGRF'};
+$('repPdf').onclick=async()=>{if(!downloads){$('repMsg').textContent='Téléchargement indisponible dans cette vue.';return}$('repMsg').textContent='Préparation du PDF…';
+  try{if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+    const cl=t=>String(t||'').replace(/[   ]/g,' ').replace(/[✓✗→]/g,'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
+    let y=42;doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(cl(C.nom),40,y);y+=14;doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(110);doc.text(`Produit le ${new Date().toLocaleDateString('fr-CA')} · Tenue de livres du cabinet`,40,y);doc.setTextColor(0);y+=18;
+    const room=n=>{if(y+n>H-40){doc.addPage();y=42}};
+    $('repOut').querySelectorAll('h2, table.rep, p').forEach(el=>{if(el.tagName!=='TABLE'&&el.closest('table'))return;
+      if(el.tagName==='H2'){room(30);doc.setFont('helvetica','bold');doc.setFontSize(12.5);doc.text(cl(el.textContent),40,y);y+=12;return}
+      if(el.tagName==='P'){const t=cl(el.textContent);if(!t)return;doc.setFont('helvetica',el.querySelector('.bad-b,.ok-b')||el.className.includes('-b')?'bold':'normal');doc.setFontSize(9);const L=doc.splitTextToSize(t,W-80);room(L.length*11+6);doc.text(L,40,y+8);y+=L.length*11+8;return}
+      const body=[...el.rows].map(r=>{const k=r.className;return[...r.cells].map(c=>({content:cl(c.querySelector('input')?.value||c.textContent),colSpan:c.colSpan,styles:{halign:c.classList.contains('num')?'right':'left',fontStyle:/sec|grp|sub|tot/.test(k)?'bold':'normal',cellPadding:{top:3,bottom:3,left:c.classList.contains('ind')?14:4,right:4},fillColor:/sec/.test(k)?[240,240,240]:false}}))});
+      doc.autoTable({startY:y,body,theme:'plain',margin:{left:40,right:40},styles:{fontSize:8.5,textColor:20},
+        didDrawCell:d=>{const k=el.rows[d.row.index]?.className||'';if(/tot/.test(k)){doc.setDrawColor(0);doc.setLineWidth(.8);doc.line(d.cell.x,d.cell.y,d.cell.x+d.cell.width,d.cell.y);doc.line(d.cell.x,d.cell.y+d.cell.height-1,d.cell.x+d.cell.width,d.cell.y+d.cell.height-1);doc.line(d.cell.x,d.cell.y+d.cell.height+1,d.cell.x+d.cell.width,d.cell.y+d.cell.height+1)}else if(/sub/.test(k)){doc.setDrawColor(0);doc.setLineWidth(.5);doc.line(d.cell.x,d.cell.y,d.cell.x+d.cell.width,d.cell.y)}}});
+      y=doc.lastAutoTable.finalY+14});
+    const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(130);doc.text(`Page ${i} de ${n}`,W-40,H-22,{align:'right'})}
+    await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${REPN[REP]||REP}_${$('repTo').value}.pdf`.replace(/\s+/g,'_'),data:new Uint8Array(doc.output('arraybuffer'))});$('repMsg').textContent='PDF enregistré.'}
+  catch(e){$('repMsg').textContent=e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.'}};
+$('repCp').onclick=async()=>{try{await navigator.clipboard.writeText(repRows().map(r=>r.join('\t')).join('\r\n'));$('repMsg').textContent='Copié : collez dans Excel.'}catch(e){$('repMsg').textContent='Copie refusée.'}};
+$('repCsv').onclick=async()=>{const csv='﻿'+repRows().map(r=>r.map(c=>`"${c.replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  if(!downloads){try{await navigator.clipboard.writeText(csv);$('repMsg').textContent='Téléchargement indisponible ici : copié à la place.'}catch(e){}return}
+  try{await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${REP}_${$('repTo').value}.csv`,data:csv});$('repMsg').textContent='Fichier enregistré.'}catch(e){$('repMsg').textContent='Téléchargement annulé.'}};
+
+$('repOut').addEventListener('change',e=>{const a=e.target.dataset?.gifi;if(a==null)return;C.gifi=C.gifi||{};const v=e.target.value.trim();if(v)C.gifi[a]=v;else delete C.gifi[a];saveClient()});
+$('repOut').addEventListener('click',async e=>{if(e.target.id!=='gifiAi')return;e.target.disabled=true;$('gifiMsg').textContent='L’IA associe les codes…';
+  try{const r=await sampleFn.json(`Associe chaque compte de ce plan comptable d'une société québécoise (Sage 50) au code IGRF/GIFI de l'ARC le plus approprié pour les annexes 100 (bilan) et 125 (résultats) de la T2. Ignore les comptes de titre et de total.\n${PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p.join(' ')).join('\n')}\n\nRéponds uniquement en JSON : {"1060":"1002","4200":"8000"}`,{modelTier:'complex'});
+    let n=0;C.gifi=C.gifi||{};Object.entries(r||{}).forEach(([a,c])=>{if(PLAN.some(p=>p[0]===a)&&/^\d{4}$/.test(String(c))&&!C.gifi[a]){C.gifi[a]=String(c);n++}});saveClient();runRep();$('repMsg').textContent=`${n} code(s) IGRF suggéré(s). Vérifiez-les.`}
+  catch(err){$('gifiMsg').textContent='Suggestion impossible pour le moment.';e.target.disabled=false}});
+$('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{const[d,f]=exRange();if(!f){$('yeMsg').textContent='Indiquez d’abord la fin de l’exercice.';return}
+  $('yeMsg').textContent='Calcul…';try{const E=await loadLedger();const B=balances(E,null,f);const re=findAcc(/NON REPARTIS|NON DISTRIBUES|BENEFICES REPORTES|SURPLUS/)||'3560';const s={};
+    B.forEach((c,a)=>{if(!c)return;const k=+String(a)[0]>=4?re:a;s[k]=(s[k]||0)+c});Object.keys(s).forEach(k=>{if(!s[k])delete s[k]});
+    const nd=addDays(f,1),nf=addDays(addDays(f,1).replace(/^(\d{4})/,y=>String(+y+1)),-1);C.ouv={date:nd,s};C.exDeb=nd;C.exFin=nf;saveClient();renderSettings();LED=null;
+    $('yeMsg').textContent=`Exercice fermé au ${f}. Nouvel exercice : ${nd} au ${nf}. Soldes d'ouverture mis à jour (${Object.keys(s).length} comptes).`}catch(err){$('yeMsg').textContent='Calcul impossible.'}
+  $('yearEnd').textContent='Passer à l’exercice suivant'});
+
+/* ---------- soldes d'ouverture ---------- */
+function ouvParse(txt){const s={};let bad=0;txt.split('\n').map(l=>l.trim()).filter(Boolean).forEach(l=>{const m=l.match(/^(\S+)\s+(.+)$/);if(!m){bad++;return}const c=toCents(m[2].replace(/\s/g,''));if(c==null){bad++;return}if(c)s[m[1]]=(s[m[1]]||0)+c});return{s,bad}}
+function ouvShow(){const o=C.ouv;$('ouvDate').value=o?.date||exRange()[0]||'';$('ouvTxt').value=o?Object.entries(o.s).sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true})).map(([a,c])=>`${a} ${(c/100).toFixed(2)}`).join('\n'):''}
+$('ouvFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;$('ouvMsg').textContent='Lecture…';
+  try{let rows;if(/\.pdf$/i.test(f.name)){const pages=await pdfPages(f);rows=pages.join('\n').split('\n').map(l=>l.split(/\s{2,}|\t/))}else rows=await rowsOf(f);
+    const out=[];rows.forEach(r=>{const i=r.findIndex(x=>/^\d{3,8}$/.test(String(x).trim()));if(i<0)return;const nums=r.slice(i+1).map(x=>toCents(String(x).replace(/\s/g,''))).filter((x,j,arr)=>x!=null);
+      const raw=r.slice(i+1).map(x=>String(x).trim());const numIdx=raw.map((x,j)=>toCents(x.replace(/\s/g,''))!=null&&/\d/.test(x)?j:-1).filter(j=>j>=0);
+      let c=0;if(numIdx.length>=2){const d=toCents(raw[numIdx[numIdx.length-2]].replace(/\s/g,''))||0,k=toCents(raw[numIdx[numIdx.length-1]].replace(/\s/g,''))||0;c=Math.abs(d)-Math.abs(k)}else if(numIdx.length===1)c=toCents(raw[numIdx[0]].replace(/\s/g,''))||0;
+      if(c)out.push(`${String(r[i]).trim()} ${(c/100).toFixed(2)}`)});
+    $('ouvTxt').value=out.join('\n');const{s}=ouvParse(out.join('\n'));const tot=Object.values(s).reduce((a,b)=>a+b,0);
+    $('ouvMsg').textContent=`${out.length} soldes repris. ${tot?`Écart débits/crédits : ${fmtN(tot)} $ — vérifiez.`:'Débits = crédits.'} Vérifiez puis enregistrez.`}catch(err){$('ouvMsg').textContent='Lecture impossible de ce fichier.'}};
+$('ouvSave').onclick=()=>{const{s,bad}=ouvParse($('ouvTxt').value);const d=$('ouvDate').value;if(!d){$('ouvMsg').textContent='Indiquez la date des soldes.';return}
+  const tot=Object.values(s).reduce((a,b)=>a+b,0);const miss=Object.keys(s).filter(a=>!PLAN.some(p=>p[0]===a));
+  C.ouv={date:d,s};if(!C.exDeb)C.exDeb=d;saveClient();renderSettings();LED=null;
+  $('ouvMsg').textContent=`${Object.keys(s).length} soldes enregistrés au ${d}.`+(tot?` Attention : débits et crédits diffèrent de ${fmtN(tot)} $.`:' Débits = crédits.')+(miss.length?` Comptes absents du plan : ${miss.join(', ')}.`:'')+(bad?` ${bad} ligne(s) ignorée(s).`:'')};
+
+/* ---------- écritures manuelles ---------- */
+let jeEdit=null;
+function jeRow(a='',d='',c=''){return `<tr><td><select class="jeA" aria-label="Compte"><option value=""></option>${OPTS.replace(`value="${esc(a)}"`,`value="${esc(a)}" selected`)}</select></td><td><input class="jeD" inputmode="decimal" value="${esc(d)}" style="width:120px;text-align:right"></td><td><input class="jeC" inputmode="decimal" value="${esc(c)}" style="width:120px;text-align:right"></td><td><button type="button" class="sm" data-x>×</button></td></tr>`}
+function jeBal(){let D=0,K=0;$('jeLines').querySelectorAll('tr').forEach(r=>{D+=cents(r.querySelector('.jeD').value);K+=cents(r.querySelector('.jeC').value)});
+  $('jeBal').textContent=`Débits ${fmtN(D)||'0,00'} · Crédits ${fmtN(K)||'0,00'}${D===K?' ✓':` · écart ${fmtN(D-K)}`}`;$('jeBal').className=D===K&&D?'ok-b':'bad-b';return D===K&&D>0}
+function jeOpen(j,tpl){jeEdit=j?.id||null;$('jeForm').hidden=false;$('jeErr').textContent='';$('jeDate').value=j?.date||exRange()[1]||'';$('jeRef').value=j?.ref||'';$('jeDesc').value=j?.desc||'';
+  const L=j?.lines?.length?j.lines:(tpl||[{},{}]);$('jeLines').innerHTML=L.map(l=>jeRow(l.a,l.d?(l.d/100).toFixed(2):'',l.c?(l.c/100).toFixed(2):'')).join('');jeBal();$('jeForm').scrollIntoView({behavior:'smooth',block:'nearest'})}
+$('jeNew').onclick=()=>jeOpen();
+$('jePaie').onclick=()=>{const f=re=>findAcc(re)||'';jeOpen({ref:'PAIE',desc:'Paie de l’actionnaire — remplacez les montants par ceux du calcul de paie',lines:[
+  {a:f(/SALAIRES/)},{a:f(/CHARGE DU RRQ|RRQ.*CHARGE/)},{a:f(/CHARGE DU RQAP/)},{a:f(/CHARGE DE A-?E|ASSURANCE-EMPLOI.*CHARGE/)},{a:f(/FSSQ|FSS/)},{a:f(/CNESST|CSST/)},
+  {a:f(/RRQ A PAYER/)},{a:f(/RQAP A PAYER/)},{a:f(/ASSURANCE-EMPLOI A PAYER/)},{a:f(/IMPOT FEDERAL A PAYER/)},{a:f(/QUEBEC A PAYER/)},{a:f(/FSSQ A PAYER/)},{a:f(/CNESST A PAYER/)},{a:f(/PRETS DES PROPRIETAIRES|ACTIONNAIRE/)}]})};
+$('jeAdd').onclick=()=>{$('jeLines').insertAdjacentHTML('beforeend',jeRow());jeBal()};
+$('jeLines').addEventListener('input',jeBal);$('jeLines').addEventListener('change',jeBal);
+$('jeLines').addEventListener('click',e=>{if(e.target.dataset.x!=null){e.target.closest('tr').remove();jeBal()}});
+$('jeCancel').onclick=()=>{$('jeForm').hidden=true};
+$('jeSave').onclick=async()=>{const date=$('jeDate').value;const lines=[...$('jeLines').querySelectorAll('tr')].map(r=>({a:r.querySelector('.jeA').value,d:cents(r.querySelector('.jeD').value),c:cents(r.querySelector('.jeC').value)})).filter(l=>l.a&&(l.d||l.c));
+  if(!date){$('jeErr').textContent='Date requise.';return}if(!jeBal()||lines.length<2){$('jeErr').textContent='L’écriture doit balancer (débits = crédits).';return}
+  const doc={date,ref:$('jeRef').value.trim().slice(0,20),desc:$('jeDesc').value.trim().slice(0,120),lines,updated:new Date().toISOString()};
+  try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/'+(jeEdit||'j'+Date.now())]=doc}else{const col=await jeCol();await(jeEdit?col.doc(jeEdit):col.doc()).set(doc)}
+    $('jeForm').hidden=true;LED=null;renderJe()}catch(e){$('jeErr').textContent='Enregistrement impossible.'}};
+async function renderJe(){ouvShow();await loadJe();
+  $('jeList').innerHTML=JE.length?JE.map(j=>`<tr><td class="d">${esc(j.date)}</td><td>${esc(j.ref||'')}</td><td>${esc(j.desc||'')}</td><td class="num">${fmtN((j.lines||[]).reduce((s,l)=>s+(l.d||0),0))}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="sm" data-je="${esc(j.id)}">Modifier</button><button class="sm danger" data-del="je-${esc(j.id)}">Supprimer</button></div></td></tr>`).join('')
+    :'<tr><td colspan="5" class="empty">Aucune écriture manuelle.</td></tr>'}
+$('jeList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.je){jeOpen(JE.find(j=>j.id===b.dataset.je));return}
+  if(b.dataset.del?.startsWith('je-'))confirm2(b,'',async()=>{const id=b.dataset.del.slice(3);try{if(local)delete LOCAL.je[C.id+'/'+id];else await(await jeCol()).doc(id).delete()}catch(err){}LED=null;renderJe()})});
+
+/* ---------- comptes liés ---------- */
+function matchLinks(txs){const pool=[];(C.links||[]).forEach(l=>(l.tx||[]).forEach(([d,a,ds])=>pool.push({l,d,a,ds,used:false})));
+  if(!pool.length)return{n:0,by:{}};
+  const take=(t,strict)=>{const c=pool.filter(p=>!p.used&&p.a===-t.amt&&dd(p.d,t.date)<=5&&(!strict||p.l.acct===t.acct)).sort((x,y)=>dd(x.d,t.date)-dd(y.d,t.date))[0];if(c)c.used=true;return c};
+  txs.filter(t=>t.st==='apparie').forEach(t=>take(t,true));
+  let n=0;const by={};
+  [...txs].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{if(t.st==='manuel'||t.st==='apparie'||t.st==='suggere')return;if(!(t.st==='transit'||(t.st==='auto'&&t.acct===C.tr)))return;
+    const c=take(t,false);if(!c||!c.l.acct)return;Object.assign(t,{acct:c.l.acct,tax:false,st:'apparie',unk:false,why:`Apparié : ${c.l.nom}, ${c.ds?c.ds.slice(0,40)+', ':''}${c.d}`});n++;by[c.l.nom]=(by[c.l.nom]||0)+Math.abs(t.amt)});
+  return{n,by}}
+function autoMatch(){if(!P)return 0;const ni=matchInvoices(P.tx);if(ni)msg(($('msg').textContent+` ${ni} paiement(s) de facture apparié(s).`).trim());if(!(C.links||[]).length)return ni;const r=matchLinks(P.tx);
+  if(r.n)msg(($('msg').textContent+` ${r.n} virement(s) apparié(s) : `+Object.entries(r.by).map(([k,v])=>`${k} ${fmt(v)}`).join(', ')+'.').trim());return r.n+ni}
+function renderLinks(){const L=C.links||[];$('lnkAcct').innerHTML='<option value="__new">+ Nouveau compte…</option>'+OPTS;
+  const pick=findAcc(/ACTIONNAIRE|SOCIETE (MERE|APPARENTEE|LIEE)|HOLDING|PORTEFEUILLE/);if(pick)$('lnkAcct').value=pick;
+  $('lnkList').innerHTML=L.length?L.map(l=>{const ds=(l.tx||[]).map(x=>x[0]).sort();return `<tr><td><strong>${esc(l.nom)}</strong></td><td><select data-la="${esc(l.id)}" aria-label="Compte">${OPTS.replace(`value="${esc(l.acct)}"`,`value="${esc(l.acct)}" selected`)}</select></td><td>${(l.tx||[]).length?`${(l.tx||[]).length} transactions, ${esc(ds[0])} au ${esc(ds[ds.length-1])}`:'<span class="why">aucun</span>'}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="sm" data-lf="${esc(l.id)}">Verser des relevés</button><button class="sm danger" data-del="lnk-${esc(l.id)}">Retirer</button></div></td></tr>`}).join('')
+    :'<tr><td colspan="4" class="empty">Aucun compte lié. Ajoutez la holding ou un compte personnel du propriétaire.</td></tr>'}
+$('lnkAcct').onchange=()=>{if($('lnkAcct').value==='__new')newAccount(null,no=>{renderLinks();if(no)$('lnkAcct').value=no})};
+$('lnkForm').onsubmit=e=>{e.preventDefault();const nom=$('lnkNom').value.trim(),acct=$('lnkAcct').value;if(!nom||acct==='__new')return;
+  C.links=[...(C.links||[]),{id:'l'+Date.now().toString(36),nom,acct,tx:[]}];$('lnkNom').value='';saveClient();renderLinks();$('lnkMsg').textContent=`« ${nom} » ajouté. Versez maintenant ses relevés.`};
+let lnkTarget=null;
+$('lnkList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.lf){lnkTarget=b.dataset.lf;$('lnkFile').click();return}
+  if(b.dataset.del?.startsWith('lnk-'))confirm2(b,'',()=>{const id=b.dataset.del.slice(4);C.links=C.links.filter(l=>l.id!==id);saveClient();renderLinks()})});
+$('lnkList').addEventListener('change',e=>{const id=e.target.dataset.la;if(!id)return;const l=C.links.find(x=>x.id===id);if(l){l.acct=e.target.value;saveClient()}});
+function autoMap(g){const res=[];for(const r of g.body){const date=toISO(r[g.date]||'',g.order);if(!date)continue;let c;
+  if(g.amt>=0)c=toCents(r[g.amt]);else{const o=toCents(r[g.out]),i=toCents(r[g.inn]);if(o===null&&i===null)continue;c=(i?Math.abs(i):0)-(o?Math.abs(o):0)}
+  if(!c)continue;res.push({date,desc:[r[g.desc]].filter(Boolean).join(' '),amt:c})}return res}
+$('lnkFile').onchange=async e=>{const files=[...e.target.files];e.target.value='';const l=(C.links||[]).find(x=>x.id===lnkTarget);if(!l)return;
+  const say=t=>$('lnkMsg').textContent=t;let all=[];
+  for(const f of files){try{if(/\.pdf$/i.test(f.name)){if(!sampleFn){say('La lecture de PDF demande l’IA, indisponible ici. Utilisez le CSV.');continue}all=all.concat(await pdfTx(f,say))}
+      else{const rows=await rowsOf(f);if(rows.length>1)all=all.concat(autoMap(guess(rows)))}}catch(err){say('Lecture impossible de '+f.name+'.')}}
+  if(!all.length){say('Aucune transaction reconnue dans ces relevés.');return}
+  const have=new Set((l.tx||[]).map(x=>x.join('|')));let n=0;
+  all.forEach(x=>{const row=[x.date,x.amt,norm(x.desc).slice(0,40)];if(!have.has(row.join('|'))){l.tx=[...(l.tx||[]),row];have.add(row.join('|'));n++}});
+  l.tx.sort((a,b)=>a[0].localeCompare(b[0]));saveClient();renderLinks();
+  const m=P?matchLinks(P.tx).n:0;if(m){render();savePer()}
+  say(`${n} transaction(s) ajoutée(s) pour « ${l.nom} ».${m?` ${m} virement(s) de la période ouverte apparié(s).`:''}`)};
+$('lnkRun').onclick=()=>{if(!P||!P.tx.length){$('lnkMsg').textContent='Ouvrez d’abord une période dans Révision.';return}
+  const r=matchLinks(P.tx);if(r.n){render();savePer()}
+  if(r.n){$('lnkMsg').textContent=`${r.n} virement(s) apparié(s) : `+Object.entries(r.by).map(([k,v])=>`${k} ${fmt(v)}`).join(', ')+'.';return}
+  $('lnkMsg').textContent=diag()};
+function diag(){const L=C.links||[],ds=P.tx.map(t=>t.date).sort(),from=ds[0],to=ds[ds.length-1];
+  const per=P.multi?`${moisLbl(P.mois)} à ${moisLbl(P.to)}`:moisLbl(P.mois);
+  const done=P.tx.filter(t=>t.st==='apparie').length;
+  const cand=P.tx.filter(t=>t.st!=='manuel'&&t.st!=='apparie'&&(t.st==='transit'||AMBIG.test(norm(t.desc))));
+  const lt=L.flatMap(l=>(l.tx||[]).map(x=>({l,d:x[0],a:x[1]})));
+  const inR=lt.filter(x=>x.d>=from&&dd(x.d,from)>=-6&&x.d<=to||dd(x.d,to)<=5);
+  const near=lt.filter(x=>x.d>=from&&x.d<=to);
+  const sameSign=cand.filter(t=>lt.some(x=>x.a===t.amt&&dd(x.d,t.date)<=5)).length;
+  const farDate=cand.filter(t=>lt.some(x=>x.a===-t.amt&&dd(x.d,t.date)>5&&dd(x.d,t.date)<=31)).length;
+  const p=[`Aucun nouveau virement apparié dans ${per}.`];
+  if(done)p.push(`${done} virement(s) étaient déjà appariés.`);
+  if(!lt.length)p.push('Aucun relevé n’a encore été versé dans les comptes liés : cliquez sur « Verser des relevés ».');
+  else if(!near.length)p.push(`Les relevés des comptes liés ne couvrent pas cette période (ils vont du ${lt.map(x=>x.d).sort()[0]} au ${lt.map(x=>x.d).sort().pop()}). Ouvrez la bonne période, ou « Plusieurs mois » dans Révision.`);
+  else p.push(`${near.length} transaction(s) des comptes liés tombent dans cette période, et ${cand.length} virement(s) du client restent à identifier.`);
+  if(sameSign)p.push(`${sameSign} montant(s) correspondent mais avec le même signe : le relevé lié a peut-être ses retraits et dépôts inversés. Retirez-le et reversez-le, ou envoyez-moi une capture.`);
+  if(farDate)p.push(`${farDate} montant(s) correspondent à plus de 5 jours d’écart : vérifiez-les à la main.`);
+  if(cand.length&&lt.length&&!sameSign&&!farDate&&near.length)p.push('Aucun montant identique : les virements ont peut-être été faits en plusieurs fois, ou vers un compte qui n’est pas encore lié.');
+  return p.join(' ')}
+
+/* ---------- discussion avec l'IA ---------- */
+let PROP=null;
+function renderChat(){const L=C.chat||[];
+  $('chatLog').innerHTML=(L.length?L:[{who:'ai',text:'Dites-moi qui est le propriétaire, les employés, le locateur, les clients réguliers… Je créerai les règles pour ce dossier.'}]).map(m=>`<div class="bub ${m.who==='me'?'me':'ai'}">${esc(m.text)}</div>`).join('')+(PROP?propHtml():'');
+  $('chatLog').scrollTop=1e6;$('chatPanel').hidden=false;$('chatGo').disabled=!sampleFn;if(!sampleFn)$('chatMsg').textContent='L’IA n’est pas disponible dans cette vue.'}
+function propHtml(){const p=PROP;let h='<div class="bub ai"><strong>Proposition</strong><div class="prop">';
+  p.nc.forEach((a,i)=>h+=`<label><input type="checkbox" data-nc="${i}" checked> Nouveau compte ${esc(a.numero)} ${esc(a.nom)} (à créer aussi dans Sage)</label>`);
+  p.rg.forEach((x,i)=>h+=`<label><input type="checkbox" data-rg="${i}" checked> « ${esc(x.p)} »${x.s!=='les deux'?` (${x.s==='sortie'?'sorties':'entrées'})`:''} → ${esc(x.a)} ${esc(PLAN.find(q=>q[0]===x.a)?.[1]||p.nc.find(n=>n.numero===x.a)?.nom||'')}${x.t?', taxable':''}${x.d?` à partir du ${esc(x.d)}`:''} <span class="why">· ${x.n} transaction(s) ce mois-ci</span></label>`);
+  if(p.note)h+=`<label><input type="checkbox" data-note checked> Retenir dans les notes : ${esc(p.note)}</label>`;
+  return h+'</div><div class="row" style="margin-top:8px"><button type="button" class="sm pri" id="propOk">Appliquer</button><button type="button" class="sm" id="propNo">Ignorer</button></div></div>'}
+$('chatLog').addEventListener('click',e=>{if(e.target.id==='propNo'){PROP=null;renderChat()}if(e.target.id!=='propOk'||!PROP)return;
+  const box=$('chatLog'),on=sel=>box.querySelector(sel)?.checked;const p=PROP;PROP=null;let nr=0,nm=0;
+  p.nc.forEach((a,i)=>{if(on(`[data-nc="${i}"]`)&&!PLAN.some(x=>x[0]===a.numero))addAccount(a.numero,a.nom)});
+  const added=[];p.rg.forEach((x,i)=>{if(!on(`[data-rg="${i}"]`)||!PLAN.some(q=>q[0]===x.a))return;C.rules=(C.rules||[]).filter(r=>!(r.p===x.p&&(r.s||'les deux')===x.s&&(r.d||'')===(x.d||'')));C.rules.push(x.d?{p:x.p,a:x.a,t:x.t,s:x.s,d:x.d}:{p:x.p,a:x.a,t:x.t,s:x.s});added.push(x);nr++});
+  if(p.note&&on('[data-note]'))C.notes=((C.notes||'')+'\n'+p.note).trim();
+  if(P)P.tx.forEach(t=>{if((t.st==='transit'||t.st==='suggere'||t.st==='auto')&&added.some(x=>has(norm(t.desc),x.p))){const o=t.acct+t.tax;t.st='transit';classify(t);if(t.st==='auto'&&t.acct+t.tax!==o)nm++}});LED=null;
+  C.chat=[...(C.chat||[]),{who:'ai',text:`Appliqué : ${nr} règle(s)${nm?`, ${nm} transaction(s) reclassée(s) ce mois-ci`:''}.`}].slice(-20);
+  saveClient();renderRules();renderSettings();renderChat();render();if(P&&P.tx.length)savePer()});
+$('chatForm').onsubmit=async e=>{e.preventDefault();const text=$('chatIn').value.trim();if(!text||!sampleFn)return;
+  C.chat=[...(C.chat||[]),{who:'me',text}].slice(-20);$('chatIn').value='';PROP=null;renderChat();$('chatGo').disabled=true;$('chatMsg').textContent='L’IA réfléchit…';
+  const descs=[...new Map((P?P.tx:[]).map(t=>[t.desc,t])).values()].slice(0,120).map(t=>`${t.desc} | ${(t.amt/100).toFixed(2)}`).join('\n');
+  try{const r=await sampleFn.json(`Tu es l'assistant de tenue de livres d'un cabinet comptable québécois pour le client « ${C.nom} ».
+Plan comptable :\n${PLAN.map(p=>p.join(' ')).join('\n')}
+Règles actuelles : ${(C.rules||[]).map(r=>`${r.p}→${r.a}${r.t?' taxable':''}${r.d?' depuis '+r.d:''}${r.s&&r.s!=='les deux'?' ('+r.s+')':''}`).join(' ; ')||'aucune'}
+Notes : ${C.notes||'aucune'}
+Descriptions bancaires de la période ouverte (description | montant, négatif = sortie) :\n${descs||'(aucune)'}
+Conversation récente :\n${(C.chat||[]).slice(-8,-1).map(m=>(m.who==='me'?'Comptable : ':'IA : ')+m.text).join('\n')}
+
+Message du comptable : ${text}
+
+Transforme ses explications en règles de classement. Une règle = motif (mots en MAJUSCULES sans accents tels qu'ils apparaissent dans les descriptions bancaires, le plus précis possible, ex. « FARAZ » ou « MARIE ROY » ; regarde comment les noms sont écrits dans les descriptions ci-dessus), compte (numéro exact du plan), sens ("sortie", "entree" ou "les deux"), taxable (true/false ; un particulier non inscrit = false), depuis (date AAAA-MM-JJ à partir de laquelle la règle s'applique, ex. « Marta charge les taxes depuis janvier » → même motif et compte, taxable true, depuis la date ; sinon omets-le ; une règle avec date a priorité sur la même règle sans date). Si aucun compte du plan ne convient (ex. avance à l'actionnaire, prêt de l'actionnaire), propose-le dans nouveaux_comptes avec un numéro libre cohérent avec le plan et utilise ce numéro dans la règle. Si les descriptions ne contiennent pas les noms (ex. seulement « VIREMENT INTERAC »), dis-le clairement : la règle ne pourra pas les attraper. note = un fait durable sur le client à retenir (une phrase) ou "". reponse = 1 à 3 phrases en français québécois simple, sans répéter la liste des règles.
+Réponds uniquement en JSON : {"reponse":"...","regles":[{"motif":"FARAZ","compte":"2650","sens":"les deux","taxable":false,"depuis":null}],"nouveaux_comptes":[{"numero":"2650","nom":"Avances de l'actionnaire"}],"note":"..."}`,{modelTier:'complex'});
+    const nc=(Array.isArray(r?.nouveaux_comptes)?r.nouveaux_comptes:[]).map(a=>({numero:String(a.numero||'').trim(),nom:String(a.nom||'').trim().slice(0,60)})).filter(a=>/^[0-9A-Za-z-]{3,12}$/.test(a.numero)&&a.nom);
+    const valid=new Set([...PLAN.map(p=>p[0]),...nc.map(a=>a.numero)]);
+    const rg=(Array.isArray(r?.regles)?r.regles:[]).map(x=>{const p=norm(x.motif).replace(/[^A-Z0-9 &'-]/g,' ').replace(/\s+/g,' ').trim();const s=x.sens==='sortie'||x.sens==='entree'?x.sens:'les deux';
+      const dd_=toISO(String(x.depuis||''))||'';return {p,a:String(x.compte||''),t:!!x.taxable,s,d:dd_,n:(P?P.tx:[]).filter(t=>has(norm(t.desc),p)&&(!dd_||t.date>=dd_)&&(s==='les deux'||(s==='sortie'?t.amt<0:t.amt>0))).length}}).filter(x=>x.p.length>=3&&valid.has(x.a));
+    const note=String(r?.note||'').trim().slice(0,300);
+    C.chat=[...C.chat,{who:'ai',text:String(r?.reponse||'Voici ce que je propose.').slice(0,800)}].slice(-20);
+    PROP=(rg.length||note||nc.length)?{rg,nc:nc.filter(a=>rg.some(x=>x.a===a.numero)&&!PLAN.some(p=>p[0]===a.numero)),note}:null;
+    $('chatMsg').textContent='';saveClient();
+  }catch(err){C.chat=[...C.chat,{who:'ai',text:err.code==='rate_limited'?'Trop de demandes, réessayez dans une minute.':'Je n’ai pas pu répondre pour le moment.'}];$('chatMsg').textContent=''}
+  $('chatGo').disabled=false;renderChat()};
+$('chatIn').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))$('chatForm').requestSubmit()});
+
+/* ---------- effacer ---------- */
+const arm={};function confirm2(btn,label,fn){if(arm[btn.id||btn.dataset.del]){delete arm[btn.id||btn.dataset.del];fn();return}
+  const k=btn.id||btn.dataset.del;arm[k]=1;const old=btn.textContent;btn.textContent='Cliquez encore pour confirmer';setTimeout(()=>{if(arm[k]){delete arm[k];btn.textContent=old}},5000)}
+async function delPeriod(pid){if(local){delete LOCAL.periodes[C.id+'/'+pid];return}await pWriting;await db.collection('clients').doc(C.id).collection('periodes').doc(pid).delete()}
+$('pClear').onclick=e=>confirm2(e.currentTarget,'',async()=>{if(!P)return;clearTimeout(pTimer);pTimer=null;const pid=P.mois+'_'+P.src;
+  try{await delPeriod(pid);P.tx=[];P.statut='en cours';AIITEMS=[];idFilter=null;render();msg(`Période ${moisLbl(P.mois)} vidée. Vous pouvez redéposer le relevé.`);setSave('Enregistré')}catch(err){msg('Effacement impossible pour le moment.',true)}
+  $('pClear').textContent='Vider cette période'});
+$('plist').addEventListener('click',e=>{const b=e.target.closest('button[data-del]');if(!b)return;e.stopPropagation();
+  confirm2(b,'',async()=>{try{await delPeriod(b.dataset.del);if(P&&P.mois+'_'+P.src===b.dataset.del){P.tx=[];P.statut='en cours';render()}loadPeriods()}catch(err){b.textContent='Erreur'}})},true);
+$('wipe').onclick=e=>confirm2(e.currentTarget,'',async()=>{clearTimeout(pTimer);pTimer=null;$('wipeMsg').textContent='Effacement…';
+  try{let ids=[];if(local)ids=Object.keys(LOCAL.periodes).filter(k=>k.startsWith(C.id+'/')).map(k=>k.slice(C.id.length+1));
+    else{const sn=await db.collection('clients').doc(C.id).collection('periodes').get();ids=sn.docs.map(d=>d.id)}
+    for(const id of ids)await delPeriod(id);
+    if($('wipeRules').checked)C.rules=[];C.last='';saveClient();renderRules();
+    if(P){P.tx=[];P.statut='en cours'}AIITEMS=[];idFilter=null;render();
+    $('wipeMsg').textContent=`${ids.length} période(s) effacée(s).${$('wipeRules').checked?' Règles apprises effacées.':''} Le dossier repart à zéro.`}
+  catch(err){$('wipeMsg').textContent='Effacement impossible pour le moment.'}
+  $('wipe').textContent='Effacer toutes les périodes'});
+
+/* ---------- fin de période ---------- */
+function openFinish(){if(!P||!P.tx.length)return;P.chk=P.chk||{};const K=P.chk;
+  const un=usedNew(),todo=P.tx.filter(t=>t.st==='transit').length,sug=P.tx.filter(t=>t.st==='suggere').length,iss=exportIssues(P.tx,P.src);
+  const ds=P.tx.map(t=>t.date).sort(),minD=ds[0],maxD=ds[ds.length-1];const[exD,exF]=exRange();const usesTr=P.tx.some(t=>t.acct===C.tr);
+  $('finT').textContent=`Terminer ${P.multi&&P.to!==P.mois?moisLbl(P.mois)+' – '+moisLbl(P.to):moisLbl(P.mois)} · ${C.nom}`;
+  const I=[];const it=(sec,id,auto,html)=>I.push({sec,id,auto,html});
+  it('Dans l’application','plan',Array.isArray(C.sage)&&C.sage.length?true:null,`Plan comptable versé à partir du dossier Sage de ce client${Array.isArray(C.sage)&&C.sage.length?'':' <span class="why">(onglet Plan comptable)</span>'}`);
+  it('Dans l’application','ex',null,exD?`Exercice <strong>${esc(exD)} au ${esc(exF)}</strong>, le même que dans Sage`:`Exercice entré dans Paramètres <span class="bad-b">(manquant)</span>`);
+  it('Dans l’application','fmt',C.dfmt==='yy'||C.dfmt==='yyyy',C.dfmt==='yy'||C.dfmt==='yyyy'?'Format de date de l’import : <strong>mm-jj-aa</strong>':'Format de date : <span class="bad-b">doit être mm-jj-aa</span> <button type="button" class="sm" id="finFmt">Corriger</button>');
+  it('Dans l’application','rev',!todo&&!sug?true:null,!todo&&!sug?'Révision terminée : rien au transitoire':`Il reste ${todo} transaction(s) au transitoire${sug?` et ${sug} suggestion(s) de l'IA`:''}. Cochez si c'est voulu (elles iront au ${esc(C.tr)}).`);
+  it('Dans l’application','iss',!iss.length,!iss.length?'Aucune écriture que Sage refuserait':`<span class="bad-b">Sage refusera ${iss.length} écriture(s)</span> : ${iss.slice(0,4).map(esc).join(' ; ')}${iss.length>4?' …':''}`);
+  it('Dans Sage','ses',null,`Date de session au moins le <strong>${esc(maxD)}</strong> <span class="why">(Configuration &gt; Paramètres &gt; Entreprise &gt; Informations)</span>`);
+  it('Dans Sage','old',null,`Transaction la plus ancienne au plus tard le <strong>${esc(minD)}</strong>`);
+  it('Dans Sage','exs',null,exD?`Début et fin d'exercice : <strong>${esc(exD)} au ${esc(exF)}</strong>`:'Début et fin d’exercice vérifiés');
+  if(un.length)it('Dans Sage','acc',false,`<span class="bad-b">Créer ces comptes</span> avec le même numéro, comme comptes de détail : ${un.map(([n,t])=>esc(n+' '+t)).join(', ')} <button type="button" class="sm" id="finAcc">C'est fait</button>`);
+  else it('Dans Sage','acc',true,'Aucun nouveau compte à créer');
+  if(usesTr)it('Dans Sage','tr',null,`Le compte transitoire <strong>${esc(C.tr)} ${esc(accName(C.tr))}</strong> existe et est un compte de détail (pas un titre ni un total)`);
+  it('Dans Sage','bak',null,'Sauvegarde faite (Fichier &gt; Sauvegarde)');
+  it('Import','dl',K.dl?true:null,`Fichier téléchargé <strong>maintenant</strong> (${P.tx.length} écritures), pas un ancien fichier`);
+  it('Import','imp',null,'Importé dans Sage (Fichier &gt; Importation/Exportation &gt; Importer des transactions &gt; journal général) et le sommaire indique <strong>« Transactions non lues : 0 »</strong>');
+  it('Import','done',P.statut==='importée'?true:null,P.statut==='importée'?`Période marquée comme importée${P.exported?' le '+esc(P.exported):''}`:'Période marquée comme importée <button type="button" class="sm" id="finDone">Marquer maintenant</button>');
+  const isOk=x=>x.auto===true||(x.auto===null&&K[x.id]);const n=I.filter(isOk).length;let sec='';
+  $('finL').innerHTML=`<li style="list-style:none;margin-left:-20px"><div class="bar"><i style="width:${n/I.length*100}%"></i></div><span class="note">${n} sur ${I.length} étapes faites</span></li>`+I.map(x=>{const h=x.sec!==sec?`<li style="list-style:none;margin:8px 0 0 -20px;font-weight:800">${x.sec}</li>`:'';sec=x.sec;
+    return h+`<li style="list-style:none;margin-left:-20px"><label style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" data-ck="${x.id}" ${isOk(x)?'checked':''} ${x.auto!==null?'disabled':''} style="margin-top:2px"><span>${x.html}${x.auto===true?' <span class="ok-b">✓ vérifié</span>':''}</span></label></li>`}).join('');
+  $('finL').querySelectorAll('[data-ck]').forEach(c=>c.onchange=()=>{K[c.dataset.ck]=c.checked;savePer();openFinish()});
+  $('finMsg').textContent=n<I.length?`Il reste ${I.length-n} étape(s) avant un import sans erreur.`:'Tout est prêt.';$('finDl').hidden=!downloads;
+  if($('finAcc'))$('finAcc').onclick=()=>{un.forEach(([n])=>{if(!C.sage.includes(n))C.sage.push(n)});saveClient();render();openFinish()};
+  if($('finFmt'))$('finFmt').onclick=()=>{C.dfmt='yy';saveClient();renderSettings();render();openFinish()};
+  if($('finDone'))$('finDone').onclick=()=>{$('markDone').click();openFinish()};
+  if(!$('finDlg').open){try{$('finDlg').showModal()}catch(e){$('finDlg').setAttribute('open','')}}}
+$('finish').onclick=openFinish;$('finX').onclick=()=>$('finDlg').close();
+$('finDl').onclick=async()=>{try{await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${P.mois}_${P.src}_sage50.txt`,data:sageBytes(buildFile())});P.chk=P.chk||{};P.chk.dl=1;savePer();openFinish();$('finMsg').textContent='Fichier enregistré.'}catch(e){$('finMsg').textContent='Téléchargement annulé ou refusé.'}};
+$('finCp').onclick=async()=>{try{await navigator.clipboard.writeText(buildFile());P.chk=P.chk||{};P.chk.dl=1;savePer();openFinish();$('finMsg').textContent='Copié. Collez-le dans un fichier .txt (encodage ANSI).'}catch(e){$('finMsg').textContent='Copie refusée par le navigateur.'}};
+let wasTodo=0;
+
+/* ---------- export ---------- */
+$('cp').onclick=async()=>{try{await navigator.clipboard.writeText(buildFile());$('exMsg').textContent='Copié. Collez-le dans un fichier .txt pour l’importer dans Sage.'}catch(e){$('exMsg').textContent='Copie refusée par le navigateur.'}};
+$('dl').onclick=async()=>{try{await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${P.mois}_${P.src}_sage50.txt`,data:sageBytes(buildFile())});$('exMsg').textContent='Fichier enregistré.'}catch(e){$('exMsg').textContent='Téléchargement annulé ou refusé.'}};
+$('markDone').onclick=()=>{const day=new Date().toLocaleDateString('fr-CA');P.statut='importée';P.exported=day;if(P.multi)P.parts.forEach(p=>{if(P.tx.some(t=>t._m===p.mois)){p.statut='importée';p.exported=day}});renderExport();savePer()};
+
+/* ---------- plan comptable ---------- */
+function planFromRows(rows){const out=[];for(const r of rows){const i=r.findIndex(x=>/^\d{3,8}(-\d{1,4})?$/.test(String(x).trim()));if(i<0)continue;
+  const name=r.slice(i+1).map(x=>String(x).trim()).find(x=>x&&!/^[\d.,\s-]+$/.test(x));if(name)out.push(String(r[i]).trim()+' '+name)}return out}
+async function handlePlan(files){const f=files[0];if(!f)return;$('planMsg').textContent='Lecture…';
+  try{let lines=[];
+    if(/\.pdf$/i.test(f.name)){const pages=await pdfPages(f);lines=pages.join('\n').split('\n').map(l=>l.match(/^\s*(\d{3,8}(?:-\d{1,4})?)\s+[-–]?\s*(.+?)\s*$/)).filter(Boolean).map(m=>m[1]+' '+m[2].replace(/\s+(Actif|Passif|Capital|Revenu|Dépense|Charge|Total|Sous-total|Groupe|Compte)(\s.*)?$/i,'').trim())}
+    else lines=planFromRows(await rowsOf(f));
+    const seen=new Set();lines=lines.filter(l=>{const k=l.split(' ')[0];if(seen.has(k))return false;seen.add(k);return true});
+    if(!lines.length){$('planMsg').textContent='Aucun compte reconnu dans ce fichier. Collez la liste à la main.';return}
+    $('planTxt').value=lines.join('\n');planFromFile=true;$('planMsg').textContent=`${lines.length} comptes reconnus. Vérifiez puis cliquez sur « Enregistrer le plan ».`;
+  }catch(e){$('planMsg').textContent='Lecture impossible de ce fichier.'}}
+$('planFile').onchange=e=>{handlePlan([...e.target.files]);e.target.value=''};dropzone($('planDrop'),handlePlan);
+$('planSave').onclick=()=>{const before=PLAN.map(p=>p[0]);C.plan=$('planTxt').value;
+  if(planFromFile)C.sage=parsePlanText(C.plan).map(p=>p[0]);else if(!Array.isArray(C.sage))C.sage=before;planFromFile=false;const sp=detectSpecial({...C,tr:'',tpsA:'',tvqA:'',tpsV:'',tvqV:''});
+  for(const k of Object.keys(sp))if(sp[k])C[k]=sp[k];setPlan();fillSelects();if(!srcAccounts().some(p=>p[0]===C.src))C.src=srcAccounts()[0]?.[0]||'';$('pSrc').value=C.src;
+  reclass();saveClient();renderRules();renderSettings();render();if(P&&P.tx.length)savePer();
+  const miss=['tr','tpsA','tvqA'].filter(k=>!C[k]);
+  const nw=newAccts();
+  $('planMsg').textContent=`Plan enregistré : ${PLAN.length} comptes.`+(nw.length?` À créer dans Sage avant l'import : ${nw.map(p=>p.join(' ')).join(', ')}.`:'')+(miss.length?' Choisissez le compte transitoire et les comptes de taxes dans Paramètres.':` Transitoire ${C.tr}, CTI ${C.tpsA}, RTI ${C.tvqA}.`);
+  $('cSub').textContent=`${PLAN.length} comptes au plan · ${(C.rules||[]).length} règles apprises · transitoire ${C.tr||'non défini'}`}
+
+/* ---------- règles et paramètres ---------- */
+function renderRules(){const R=C.rules||[];$('rCount').textContent=R.length;
+  $('rules').innerHTML=R.length?R.map((r,i)=>[r,i]).sort((a,b)=>a[0].p.localeCompare(b[0].p)).map(([r,i])=>`<tr><td>${esc(r.p)}</td><td>${esc(r.a)} ${esc(accName(r.a))}${r.s&&r.s!=='les deux'?` <span class="pill">${r.s==='sortie'?'sorties':'entrées'} seulement</span>`:''}${r.d?` <span class="pill">à partir du ${esc(r.d)}</span>`:''}</td><td>${r.t?'Oui':'Non'}</td><td><button class="sm" data-p="${esc(r.p)}" data-i="${i}">Retirer</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty">Aucune encore. Elles s’ajoutent quand vous classez une transaction à la main.</td></tr>';
+  $('baseRules').innerHTML=baseResolved().map(r=>`<tr><td>${esc(r.p)}</td><td>${r.a?esc(r.a+' '+accName(r.a)):'<span class="why">aucun compte correspondant</span>'}</td><td>${r.t?'Oui':'Non'}</td></tr>`).join('')}
+$('rules').onclick=e=>{const b=e.target.closest('button');const p=b?.dataset.p;if(p==null)return;const i=b.dataset.i!=null?+b.dataset.i:C.rules.findIndex(r=>r.p===p);if(i>=0)C.rules.splice(i,1);saveClient();reclass();renderRules();render();savePer()};
+$('rAdd').onclick=()=>{const p=norm($('rP').value);if(!p)return;C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a:$('rA').value,t:$('rT').checked});$('rP').value='';saveClient();reclass();renderRules();render();savePer()};
+function renderSettings(){$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
+$('sSave').onclick=()=>{C.exDeb=$('sExD').value;C.exFin=$('sExF').value;C.nom=$('sNom').value.trim()||C.nom;C.notes=$('sNotes').value;C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
+  $('cName').textContent=C.nom;reclass();saveClient();render();if(P&&P.tx.length)savePer();$('sMsg').textContent='Enregistré.'};
+let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
+  C.deleted=true;saveClient();const i=CLIENTS.findIndex(c=>c.id===C.id);if(i>=0)CLIENTS[i].deleted=true;$('back').click()};
+
+/* ---------- sauvegarde ---------- */
+const SUBS=['periodes','ecritures','factures'];
+$('bkExp').onclick=async()=>{const say=t=>$('bkMsg').textContent=t;say('Préparation…');
+  try{const out={format:'tenue-livres-v1',date:new Date().toISOString(),clients:[]};
+    const L=local?Object.entries(LOCAL.clients).map(([id,d])=>({id,d})):(await db.collection('clients').get()).docs.map(x=>({id:x.id,d:x.data()}));
+    for(const{id,d}of L){const c={id,data:d};for(const sub of SUBS){if(local){const src=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je||{}):(LOCAL.inv||{});c[sub]=Object.entries(src).filter(([k])=>k.startsWith(id+'/')).map(([k,v])=>({id:k.split('/')[1],data:v}))}
+        else c[sub]=(await db.collection('clients').doc(id).collection(sub).get()).docs.map(x=>({id:x.id,data:x.data()}))}out.clients.push(c);say(`Lecture : ${out.clients.length}/${L.length} dossier(s)…`)}
+    const json=JSON.stringify(out);if(downloads)await downloads.save({filename:`sauvegarde_dossiers_${new Date().toISOString().slice(0,10)}.json`,data:json});else await navigator.clipboard.writeText(json);
+    say(`${out.clients.length} dossier(s) exporté(s).`)}catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Exportation impossible.')}};
+$('bkImp').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const say=t=>$('bkMsg').textContent=t;
+  try{const j=JSON.parse(await f.text());if(j.format!=='tenue-livres-v1')throw 0;let n=0;
+    for(const c of j.clients){if(local){LOCAL.clients[c.id]=c.data;for(const sub of SUBS)(c[sub]||[]).forEach(x=>{const t=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je=LOCAL.je||{}):(LOCAL.inv=LOCAL.inv||{});t[c.id+'/'+x.id]=x.data})}
+      else{await db.collection('clients').doc(c.id).set(c.data);for(const sub of SUBS)for(const x of c[sub]||[])await db.collection('clients').doc(c.id).collection(sub).doc(x.id).set(x.data)}
+      n++;say(`Import : ${n}/${j.clients.length} dossier(s)…`)}
+    say(`${n} dossier(s) importé(s).`);renderList()}catch(err){say('Fichier de sauvegarde invalide ou import impossible.')}};
+
+/* ---------- démarrage ---------- */
+renderList();
+const goLocal=why=>{if(db||local)return;local=true;$('dbStatus').textContent=why;renderList()};
+const start=setTimeout(()=>goLocal('Base de données injoignable : les dossiers ne seront gardés que pendant cette session.'),10000);
+if(window.claude?.use){
+  claude.use('db').then(d=>{if(!d){clearTimeout(start);goLocal('Connectez-vous à Claude pour enregistrer les dossiers. En attendant, rien n’est gardé après la fermeture.');return}
+    db=d;let first=true;
+    db.collection('clients').onSnapshot(s=>{if(first){first=false;clearTimeout(start)}if(local)return;
+      CLIENTS=s.docs.map(x=>({id:x.id,...x.data()}));$('dbStatus').textContent=`${CLIENTS.filter(c=>!c.deleted).length} dossier(s) · enregistrés pour le cabinet`;renderList()},
+      e=>{clearTimeout(start);$('dbStatus').textContent=e.code==='revoked'?'Accès retiré.':'Base de données indisponible pour le moment.'});
+  }).catch(()=>goLocal('Base de données indisponible.'));
+  claude.use('sample').then(f=>{sampleFn=f;if(C){render();renderChat()}}).catch(()=>{});
+  claude.use('dictation').then(dc=>{if(!dc)return;const mic=$('mic');mic.hidden=false;let lang='fr';
+    dc.onFinal(({text})=>{const el=$('chatIn');el.value=el.value?el.value+text:text.replace(/^\s+/,'')});
+    dc.onPartial(({text})=>{$('chatMsg').textContent=text?'… '+text:''});
+    dc.onState(({state,reason})=>{const on=state!=='idle';mic.setAttribute('aria-pressed',on);$('micT').textContent=on?'Arrêter':'Parler';
+      if(!on){$('chatMsg').textContent=reason==='not_granted'?'Micro refusé. Vous pouvez l’autoriser dans les permissions de la page.':reason==='rate_limited'?'Micro occupé, réessayez dans un instant.':reason==='upstream_error'?'Le micro a eu un problème, réessayez.':'';
+        if(reason==='unavailable'){if(lang){lang=null;$('chatMsg').textContent='Dictée en français indisponible : réessayez, la langue du navigateur sera utilisée.'}else mic.hidden=true}}});
+    mic.onclick=()=>{if(dc.active()){dc.stop().catch(()=>{});return}
+      dc.start(lang?{language:lang}:undefined).catch(e=>{if(e.code==='not_granted')$('chatMsg').textContent='Micro refusé.';else if(e.code==='unavailable'&&lang){lang=null;$('chatMsg').textContent='Dictée en français indisponible : cliquez de nouveau.'}})}}).catch(()=>{});
+  claude.use('downloads').then(d=>{downloads=d;$('dl').hidden=!d}).catch(()=>{});
+}else goLocal('Base de données indisponible ici : les dossiers ne seront gardés que pendant cette session.');
+}
