@@ -18,9 +18,9 @@ jobs:
         with:
           version: latest
       - name: Envoi de courriels depuis l'intranet (connexion requise)
-        run: supabase functions deploy tl-email --project-ref "$PROJET" --use-api
+        run: supabase functions deploy tl-email --project-ref "$PROJET" --use-api --yes
       # cc-avis et cc-rappels vérifient elles-mêmes l'appelant (membre connecté, client du portail ou secret des tâches programmées)
       - name: Avis du portail client
-        run: supabase functions deploy cc-avis --project-ref "$PROJET" --no-verify-jwt --use-api
+        run: supabase functions deploy cc-avis --project-ref "$PROJET" --no-verify-jwt --use-api --yes
       - name: Rappels et sommaire mensuel
-        run: supabase functions deploy cc-rappels --project-ref "$PROJET" --no-verify-jwt --use-api
+        run: supabase functions deploy cc-rappels --project-ref "$PROJET" --no-verify-jwt --use-api --yes
