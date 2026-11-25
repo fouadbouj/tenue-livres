@@ -5,9 +5,9 @@ const dl=x=>x?new Date((x.length===10?x+'T12:00':x)).toLocaleDateString('fr-CA',
 const money=v=>v==null?'':new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(v);
 const safe=n=>n.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-120);
 const iso=d=>d.toISOString().slice(0,10),finMois=(y,m)=>new Date(Date.UTC(y,m,0));
-const invite=new URLSearchParams(location.search).get('invite')||'';
+const QS=new URLSearchParams(location.search),invite=QS.get('invite')||'';let depot=QS.get('depot')||'';
 
-document.addEventListener('portail-pret',()=>{({sb,U,esc}=window.PORTAIL);if(invite)space('ent')});
+document.addEventListener('portail-pret',()=>{({sb,U,esc}=window.PORTAIL);if(invite||depot)space('ent')});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-sp]');if(b)space(b.dataset.sp)});
 function space(sp){document.querySelectorAll('#space button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.sp===sp));$('perso').hidden=sp!=='perso';$('ent').hidden=sp!=='ent';if(sp==='ent')loadEnts()}
 
@@ -15,6 +15,7 @@ async function loadEnts(){$('ent').innerHTML='<div class="card"><p class="sub">C
   if(invite&&!sessionStorage.getItem('inv-'+invite)){sessionStorage.setItem('inv-'+invite,'1');await join(invite,true)}
   const{data,error}=await sb.from('cc_clients').select('*').order('nom');ENTS=data||[];
   if(error){$('ent').innerHTML=`<div class="card"><p class="msg err">Espace entreprise indisponible pour le moment.</p></div>`;return}
+  if(depot&&ENTS.length){const{data:d}=await sb.from('cc_demandes').select('id,client_id').eq('id',depot).maybeSingle();if(d){CUR=d.client_id;SUB='dep';DEP=d.id;depot=''}}
   if(!CUR||!ENTS.some(x=>x.id===CUR))CUR=ENTS[0]?.id||null;render()}
 async function join(code,quiet){const{data,error}=await sb.rpc('pc_rejoindre',{p_code:code});if(error){if(!quiet)return error.message;return}return null}
 

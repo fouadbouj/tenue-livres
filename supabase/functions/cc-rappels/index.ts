@@ -37,11 +37,24 @@ export function periodes(c: Client, aujourdhui: Date): Periode[] {
   return out;
 }
 
-async function envoyer(c: Client, d: { periode: string; debut: string; fin: string; echeance: string | null; jeton: string; rappels: number }) {
+// Accès au portail : si personne de l'entreprise n'a encore de compte lié, on joint un code d'invitation (créé au besoin)
+// deno-lint-ignore no-explicit-any
+async function codeInvitation(admin: any, c: Client): Promise<string | null> {
+  const { data: acc } = await admin.from("cc_acces").select("*").eq("client_id", c.id);
+  if ((acc || []).some((a: { user_id: string | null }) => a.user_id)) return null;
+  const libre = (acc || []).find((a: { user_id: string | null; courriel: string | null }) => !a.user_id && (a.courriel || "").toLowerCase() === (c.courriel || "").toLowerCase()) || (acc || []).find((a: { user_id: string | null }) => !a.user_id);
+  if (libre) return libre.code;
+  const { data: n } = await admin.from("cc_acces").insert({ client_id: c.id, courriel: c.courriel }).select("code").single();
+  return n?.code || null;
+}
+
+// deno-lint-ignore no-explicit-any
+async function envoyer(admin: any, c: Client, d: { id: string; periode: string; debut: string; fin: string; echeance: string | null; rappels: number }) {
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) throw new Error("RESEND_API_KEY manquante");
   const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
-  const lien = `${site}/depot.html?j=${d.jeton}`;
+  const code = await codeInvitation(admin, c);
+  const lien = `${site}/portail.html?depot=${d.id}${code ? `&invite=${code}` : ""}`;
   const rappel = d.rappels > 0 ? "Rappel : " : "";
   const sujet = `${rappel}documents pour vos déclarations de TPS/TVQ — période du ${longue(d.debut)} au ${longue(d.fin)}`;
   const texte = `Bonjour${c.contact ? " " + c.contact : ""},
@@ -50,8 +63,14 @@ ${d.rappels > 0 ? "Nous n'avons pas encore reçu vos documents. " : ""}Afin de p
 
 ${c.documents}
 
-Téléversez-les en toute sécurité ici :
+Déposez-les en toute sécurité dans votre portail client (la bonne période s'ouvre directement) :
 ${lien}
+${code ? `
+Première visite? Créez votre compte avec cette adresse courriel, puis entrez votre code d'invitation : ${code}
+(Le code est déjà inscrit si vous passez par le lien ci-dessus.)
+` : `
+Connectez-vous avec votre compte habituel.
+`}
 
 Vous pouvez aussi les déposer à notre bureau : 220-672, boulevard des Laurentides, Laval (Québec) H7G 2V9.
 
@@ -93,7 +112,7 @@ Deno.serve(async (req) => {
       const { data: d } = await admin.from("cc_demandes").select("*, cc_clients(*)").eq("id", body.demande_id).single();
       if (!d) return json({ error: "demande introuvable" }, 404);
       if (!d.cc_clients?.courriel) return json({ error: "le client n'a pas de courriel" }, 400);
-      await envoyer(d.cc_clients, d);
+      await envoyer(admin, d.cc_clients, d);
       await admin.from("cc_demandes").update({ statut: d.statut === "à envoyer" ? "envoyée" : d.statut, rappels: d.rappels + 1, dernier_rappel: new Date().toISOString() }).eq("id", d.id);
       return json({ ok: true });
     }
@@ -115,7 +134,7 @@ Deno.serve(async (req) => {
         const jours = d.dernier_rappel ? (auj.getTime() - new Date(d.dernier_rappel).getTime()) / 864e5 : 999;
         if (d.statut === "envoyée" && (jours < 7 || d.rappels >= 4)) continue;
         try {
-          await envoyer(c, d);
+          await envoyer(admin, c, d);
           await admin.from("cc_demandes").update({ statut: "envoyée", rappels: d.rappels + 1, dernier_rappel: auj.toISOString() }).eq("id", d.id);
           envoyes++;
         } catch (e) { erreurs.push(`${c.nom} : ${String(e)}`); }
