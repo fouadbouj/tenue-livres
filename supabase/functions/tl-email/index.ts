@@ -15,10 +15,29 @@ const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 // ---- Envoi de courriel : Microsoft 365 (boîte Outlook du cabinet) ou, à défaut, Resend ----
 // Microsoft 365 : secrets MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET et COURRIEL_EXPEDITEUR (ex. admin@boujradcpa.com).
 // Le courriel part de cette boîte et apparaît dans ses Éléments envoyés. Resend : secret RESEND_API_KEY.
+// Corps HTML propre (paragraphes, liens) + signature du cabinet avec le logo
+function corpsHtml(text: string) {
+  const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+  const e = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+  const lignes = text.replace(/\r/g, "").trim().split("\n");
+  if ((lignes[lignes.length - 1] || "").trim() === "Boujrad CPA Inc.") { lignes.pop(); while (lignes.length && !lignes[lignes.length - 1].trim()) lignes.pop(); }
+  const paras = lignes.join("\n").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+    .map((p) => `<p style="margin:0 0 14px">${e(p).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#1f3d6e">$1</a>').replace(/\n/g, "<br>")}</p>`).join("");
+  const nom = Deno.env.get("SIGNATURE_NOM") || "Administration";
+  const tel = Deno.env.get("SIGNATURE_TEL");
+  const mail = (Deno.env.get("COURRIEL_EXPEDITEUR") || "admin@boujradcpa.com").replace(/^.*<|>.*$/g, "").trim();
+  const sig = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:22px;border-top:2px solid #c99d45;padding-top:14px"><tr>
+    <td style="padding:14px 16px 0 0;vertical-align:top"><img src="${site}/logo-courriel.png" width="96" height="38" alt="bCPA." style="display:block;border:0"></td>
+    <td style="padding:12px 0 0 16px;border-left:1px solid #d5deeb;vertical-align:top;font-size:13px;line-height:1.5;color:#41506a">
+      <strong style="color:#0b1626;font-size:14px">${e(nom)}</strong><br><strong style="color:#0b1626">Boujrad CPA Inc.</strong><br>220-672, boulevard des Laurentides<br>Laval (Québec) H7G 2V9<br>
+      ${tel ? e(tel) + "<br>" : ""}<a href="mailto:${e(mail)}" style="color:#1f3d6e">${e(mail)}</a> · <a href="https://boujradcpa.com" style="color:#1f3d6e">boujradcpa.com</a></td></tr></table>`;
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#0b1626;max-width:640px">${paras}${sig}</div>`;
+}
+
 let jetonMS: { v: string; exp: number } | null = null;
 type PJ = { filename: string; contentType: string; content: string };
 async function envoyerCourriel(o: { to: string[]; subject: string; text: string; replyTo?: string | null; attachments?: PJ[] }) {
-  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.55;white-space:pre-wrap">${o.text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!))}</div>`;
+  const html = corpsHtml(o.text);
   const exp = (Deno.env.get("COURRIEL_EXPEDITEUR") || "admin@boujradcpa.com").trim();
   const adresse = (exp.match(/<([^>]+)>/)?.[1] || exp).trim();
   const tenant = Deno.env.get("MS_TENANT_ID"), id = Deno.env.get("MS_CLIENT_ID"), secret = Deno.env.get("MS_CLIENT_SECRET");
