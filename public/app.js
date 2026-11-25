@@ -1827,13 +1827,15 @@ async function openAsk(){const d=$('mailDlg');$('mailMsg').textContent='';$('mai
   $('mailAtt').textContent=`Pièces jointes : ${fnBase()}.pdf (pour consulter) et ${fnBase()}.xlsx (pour répondre directement dans le fichier).`;
   $('mailBody').value=`Bonjour,
 
-Dans le cadre de la tenue de livres de ${C.nom}, nous avons besoin de précisions sur ${MAILL.length} transaction${MAILL.length>1?'s':''} ${perTxt()} que nous ne pouvons pas classer sans votre aide.
+Dans le cadre de la tenue de livres de ${C.nom}, nous avons besoin de précisions sur ${MAILL.length>1?`les ${MAILL.length} transactions`:'la transaction'} présentée${MAILL.length>1?'s':''} en pièce jointe afin de ${MAILL.length>1?'les':'la'} classer dans les bons comptes.
 
-Vous trouverez la liste en pièce jointe : en PDF pour la consulter, et en Excel pour y inscrire vos réponses directement. Pour chaque transaction, indiquez de quoi il s’agit (à qui le paiement a été fait ou de qui l’argent provient, et pourquoi) et joignez la facture ou la pièce justificative, s’il y a lieu.
+Pour chacune, pourriez-vous nous indiquer de quoi il s’agit (à qui le paiement a été fait ou de qui l’argent provient, et pour quelle raison) et nous transmettre la facture ou la pièce justificative, s’il y a lieu?
 
-Vous pouvez nous retourner le fichier Excel complété en répondant à ce courriel ou par votre portail client.
+La liste est jointe en format PDF et Excel. Vous pouvez inscrire vos réponses directement dans le fichier Excel et nous le retourner.
 
-Merci!
+Merci de nous les faire parvenir le plus tôt possible.
+
+Cordialement,
 
 Boujrad CPA Inc.`;
   $('mailSend').hidden=typeof window.tlSendEmail!=='function'}
