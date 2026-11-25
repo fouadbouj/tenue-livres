@@ -13,7 +13,7 @@
    PICTURE: la liste des dossiers, puis la table de révision avec la jauge « à classer ».
    COLOUR and TYPE: fond rose pâle, encre, sarcelle pour classé, bordeaux pour transitoire; Libre Franklin.
    LAYOUT: barre d'en-tête, dossiers en liste, dossier ouvert en onglets. */
-:root{color-scheme:light dark;--bg:light-dark(#ffe3dc,#1c1512);--ink:light-dark(#1a1817,#f3e9e4);--panel:light-dark(#fffaf8,#2a201b);--line:light-dark(#efc9bf,#4a3a32);--mute:light-dark(#6b5f5a,#b8a69d);--teal:light-dark(#0d7680,#4fb8c1);--claret:light-dark(#990f3d,#ff7aa3);--soft:light-dark(#fff1ec,#33261f);--gold:light-dark(#a87a00,#e0b84a)}
+:root{color-scheme:light dark;--bg:light-dark(#f4f6fa,#0b1626);--ink:light-dark(#0b1626,#eef2f8);--panel:light-dark(#ffffff,#13233a);--line:light-dark(#d5deeb,#2a3f5e);--mute:light-dark(#5a6678,#9fb0c8);--teal:light-dark(#1f3d6e,#e8c77d);--claret:light-dark(#b3261e,#ff8a80);--soft:light-dark(#e8edf5,#1d3352);--gold:light-dark(#a0761a,#e8c77d)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Libre Franklin",system-ui,sans-serif;overflow-x:clip}
@@ -41,7 +41,7 @@ input,select,textarea{background:var(--bg);border:1px solid var(--line);border-r
 input[type=checkbox]{min-height:auto;width:22px;height:22px;accent-color:var(--teal)}
 textarea{width:100%;min-height:240px;font-size:14px}
 button{min-height:44px;padding:8px 16px;border-radius:6px;border:1px solid var(--ink);background:transparent;cursor:pointer;font-weight:600}
-button.pri{background:var(--teal);border-color:var(--teal);color:#fff}
+button.pri{background:var(--teal);border-color:var(--teal);color:light-dark(#fff,#0b1626)}
 button.danger{border-color:var(--claret);color:var(--claret)}
 button.sm{min-height:34px;padding:4px 10px;font-size:14px}
 button:disabled{opacity:.45;cursor:default}
@@ -69,7 +69,7 @@ td select{width:100%;min-height:38px;padding:4px 6px;font-size:14px}
 .toast{position:sticky;bottom:12px;margin-top:12px;background:var(--ink);color:var(--bg);border-radius:10px;padding:12px 14px;display:none;gap:10px;align-items:center;flex-wrap:wrap;z-index:5}
 .toast.on{display:flex}
 .toast button{border-color:var(--bg);color:var(--bg)}
-.toast button.pri{background:var(--teal);border-color:var(--teal);color:#fff}
+.toast button.pri{background:var(--teal);border-color:var(--teal);color:light-dark(#fff,#0b1626)}
 .note{font-size:13px;color:var(--mute)}
 .msg{font-size:14px;margin-top:8px;min-height:1em}
 .msg.err{color:var(--claret)}

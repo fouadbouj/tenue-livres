@@ -52,11 +52,11 @@ function makeDictation(){const SR=window.SpeechRecognition||window.webkitSpeechR
     onPartial(h){H.p.push(h);return()=>{}},onFinal(h){H.f.push(h);return()=>{}},onState(h){H.s.push(h);return()=>{}}}}
 
 /* ---------- connexion ---------- */
-const css=`#auth{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--bg,#ffe3dc);font-family:"Libre Franklin",system-ui,sans-serif}
-#auth form{background:var(--panel,#fff);border:1px solid var(--line,#efc9bf);border-radius:12px;padding:28px;width:min(400px,92vw);display:grid;gap:12px}
+const css=`#auth{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:var(--bg,#f4f6fa);font-family:"Libre Franklin",system-ui,sans-serif}
+#auth form{background:var(--panel,#fff);border:1px solid var(--line,#d5deeb);border-radius:12px;padding:28px;width:min(400px,92vw);display:grid;gap:12px}
 #auth h1{font-size:26px;margin:0}#auth input{font:inherit;font-size:16px;padding:10px;border:1px solid var(--line,#ccc);border-radius:6px;min-height:44px}
-#auth button{font:inherit;font-weight:600;min-height:44px;border-radius:6px;border:1px solid #0d7680;background:#0d7680;color:#fff;cursor:pointer}#auth .alt{background:transparent;color:#0d7680}
-#auth .m{font-size:14px;min-height:1em}#auth .e{color:#990f3d}#who{position:fixed;top:8px;right:12px;z-index:40;font:13px system-ui;display:flex;gap:8px;align-items:center}#who button{font:inherit;font-size:13px;border:1px solid currentColor;background:transparent;border-radius:6px;padding:4px 10px;cursor:pointer}`;
+#auth button{font:inherit;font-weight:600;min-height:44px;border-radius:6px;border:1px solid #1f3d6e;background:#1f3d6e;color:#fff;cursor:pointer}#auth .alt{background:transparent;color:#1f3d6e}
+#auth .m{font-size:14px;min-height:1em}#auth .e{color:#b3261e}#who{position:fixed;top:8px;right:12px;z-index:40;font:13px system-ui;display:flex;gap:8px;align-items:center}#who button{font:inherit;font-size:13px;border:1px solid currentColor;background:transparent;border-radius:6px;padding:4px 10px;cursor:pointer}`;
 document.head.insertAdjacentHTML('beforeend',`<style>${css}</style>`);
 document.title=cfg.NOM_CABINET||document.title;
 function loginUI(){return new Promise(done=>{const d=document.createElement('div');d.id='auth';d.innerHTML=`<form><img src="favicon.svg" alt="" width="48" height="48" style="display:block;margin:0 0 14px"><h1>${(cfg.NOM_CABINET||'Tenue de livres').replace(/</g,'&lt;')}</h1>
