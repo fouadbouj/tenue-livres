@@ -14,13 +14,15 @@ jobs:
       PROJET: dluizzekoukuwskokyfz
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/setup-node@v4
         with:
-          version: latest
+          node-version: 20
+      - name: Outil Supabase
+        run: npx --yes supabase@latest --version
       - name: Envoi de courriels depuis l'intranet (connexion requise)
-        run: supabase functions deploy tl-email --project-ref "$PROJET" --use-api --yes
+        run: npx --yes supabase@latest functions deploy tl-email --project-ref "$PROJET" --use-api --yes
       # cc-avis et cc-rappels vérifient elles-mêmes l'appelant (membre connecté, client du portail ou secret des tâches programmées)
       - name: Avis du portail client
-        run: supabase functions deploy cc-avis --project-ref "$PROJET" --no-verify-jwt --use-api --yes
+        run: npx --yes supabase@latest functions deploy cc-avis --project-ref "$PROJET" --no-verify-jwt --use-api --yes
       - name: Rappels et sommaire mensuel
-        run: supabase functions deploy cc-rappels --project-ref "$PROJET" --no-verify-jwt --use-api --yes
+        run: npx --yes supabase@latest functions deploy cc-rappels --project-ref "$PROJET" --no-verify-jwt --use-api --yes
