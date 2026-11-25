@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Logiciel comptable</title>
+<title>Intranet Boujrad CPA Inc.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&display=swap" rel="stylesheet">
 <style>
@@ -104,6 +104,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 @media(max-width:800px){.top,.two{grid-template-columns:1fr}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}}
 @media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+#mailDlg{border:1px solid var(--line);border-radius:14px;padding:0;width:min(760px,94vw);background:var(--panel);color:var(--ink)}#mailDlg::backdrop{background:rgba(11,22,38,.45)}.mailbox{padding:22px}.mailbox input,.mailbox textarea{width:100%}
 /* ---------- coquille : barre latérale ---------- */
 .shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
 .side{position:sticky;top:0;height:100vh;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:8px}
@@ -304,6 +305,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <div class="row">
           <input id="q" type="search" placeholder="Rechercher…" aria-label="Rechercher une transaction">
           <button id="ask" class="sm" hidden>Classer les inconnus avec l'IA</button>
+          <button class="sm" data-askcli>Demander les détails au client</button>
           <button id="acceptSug" class="sm" hidden>Accepter les suggestions</button>
         </div>
       </div>
@@ -454,7 +456,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       </div>
       <p class="note" style="margin-top:12px">Ou collez-le ici : un compte par ligne, le numéro puis le nom.</p>
       <textarea id="planTxt" spellcheck="false"></textarea>
-      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><span class="msg" id="planMsg"></span></div>
+      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><button id="planBase">Ajouter les comptes manquants du plan de base</button><span class="msg" id="planMsg"></span></div>
     </div>
   </section>
 
@@ -633,6 +635,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <label class="f">Fin de l'exercice<input type="date" id="sExF"></label>
         <label class="f">Format de date Sage<select id="sDf"><option value="yy">mm-jj-aa (exigé par l'import Sage)</option><option value="yyyy">mm-jj-aaaa</option><option value="dmys">jj/mm/aaaa</option><option value="dmy">jj-mm-aaaa</option><option value="ymd">aaaa-mm-jj</option></select></label>
       </div>
+      <label class="f" style="margin-top:10px">Courriel du client (demandes de précisions)<input id="sEmail" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
       <label class="f" style="margin-top:10px">Notes pour l'IA (ex. « les virements à Jean Tremblay sont des salaires »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
@@ -669,6 +672,25 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   </main>
 </div>
+<dialog id="mailDlg" aria-labelledby="mailT">
+  <form method="dialog" class="mailbox">
+    <h2 id="mailT">Demander les détails au client</h2>
+    <p class="note" id="mailInfo"></p>
+    <label class="f">À<input id="mailTo" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
+    <label class="f" style="margin-top:8px">Objet<input id="mailSub"></label>
+    <label class="f" style="margin-top:8px">Message<textarea id="mailBody" style="min-height:300px;font-size:14px"></textarea></label>
+    <label class="row" style="gap:8px;margin-top:8px"><input type="checkbox" id="mailSaveTo" checked> Garder ce courriel dans le dossier du client</label>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="pri" id="mailSend" hidden>Envoyer</button>
+      <button type="button" id="mailOpen">Ouvrir dans ma messagerie</button>
+      <button type="button" id="mailCopy">Copier le message</button>
+      <button type="button" id="mailCsv">Télécharger la liste (CSV)</button>
+      <button type="button" id="mailClose" class="sm">Fermer</button>
+    </div>
+    <div class="msg" id="mailMsg"></div>
+  </form>
+</dialog>
+
   <p class="note" style="display:none">Taxes incluses : le montant est ventilé en net, TPS 5 % et TVQ 9,975 %. Les repas ne donnent droit qu'à 50 % des CTI et RTI : ajustez dans Sage.</p>
 </div>
 
@@ -697,35 +719,134 @@ const MOISN=['janv.','févr.','mars','avr.','mai','juin','juill.','août','sept.
 const moisLbl=m=>{const[y,mm]=String(m||'').split('-');return mm?`${MOISN[+mm-1]} ${y}`:'—'};
 
 /* Catégories : retrouvent le bon compte dans n'importe quel plan */
+const isTr=t=>t.st==='transit'||(!!C&&!!C.tr&&t.acct===C.tr);
 const CAT={carb:/CARBURANT|ESSENCE|\bGAZ\b|FUEL|COMBUSTIBLE|VEHICULE/,elec:/ELECTRICITE|HYDRO|ENERGIE|CHAUFFAGE|SERVICES PUBLICS/,tel:/TELECOM|TELEPHON|INTERNET|CELLULAIRE|COMMUNICATION/,fb:/FRAIS BANC|FRAIS DE BANQUE|FRAIS DE SERVICE|BANK/,int:/INTERET|FRAIS FINANCIERS/,rep:/REPAS|REPRESENTATION|DIVERTISSEMENT/,log:/LOGICIEL|ABONNEMENT|INFORMATIQUE/,four:/FOURNITURE|PAPETERIE|FRAIS DE BUREAU/,ass:/ASSURANCE/,imm:/IMMATRICUL|PERMIS|LICENCE/,veh:/ENTRETIEN.*VEHICULE|VEHICULE|DEPENSES? (DE |D')?(VEHICULE|AUTOMOBILE)|FRAIS DE VEHICULE|AUTOMOBILE/,pub:/PUBLICITE|MARKETING|PROMOTION/};
 const BASE=[["PETRO-CANADA","carb",1],["PETRO CANADA","carb",1],["ESSO","carb",1],["SHELL","carb",1],["ULTRAMAR","carb",1],["COUCHE-TARD","carb",1],["CREVIER","carb",1],["IRVING","carb",1],["HYDRO-QUEBEC","elec",1],["HYDRO QUEBEC","elec",1],["ENERGIR","elec",1],["VIDEOTRON","tel",1],["BELL CANADA","tel",1],["BELL MOBILITE","tel",1],["ROGERS","tel",1],["FIDO","tel",1],["TELUS","tel",1],["KOODO","tel",1],["FRAIS MENSUELS","fb",0],["FRAIS DE SERVICE","fb",0],["FRAIS BANCAIRES","fb",0],["FRAIS D'UTILISATION","fb",0],["INTERETS","int",0],["TIM HORTONS","rep",1],["MCDONALD","rep",1],["STARBUCKS","rep",1],["UBER EATS","rep",1],["ADOBE","log",1],["MICROSOFT","log",1],["GOOGLE","log",1],["INTUIT","log",1],["ZOOM","log",1],["BUREAU EN GROS","four",1],["STAPLES","four",1],["INTACT","ass",0],["DESJARDINS ASSURANCES","ass",0],["LA CAPITALE","ass",0],["BELAIR","ass",0],["SAAQ","imm",0],["CANADIAN TIRE","veh",1],["FACEBK","pub",1],["META ADS","pub",1]].map(([p,c,t])=>({p:norm(p),c,t:!!t}));
-const DEF_PLAN=`1060 Compte courant
-1090 Compte transitoire
+const DEF_PLAN=`1000 ACTIF
+1010 Petite caisse
+1040 Compte transitoire
+1055 Compte d'épargne
+1060 Compte courant
+1065 Compte courant (2e compte)
+1067 Compte bancaire en devises US
+1100 Placements temporaires
+1200 Comptes clients
+1205 Provision pour créances douteuses
+1210 Autres débiteurs
+1215 Subventions et crédits d'impôt à recevoir
+1220 Avances à des sociétés liées
+1225 Avances à l'actionnaire
+1230 Prêts consentis
+1250 Impôts sur le revenu à recevoir
+1300 Stocks
+1320 Frais payés d'avance
+1325 Dépôts et garanties
+1500 Placements à long terme
+1510 Placements dans des sociétés liées
+1700 Matériel et équipement
+1705 Amortissement cumulé - matériel et équipement
+1710 Mobilier et agencements
+1715 Amortissement cumulé - mobilier et agencements
+1720 Matériel informatique
+1725 Amortissement cumulé - matériel informatique
+1730 Matériel roulant
+1735 Amortissement cumulé - matériel roulant
+1740 Améliorations locatives
+1745 Amortissement cumulé - améliorations locatives
+1750 Bâtiment
+1755 Amortissement cumulé - bâtiment
+1760 Terrain
+1800 Logiciels
+1805 Amortissement cumulé - logiciels
+1850 Achalandage
+1860 Frais de constitution
+2000 PASSIF
+2050 Marge de crédit
+2100 Comptes fournisseurs
+2110 Charges à payer
+2120 Salaires à payer
+2125 Vacances à payer
+2130 DAS à payer (retenues à la source)
 2140 Carte de crédit Visa
+2145 Carte de crédit Mastercard
+2150 Carte de crédit American Express
+2160 Impôts sur le revenu à payer
+2170 Dividendes à payer
+2180 Revenus reportés et acomptes de clients
+2190 Intérêts courus
 2310 TPS perçue
 2315 TPS payée (CTI)
 2320 TVQ perçue
 2325 TVQ payée (RTI)
-3560 Retraits de l'actionnaire
+2330 TPS à remettre (solde net)
+2335 TVQ à remettre (solde net)
+2400 Tranche de la dette échéant à moins d'un an
+2600 Emprunt bancaire à long terme
+2610 Emprunt hypothécaire
+2620 Obligations locatives
+2640 Avances de l'actionnaire
+2650 Avances de sociétés liées
+3000 CAPITAUX PROPRES
+3100 Capital-actions
+3200 Surplus d'apport
+3500 Bénéfices non répartis
+3600 Dividendes
+4000 PRODUITS
+4010 Ventes
 4020 Revenus de services
-4400 Intérêts gagnés
-5300 Frais de bureau
-5310 Électricité
-5320 Télécommunications
-5330 Loyer
-5340 Assurances
-5350 Frais bancaires
-5360 Intérêts et frais financiers
-5370 Carburant
-5380 Entretien de véhicule
-5390 Immatriculation et permis
-5400 Repas et représentation
-5410 Logiciels et abonnements
-5420 Fournitures
-5430 Honoraires professionnels
-5440 Publicité
-5450 Déplacements
-5460 Sous-traitance`;
+4030 Revenus d'honoraires
+4050 Revenus de location
+4080 Escomptes et retours sur ventes
+4400 Revenus d'intérêts
+4410 Revenus de dividendes
+4420 Subventions
+4450 Gain (perte) sur disposition d'actifs
+4460 Revenus divers
+5000 COÛT DES VENTES
+5010 Achats de marchandises
+5020 Variation des stocks
+5030 Sous-traitance
+5040 Fret et transport sur achats
+5050 Matériaux et fournitures directes
+5100 Salaires et traitements
+5110 Charges sociales de l'employeur
+5120 Avantages sociaux
+6000 FRAIS D'EXPLOITATION
+6010 Publicité et promotion
+6020 Assurances
+6030 Frais bancaires
+6040 Intérêts et frais financiers
+6050 Intérêts sur la dette à long terme
+6060 Honoraires comptables et juridiques
+6065 Honoraires de consultants
+6070 Frais de bureau
+6075 Fournitures de bureau
+6080 Logiciels et abonnements
+6090 Télécommunications
+6100 Électricité et chauffage
+6110 Loyer
+6120 Entretien et réparations
+6130 Carburant
+6140 Entretien de véhicule
+6150 Immatriculation et permis
+6160 Location de véhicule
+6170 Repas et représentation
+6180 Déplacements et voyages
+6190 Formation et congrès
+6200 Cotisations professionnelles
+6210 Taxes et permis d'affaires
+6220 Taxes foncières
+6230 Créances irrécouvrables
+6240 Dons
+6250 Frais de poste et de livraison
+6260 Fournitures d'exploitation
+6270 Frais de carte de crédit et de paiement
+6280 Pertes de change
+6300 Amortissement des immobilisations
+6310 Amendes et pénalités
+6320 Frais divers
+9000 IMPÔTS
+9010 Impôts sur le revenu`;
 
 let db=null,sampleFn=null,downloads=null,local=false;
 let SEL=new Set(),idFilter=null,PREV=[],AIITEMS=[];let CLIENTS=[],C=null,PLAN=[],OPTS='',P=null,filter='todo',tab='home',parsed=null,toastT=null,seq=0;
@@ -765,7 +886,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -776,7 +897,7 @@ function flushMulti(p=P){p.parts.forEach(part=>{const tx=p.tx.filter(t=>t._m===p
   pWriting.then(()=>setSave(local?'Enregistré (session seulement)':'Enregistré'))}
 function savePer(){if(!P)return;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
   pTimer=null;enforceLock(P);if(P.multi){flushMulti();return}
-  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:P.tx.length,todo:P.tx.filter(t=>t.st==='transit').length,updated:new Date().toISOString()};
+  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:P.tx.length,todo:P.tx.filter(isTr).length,updated:new Date().toISOString()};
   const pid=P.mois+'_'+P.src;
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;setSave('Enregistré (session seulement)');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}return}
   pWriting=pWriting.then(()=>db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(snap)).then(()=>{setSave('Enregistré');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}}).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true));
@@ -825,7 +946,7 @@ window.addEventListener('popstate',async()=>{const{c,t}=parseHash();NAVQ=true;
   try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t)}}else setTab(t)}finally{NAVQ=false}});
 {const h=parseHash();if(h.c)PENDING=h}
 function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;enforceLock(P);P.multi?flushMulti():savePerFlush(P)}}
-function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(t=>t.st==='transit').length,updated:new Date().toISOString()};
+function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(isTr).length,updated:new Date().toISOString()};
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
 function fillSelects(){
   $('pSrc').innerHTML=srcAccounts().map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
@@ -1371,9 +1492,9 @@ async function loadLedger(){
   let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);
     else{const s=await db.collection('clients').doc(C.id).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){throw e}
   const E=[];
-  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t);E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:t.desc,lines:lines(t,p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,todo:t.st==='transit'})}));
+  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t);E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:t.desc,lines:lines(t,p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,todo:isTr(t)})}));
   await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv'}));
-  (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id,aje:j.type==='aje'}));
+  (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id,aje:j.type==='aje',todo:!!C.tr&&(j.lines||[]).some(l=>l.a===C.tr)}));
   E.sort((a,b)=>a.date.localeCompare(b.date));
   return E}
 function balances(E,from,to,ouvTo=to){/* soldes au "to" ; pour revenus/charges : depuis le début d'exercice ou "from" */
@@ -1400,7 +1521,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   const todo=E.filter(e=>e.todo&&(!f||e.date>=f)&&(!t||e.date<=t)).length;
   const tr=t=>`<tr${t[2]?` class="${t[2]}"`:''}>${t[0]}</tr>`;
   const link=a=>`<a data-gl="${esc(a)}">${esc(a)} ${esc(accName(a))}</a>`;
-  let h='',warn=todo?`<p class="msg err">${todo} transaction(s) encore au compte transitoire ${esc(C.tr)} dans cette période.</p>`:'';
+  let h='',warn=todo?`<p class="msg err">${todo} transaction(s) encore au compte transitoire ${esc(C.tr)} dans cette période.</p><div class="row" style="margin:-4px 0 10px"><button class="sm pri" data-askcli>Demander les détails au client</button></div>`:'';
   if(REP==='bs'){const B=balances(E,null,t);const[exD]=exRange();const ni=[...balances(E,f||exD,t)].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
     const sect=(title,first,sign)=>{const set=new Set([...B].filter(([a,c])=>c&&first.includes(String(a)[0])).map(([a])=>a));let tot=0;let x=`<tr class="sec"><td colspan="2">${title}</td></tr>`;
       groups(set,first).forEach(g=>{let st=0;if(g.title)x+=`<tr class="grp"><td colspan="2">${esc(g.title)}</td></tr>`;g.items.forEach(a=>{const v=sign*B.get(a);st+=v;x+=`<tr><td class="ind">${link(a)}</td><td class="num">${fmtN(v)}</td></tr>`});if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td><td class="num">${fmtN(st)}</td></tr>`;tot+=st});
@@ -1449,7 +1570,7 @@ $('repPdf').onclick=async()=>{if(!downloads){$('repMsg').textContent='Téléchar
   try{if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
     const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
     const cl=t=>String(t||'').replace(/[   ]/g,' ').replace(/[✓✗→]/g,'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
-    let y=42;doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(cl(C.nom),40,y);y+=14;doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(110);doc.text(`Produit le ${new Date().toLocaleDateString('fr-CA')} · Logiciel comptable`,40,y);doc.setTextColor(0);y+=18;
+    let y=42;doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(cl(C.nom),40,y);y+=14;doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(110);doc.text(`Produit le ${new Date().toLocaleDateString('fr-CA')} · Intranet Boujrad CPA Inc.`,40,y);doc.setTextColor(0);y+=18;
     const room=n=>{if(y+n>H-40){doc.addPage();y=42}};
     $('repOut').querySelectorAll('h2, table.rep, p').forEach(el=>{if(el.tagName!=='TABLE'&&el.closest('table'))return;
       if(el.tagName==='H2'){room(30);doc.setFont('helvetica','bold');doc.setFontSize(12.5);doc.text(cl(el.textContent),40,y);y+=12;return}
@@ -1691,6 +1812,10 @@ async function handlePlan(files){const f=files[0];if(!f)return;$('planMsg').text
     $('planTxt').value=lines.join('\n');planFromFile=true;$('planMsg').textContent=`${lines.length} comptes reconnus. Vérifiez puis cliquez sur « Enregistrer le plan ».`;
   }catch(e){$('planMsg').textContent='Lecture impossible de ce fichier.'}}
 $('planFile').onchange=e=>{handlePlan([...e.target.files]);e.target.value=''};dropzone($('planDrop'),handlePlan);
+$('planBase').onclick=()=>{const cur=parsePlanText($('planTxt').value),have=new Set(cur.map(p=>p[0])),names=new Set(cur.map(p=>norm(p[1])));
+  const add=parsePlanText(DEF_PLAN).filter(([n,t])=>!have.has(n)&&!names.has(norm(t))&&!isHeader(n,t));const clash=parsePlanText(DEF_PLAN).filter(([n,t])=>have.has(n)&&!names.has(norm(t))&&!isHeader(n,t));
+  if(!add.length){$('planMsg').textContent='Rien à ajouter : le plan contient déjà tous les comptes du plan de base.';return}
+  $('planTxt').value=$('planTxt').value.replace(/\s*$/,'')+'\n'+add.map(p=>p.join(' ')).join('\n');$('planMsg').textContent=`${add.length} compte(s) ajouté(s) à la liste${clash.length?` (${clash.length} sauté(s) parce que leur numéro est déjà pris)`:''}. Vérifiez, puis cliquez sur Enregistrer le plan.`};
 $('planSave').onclick=()=>{const before=PLAN.map(p=>p[0]);C.plan=$('planTxt').value;
   if(planFromFile)C.sage=parsePlanText(C.plan).map(p=>p[0]);else if(!Array.isArray(C.sage))C.sage=before;planFromFile=false;const sp=detectSpecial({...C,tr:'',tpsA:'',tvqA:'',tpsV:'',tvqV:''});
   for(const k of Object.keys(sp))if(sp[k])C[k]=sp[k];setPlan();fillSelects();if(!srcAccounts().some(p=>p[0]===C.src))C.src=srcAccounts()[0]?.[0]||'';$('pSrc').value=C.src;
@@ -1706,8 +1831,8 @@ function renderRules(){const R=C.rules||[];$('rCount').textContent=R.length;
   $('baseRules').innerHTML=baseResolved().map(r=>`<tr><td>${esc(r.p)}</td><td>${r.a?esc(r.a+' '+accName(r.a)):'<span class="why">aucun compte correspondant</span>'}</td><td>${r.t?'Oui':'Non'}</td></tr>`).join('')}
 $('rules').onclick=e=>{const b=e.target.closest('button');const p=b?.dataset.p;if(p==null)return;const i=b.dataset.i!=null?+b.dataset.i:C.rules.findIndex(r=>r.p===p);if(i>=0)C.rules.splice(i,1);saveClient();reclass();renderRules();render();savePer()};
 $('rAdd').onclick=()=>{const p=norm($('rP').value);if(!p)return;C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a:$('rA').value,t:$('rT').checked});$('rP').value='';saveClient();reclass();renderRules();render();savePer()};
-function renderSettings(){renderExList();$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
-$('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.notes=$('sNotes').value;C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
+function renderSettings(){renderExList();$('sEmail').value=C.email||'';$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
+$('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
   $('cName').textContent=C.nom;reclass();saveClient();fillExSel();render();if(P&&P.tx.length)savePer();$('sMsg').textContent='Enregistré.'};
 let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
   C.deleted=true;saveClient();const i=CLIENTS.findIndex(c=>c.id===C.id);if(i>=0)CLIENTS[i].deleted=true;$('back').click()};
@@ -1813,7 +1938,7 @@ const SECS=[['A','Encaisse','1',/BANQUE|ENCAISSE|CAISSE|COMPTE COURANT|EPARGNE|T
   ['G','Autres actifs','1',null],
   ['CC','Impôts sur le revenu','2',/IMPOTS? SUR LE REVENU|IMPOTS? DES SOCIETES/],['BB','Sommes à remettre à l’État','2',/TPS|TVQ|TAXE|DAS|RRQ|RQAP|ASSURANCE.EMPLOI|IMPOT|FSS|CNESST|CSST|RETENUE|REMISE/],
   ['EE','Avances des actionnaires et apparentés','2',/ACTIONNAIRE|ADMINISTRATEUR|APPARENT|PROPRIETAIRE|ASSOCIE|LIEE|DIRIGEANT/],
-  ['DD','Emprunts et dette à long terme','2',/EMPRUNT|PRET|HYPOTHEQUE|MARGE|DETTE|FINANCEMENT|OBLIGATION LOCATIVE/],
+  ['DD','Emprunts et dette à long terme','2',/^(?!.*(MARGE|COURT TERME|MOINS D.UN AN)).*(EMPRUNT|PRET|HYPOTHEQUE|DETTE|FINANCEMENT|OBLIGATION LOCATIVE)/],
   ['AA','Créditeurs et charges à payer','2',null],['GG','Capital-actions','3',/CAPITAL/],['HH','Bénéfices non répartis et dividendes','3',null],
   ['10','Produits','4',null],['20','Coût des ventes','5',/ACHATS|COUT DES|MATIERES|FRET|MARCHANDISES VENDUES/],
   ['30','Salaires et charges sociales','5',/SALAIRE|REMUNERATION|CHARGES? SOCIALES|RRQ|RQAP|ASSURANCE.EMPLOI|FSS|CNESST|CSST|AVANTAGES SOCIAUX/],['40','Frais d’exploitation','5',null]];
@@ -2374,6 +2499,46 @@ function txSumHtml(E,f,t){const inR=e=>(!f||e.date>=f)&&(!t||e.date<=t);const fl
   <table class="rep"><tr class="sec"><td colspan="3">TVQ (Revenu Québec)</td></tr>${r('203','Ventes et autres recettes',rev)}${r('205','TVQ perçue',tvqV)}${r('206','Remboursements de la taxe sur les intrants (RTI)',rti)}${r('209',tvqV-rti>=0?'Taxe nette à remettre':'Remboursement net',Math.abs(tvqV-rti),'tot')}</table></div>
   <p class="note">Les repas et frais de représentation ne donnent droit qu’à 50 % des CTI et RTI.</p>`}
 
+/* ---------- demande de précisions au client (compte transitoire) ---------- */
+let MAILL=[];
+async function trList(){if(!LED)LED=await loadLedger();const x=curEx();
+  return LED.filter(e=>e.todo&&(!x||(e.date>=x.deb&&e.date<=x.fin))).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>{const tl=e.lines.find(l=>l[0]===C.tr),o=e.lines.find(l=>l[0]!==C.tr);
+    return{date:e.date,desc:e.desc||'',amt:tl?tl[1]:0,src:e.kind==='rel'?e.src:(o?.[0]||'')}})}
+const moneyA=c=>new Intl.NumberFormat('fr-CA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Math.abs(c)/100)+' $';
+async function openAsk(){const d=$('mailDlg');$('mailMsg').textContent='';$('mailInfo').textContent='Préparation de la liste…';d.showModal?d.showModal():d.setAttribute('open','');
+  try{MAILL=await trList()}catch(e){$('mailInfo').textContent='Lecture des données impossible.';return}
+  const x=curEx(),lines=MAILL.map(t=>`- ${t.date} · ${t.amt>0?'Retrait':'Dépôt'} de ${moneyA(t.amt)} · ${t.desc}${t.src?` (compte ${t.src} ${accName(t.src)})`:''}`);
+  $('mailInfo').textContent=MAILL.length?`${MAILL.length} transaction(s) au compte transitoire ${C.tr}${x?` pour l’exercice ${x.deb} au ${x.fin}`:''}.`:'Aucune transaction au compte transitoire dans cet exercice.';
+  $('mailTo').value=C.email||'';$('mailSub').value=`${C.nom} — précisions demandées sur ${MAILL.length} transaction${MAILL.length>1?'s':''}`;
+  $('mailBody').value=`Bonjour,
+
+Dans le cadre de la tenue de livres de ${C.nom}, nous avons besoin de précisions sur les transactions ci-dessous afin de les classer dans les bons comptes.
+
+Pour chacune, pourriez-vous nous indiquer de quoi il s’agit (à qui le paiement a été fait ou de qui l’argent provient, et pour quelle raison) et nous transmettre la facture ou la pièce justificative, s’il y a lieu?
+
+${lines.join('\n')}
+
+Merci de nous les faire parvenir le plus tôt possible.
+
+Cordialement,
+
+Boujrad CPA Inc.`;
+  $('mailSend').hidden=typeof window.tlSendEmail!=='function'}
+document.addEventListener('click',e=>{if(e.target.closest('[data-askcli]')){e.preventDefault();openAsk()}});
+$('mailClose').onclick=()=>{const d=$('mailDlg');d.close?d.close():d.removeAttribute('open')};
+const keepTo=()=>{const v=$('mailTo').value.trim();if($('mailSaveTo').checked&&v&&v!==C.email){C.email=v.slice(0,200);saveClient()}};
+const mailOk=()=>{const v=$('mailTo').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){$('mailMsg').textContent='Entrez une adresse courriel valide.';return false}return true};
+$('mailOpen').onclick=()=>{if(!mailOk())return;keepTo();const u=`mailto:${encodeURIComponent($('mailTo').value.trim())}?subject=${encodeURIComponent($('mailSub').value)}&body=${encodeURIComponent($('mailBody').value)}`;
+  if(u.length>1900)$('mailMsg').textContent='Message long : si votre messagerie le coupe, utilisez « Copier le message » puis collez-le.';else $('mailMsg').textContent='Votre messagerie s’ouvre avec le message prêt à envoyer.';
+  const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()};
+$('mailCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('mailBody').value);$('mailMsg').textContent='Message copié.'}catch(e){$('mailBody').select();$('mailMsg').textContent='Sélectionné : faites Ctrl+C.'}};
+$('mailCsv').onclick=async()=>{if(!downloads){$('mailMsg').textContent='Téléchargement indisponible dans cette vue.';return}
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`;const csv='﻿Date;Type;Montant;Description;Compte;Précisions du client\r\n'+MAILL.map(t=>[t.date,t.amt>0?'Retrait':'Dépôt',(Math.abs(t.amt)/100).toFixed(2).replace('.',','),t.desc,t.src+' '+accName(t.src),''].map(q).join(';')).join('\r\n');
+  try{await downloads.save({filename:`${C.nom}_transactions_a_preciser.csv`.replace(/[^\w.-]+/g,'_'),data:csv});$('mailMsg').textContent='Liste enregistrée : joignez-la au courriel au besoin.'}catch(e){$('mailMsg').textContent='Téléchargement annulé.'}};
+$('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend');b.disabled=true;$('mailMsg').textContent='Envoi…';
+  try{await window.tlSendEmail({to:$('mailTo').value.trim(),subject:$('mailSub').value,text:$('mailBody').value});$('mailMsg').textContent='Courriel envoyé au client.';C.demandes=[...(C.demandes||[]),{date:new Date().toISOString(),to:$('mailTo').value.trim(),n:MAILL.length}].slice(-50);saveClient()}
+  catch(e){$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
+
 /* ---------- accueil du dossier ---------- */
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
@@ -2386,7 +2551,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
     const cls=!P_.length?(fut?'fut':''):t?'r':'o',st=!P_.length?(fut?'À venir':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
-  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} à classer`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer')}
+  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>Envoie la liste des transactions à préciser par courriel</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
   const miss=ms.filter(m=>m<now&&!by(m).length);if(miss.length)add('g',`${miss.length} mois sans relevé`,miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':''),'mo:'+miss[0]+':','Déposer');
   if(!x.ouv)add('g','Soldes d’ouverture à saisir','Les soldes au premier jour de l’exercice, pour un bilan complet.','je','Saisir');
   try{if(!MIS||MIS.ex!==x.id)await loadMis();}catch(e){}if(C?.id!==cid)return;
@@ -2397,6 +2562,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   $('hTodo').innerHTML=T.join('');
   try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
     const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
+    {const n=LED.filter(e=>e.todo&&e.date>=x.deb&&e.date<=x.fin).length;if(n&&!$('hTodo').querySelector('[data-askcli]'))$('hTodo').insertAdjacentHTML('afterbegin',`<li><i class="r"></i><div>${n} transaction${n>1?'s':''} au compte transitoire<small>Demandez les détails au client par courriel</small></div><button class="sm pri" data-askcli>Envoyer</button></li>`)}
     $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
 $('expChg').onclick=()=>setTab('rev');
 $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;

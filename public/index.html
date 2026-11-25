@@ -4,7 +4,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Logiciel comptable</title>
+<title>Intranet Boujrad CPA Inc.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&display=swap" rel="stylesheet">
 <style>
@@ -105,6 +105,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 @media(max-width:800px){.top,.two{grid-template-columns:1fr}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}}
 @media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+#mailDlg{border:1px solid var(--line);border-radius:14px;padding:0;width:min(760px,94vw);background:var(--panel);color:var(--ink)}#mailDlg::backdrop{background:rgba(11,22,38,.45)}.mailbox{padding:22px}.mailbox input,.mailbox textarea{width:100%}
 /* ---------- coquille : barre latérale ---------- */
 .shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
 .side{position:sticky;top:0;height:100vh;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:8px}
@@ -305,6 +306,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <div class="row">
           <input id="q" type="search" placeholder="Rechercher…" aria-label="Rechercher une transaction">
           <button id="ask" class="sm" hidden>Classer les inconnus avec l'IA</button>
+          <button class="sm" data-askcli>Demander les détails au client</button>
           <button id="acceptSug" class="sm" hidden>Accepter les suggestions</button>
         </div>
       </div>
@@ -455,7 +457,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       </div>
       <p class="note" style="margin-top:12px">Ou collez-le ici : un compte par ligne, le numéro puis le nom.</p>
       <textarea id="planTxt" spellcheck="false"></textarea>
-      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><span class="msg" id="planMsg"></span></div>
+      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><button id="planBase">Ajouter les comptes manquants du plan de base</button><span class="msg" id="planMsg"></span></div>
     </div>
   </section>
 
@@ -634,6 +636,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <label class="f">Fin de l'exercice<input type="date" id="sExF"></label>
         <label class="f">Format de date Sage<select id="sDf"><option value="yy">mm-jj-aa (exigé par l'import Sage)</option><option value="yyyy">mm-jj-aaaa</option><option value="dmys">jj/mm/aaaa</option><option value="dmy">jj-mm-aaaa</option><option value="ymd">aaaa-mm-jj</option></select></label>
       </div>
+      <label class="f" style="margin-top:10px">Courriel du client (demandes de précisions)<input id="sEmail" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
       <label class="f" style="margin-top:10px">Notes pour l'IA (ex. « les virements à Jean Tremblay sont des salaires »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
@@ -670,6 +673,25 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   </main>
 </div>
+<dialog id="mailDlg" aria-labelledby="mailT">
+  <form method="dialog" class="mailbox">
+    <h2 id="mailT">Demander les détails au client</h2>
+    <p class="note" id="mailInfo"></p>
+    <label class="f">À<input id="mailTo" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
+    <label class="f" style="margin-top:8px">Objet<input id="mailSub"></label>
+    <label class="f" style="margin-top:8px">Message<textarea id="mailBody" style="min-height:300px;font-size:14px"></textarea></label>
+    <label class="row" style="gap:8px;margin-top:8px"><input type="checkbox" id="mailSaveTo" checked> Garder ce courriel dans le dossier du client</label>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="pri" id="mailSend" hidden>Envoyer</button>
+      <button type="button" id="mailOpen">Ouvrir dans ma messagerie</button>
+      <button type="button" id="mailCopy">Copier le message</button>
+      <button type="button" id="mailCsv">Télécharger la liste (CSV)</button>
+      <button type="button" id="mailClose" class="sm">Fermer</button>
+    </div>
+    <div class="msg" id="mailMsg"></div>
+  </form>
+</dialog>
+
   <p class="note" style="display:none">Taxes incluses : le montant est ventilé en net, TPS 5 % et TVQ 9,975 %. Les repas ne donnent droit qu'à 50 % des CTI et RTI : ajustez dans Sage.</p>
 </div>
 
