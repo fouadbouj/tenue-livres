@@ -40,7 +40,7 @@ const DEF_PLAN=`1060 Compte courant
 5460 Sous-traitance`;
 
 let db=null,sampleFn=null,downloads=null,local=false;
-let SEL=new Set(),idFilter=null,PREV=[],AIITEMS=[];let CLIENTS=[],C=null,PLAN=[],OPTS='',P=null,filter='todo',tab='rev',parsed=null,toastT=null,seq=0;
+let SEL=new Set(),idFilter=null,PREV=[],AIITEMS=[];let CLIENTS=[],C=null,PLAN=[],OPTS='',P=null,filter='todo',tab='home',parsed=null,toastT=null,seq=0;
 const LOCAL={clients:{},periodes:{}};
 
 /* ---------- plan comptable ---------- */
@@ -121,7 +121,7 @@ async function openClient(id,isNew){
   $('pMois').value=C.last||`${pm.getFullYear()}-${String(pm.getMonth()+1).padStart(2,'0')}`;
   {const e=curEx();if(e&&($('pMois').value<e.deb.slice(0,7)||$('pMois').value>e.fin.slice(0,7)))$('pMois').value=e.fin.slice(0,7)<$('pMois').value?e.fin.slice(0,7):e.deb.slice(0,7)}
   $('pSrc').value=C.src||$('pSrc').value;
-  setTab(isNew?'plan':'rev');
+  setTab(isNew?'plan':'home');
   if(isNew)$('planMsg').textContent='Nouveau dossier : versez le plan comptable du client pour commencer.';
   mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true;$('pClear').hidden=false;$('pOpen').textContent='Ouvrir la période';$('rFrom').value=$('rTo').value='';
   await openPeriod();
@@ -179,12 +179,15 @@ async function openRange(){let f=$('rFrom').value,t=$('rTo').value;const src=$('
   msg(`${P.tx.length} transaction(s) de ${moisLbl(months[0])} à ${moisLbl(months[months.length-1])}, sur ${P.parts.filter(p=>p.exists).length} mois avec des données. Les modifications sont enregistrées dans chaque mois.`);render()}
 
 /* ---------- onglets ---------- */
-function setTab(t){tab=t;document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
+const CFG=['set','plan','rules','links','per'],PGT={home:['Accueil','Où en est le dossier et ce qu’il reste à faire.'],rev:['Transactions','Déposez un relevé, puis classez les transactions du mois.'],inv:['Factures','Comptes clients et fournisseurs.'],je:['Écritures de journal','Ajustements, amortissement et soldes d’ouverture.'],rec:['Conciliation bancaire','Comparez les livres aux soldes des relevés.'],rep:['Rapports','Bilan, résultats, grand livre et autres rapports.'],mis:['Mission de compilation','Tout le dossier de fin d’exercice, étape par étape.']};
+function setTab(t){tab=t;const g=CFG.includes(t)?'set':t;document.querySelectorAll('#side [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g));document.querySelectorAll('#cfgNav [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
+  $('cfgNav').hidden=g!=='set';const pt=PGT[g]||['Réglages','Plan comptable, règles, comptes liés, exercices et paramètres du dossier.'];$('pgTitle').textContent=pt[0];$('pgSub').textContent=pt[1];window.scrollTo?.(0,0);
+  $('tHome').hidden=t!=='home';if(t==='home')renderHome();
   for(const[k,id]of[['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
   if(t==='mis')renderMis();
   if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
   if(t==='per')loadPeriods()}
-document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+document.querySelectorAll('#side [data-t],#cfgNav [data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
 let PERS=[];
 async function yearSel(){const src=$('ySrc').value,f=$('yFrom').value||'0000-00',t=$('yTo').value||'9999-99';
@@ -1589,6 +1592,36 @@ async function misPdf(kind,btn){const say=t=>$('misMsg').textContent=t;if(!downl
   catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.')}btn.disabled=false}
 
 $('perAll').onchange=loadPeriods;$('jeAll').onchange=renderJe;
+
+
+/* ---------- accueil du dossier ---------- */
+async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
+  if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
+  let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(cid+'/')).map(([,v])=>v);else{const s=await db.collection('clients').doc(cid).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){}
+  if(C?.id!==cid)return;PERS=L;
+  const ms=[];for(let m=x.deb.slice(0,7);m<=x.fin.slice(0,7);){ms.push(m);const[y,mm]=m.split('-').map(Number);m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,'0')}`}
+  const now=new Date().toISOString().slice(0,7),by=m=>L.filter(p=>p.mois===m),todo=ms.reduce((s,m)=>s+by(m).reduce((t,p)=>t+(+p.todo||0),0),0);
+  $('navTodo').hidden=!todo;$('navTodo').textContent=todo;
+  $('hMonths').innerHTML=ms.map(m=>{const P_=by(m),n=P_.reduce((s,p)=>s+(+p.n||0),0),t=P_.reduce((s,p)=>s+(+p.todo||0),0),fut=m>now;
+    const cls=!P_.length?(fut?'fut':''):t?'r':'o',st=!P_.length?(fut?'À venir':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
+    return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
+  const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
+  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} à classer`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer')}
+  const miss=ms.filter(m=>m<now&&!by(m).length);if(miss.length)add('g',`${miss.length} mois sans relevé`,miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':''),'mo:'+miss[0]+':','Déposer');
+  if(!x.ouv)add('g','Soldes d’ouverture à saisir','Les soldes au premier jour de l’exercice, pour un bilan complet.','je','Saisir');
+  try{if(!MIS||MIS.ex!==x.id)await loadMis();}catch(e){}if(C?.id!==cid)return;
+  if(MIS){const dn=Object.values(stepDone()).filter(Boolean).length;add(MIS.statut==='terminée'?'o':'g',`Mission de compilation : ${dn} / ${STEPS.length} étapes`,MIS.statut==='terminée'?'Mission terminée.':'Reprenez là où vous étiez.','mis','Continuer')}
+  else if(x.fin<=new Date().toISOString().slice(0,10))add('g','Mission de compilation à créer','L’exercice est terminé : préparez les états financiers.','mis','Créer');
+  if(x.statut==='ferme')add('o','Exercice fermé','Les livres de cet exercice sont verrouillés.','','');
+  if(!T.length)add('o','Rien en attente','Tout est classé pour cet exercice.','','');
+  $('hTodo').innerHTML=T.join('');
+  try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
+    const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
+    $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
+$('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;
+  let m=b.dataset.mo,src=b.dataset.src;const g=b.dataset.go||'';if(g.startsWith('mo:')){[,m,src]=g.split(':')}else if(g){setTab(g);return}
+  if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
+  $('pMois').value=m;if(src&&[...$('pSrc').options].some(o=>o.value===src))$('pSrc').value=src;setTab('rev');openPeriod()});
 
 /* ---------- sauvegarde ---------- */
 const SUBS=['periodes','ecritures','factures','missions'];

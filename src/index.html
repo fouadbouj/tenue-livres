@@ -14,7 +14,7 @@
    LAYOUT: barre d'en-tête, dossiers en liste, dossier ouvert en onglets. */
 :root{color-scheme:light dark;--bg:light-dark(#f4f6fa,#0b1626);--ink:light-dark(#0b1626,#eef2f8);--panel:light-dark(#ffffff,#13233a);--line:light-dark(#d5deeb,#2a3f5e);--mute:light-dark(#5a6678,#9fb0c8);--teal:light-dark(#1f3d6e,#e8c77d);--claret:light-dark(#b3261e,#ff8a80);--soft:light-dark(#e8edf5,#1d3352);--gold:light-dark(#a0761a,#e8c77d)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
-*{box-sizing:border-box;min-width:0}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Libre Franklin",system-ui,sans-serif;overflow-x:clip}
 .band{padding:clamp(18px,3vw,36px) max(4vw,14px);max-width:1240px;margin:0 auto}
 h1{font-weight:800;font-size:clamp(28px,4vw,40px);line-height:1.05;margin:0;text-wrap:balance}
@@ -104,6 +104,47 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 @media(max-width:800px){.top,.two{grid-template-columns:1fr}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}}
 @media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+/* ---------- coquille : barre latérale ---------- */
+.shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;height:100vh;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:8px}
+.side .back{background:none;border:0;color:var(--mute);text-align:left;padding:4px 8px;min-height:32px;font-size:14px;font-weight:500;justify-content:flex-start}
+.side .back:hover{color:var(--ink);background:var(--soft)}
+.who{padding:4px 8px}.who strong{display:block;font-size:18px;line-height:1.2;font-weight:800;overflow-wrap:anywhere}.who span{display:block;font-size:12.5px;color:var(--mute);margin-top:3px}
+.side .exsel{display:flex;flex-direction:column;align-items:stretch;gap:3px;margin:4px 8px 0;font-size:12px}.side .exsel select{min-height:36px;font-size:14px;width:100%}
+.side #exPill{align-self:flex-start;margin:0 8px}
+.snav{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.snav .sg{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);margin:14px 10px 4px;font-weight:600}
+.snav button{display:flex;align-items:center;gap:11px;text-align:left;border:0;background:none;border-radius:8px;padding:8px 10px;min-height:40px;font-size:15px;font-weight:500;color:var(--ink);justify-content:flex-start}
+.snav button:hover{background:var(--soft)}
+.snav button[aria-pressed=true]{background:var(--teal);color:light-dark(#fff,#0b1626)}
+.snav svg{width:18px;height:18px;flex:none;opacity:.85}
+.cnt{margin-left:auto;font-style:normal;font-size:12px;font-weight:700;background:var(--claret);color:#fff;border-radius:999px;padding:0 8px;line-height:20px}
+.side #saveState{margin:auto 8px 0;font-size:12px}
+.main{padding:clamp(18px,3vw,32px) clamp(16px,3.2vw,44px) 60px;max-width:1300px;width:100%}
+.phead h1{font-size:clamp(26px,3vw,34px)}.phead .sub{margin-top:4px}
+.subnav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:16px 0 0;overflow-x:auto}
+.subnav button{border:0;background:none;border-bottom:2px solid transparent;border-radius:0;padding:8px 14px;min-height:42px;font-size:15px;font-weight:600;color:var(--mute);white-space:nowrap}
+.subnav button[aria-pressed=true]{color:var(--ink);border-bottom-color:var(--teal);background:none}
+details.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::after{content:'';width:9px;height:9px;border-right:2px solid var(--mute);border-bottom:2px solid var(--mute);transform:rotate(45deg);margin-right:6px;transition:transform .15s;flex:none}
+details.fold[open]>summary::after{transform:rotate(-135deg)}
+details.fold>summary>span{display:flex;flex-direction:column;gap:2px}details.fold>summary strong{font-size:17px}details.fold>summary small{color:var(--mute);font-size:13px}
+details.fold[open]>summary{margin-bottom:12px}
+.gauge.slim{margin-top:16px;padding:10px 14px}.gauge.slim b{font-size:20px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}.kpi span{font-size:13px;color:var(--mute)}.kpi b{display:block;font-size:24px;font-weight:800;margin-top:2px;white-space:nowrap}.kpi b.neg{color:var(--claret)}
+.hgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:start}
+ul.todo{list-style:none;margin:0;padding:0}ul.todo li{display:flex;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}ul.todo li:last-child{border:0}
+ul.todo i{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line)}ul.todo i.r{background:var(--claret)}ul.todo i.g{background:var(--gold)}ul.todo i.o{background:var(--teal)}
+ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute);font-weight:400;font-size:13px}
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.mo{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;background:var(--bg);min-height:70px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:1px;font-size:14px}
+.mo:hover{border-color:var(--ink)}.mo b{font-size:15px;text-transform:capitalize}.mo span{font-size:12.5px;color:var(--mute)}.mo small{font-size:11.5px;color:var(--mute)}
+.mo.r{border-color:var(--claret);border-left-width:4px}.mo.r span{color:var(--claret);font-weight:700}.mo.o{border-left:4px solid var(--teal)}.mo.o span{color:var(--teal);font-weight:600}.mo.fut{opacity:.55}
+@media(max-width:1000px){.hgrid{grid-template-columns:1fr}}
+@media(max-width:860px){.shell{grid-template-columns:1fr}.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}.snav{flex-direction:row;overflow-x:auto;padding-bottom:4px}.snav .sg{display:none}.snav button{white-space:nowrap;flex:none}.side #saveState{margin:0 8px}}
+
 .efp{font-family:Calibri,Carlito,'Segoe UI',Arial,sans-serif;font-size:13px}.efp .ehd{display:grid;border-bottom:2px solid #111;padding-bottom:3px;margin-bottom:22px}.efp .ehd strong{font-size:15px}.efp .ehd em,.efp .ehd b{font-size:11px;font-weight:700}
 .efp .ecov{text-align:center;padding:90px 60px}.efp .ecov hr{border:0;border-top:2px solid #111;width:60%;margin:14px auto}.efp .ecov p{margin:6px 0}
 .efp table.efs,.efp table.etoc{width:100%;border-collapse:collapse;margin:6px 0 10px}.efp table.efs td,.efp table.etoc td{padding:2px 6px;border:0}.efp td.num{text-align:right;width:110px;white-space:nowrap}.efp td.ind{padding-left:22px}
@@ -134,7 +175,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
   <div class="top">
     <div>
       <h1>Dossiers clients</h1>
-      <p class="sub">Chaque client garde son plan comptable, ses règles, ses exercices et ses missions. Choisissez un dossier et déposez le mois à faire.</p>
+      <p class="sub">Choisissez un dossier pour le continuer, ou créez-en un nouveau.</p>
     </div>
     <div class="panel" style="margin:0">
       <form id="newForm" class="row">
@@ -153,22 +194,58 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
       <tbody id="clist"></tbody>
     </table></div>
   </div>
-  <div class="panel">
-    <h2>Sauvegarde et transfert</h2>
+  <details class="panel fold">
+    <summary><span><strong>Sauvegarde et transfert</strong><small>Exporter ou importer tous les dossiers (fichier JSON)</small></span></summary>
     <p class="note">Exporte tous les dossiers (plans, règles, périodes, écritures, factures) dans un fichier JSON : sauvegarde, ou transfert vers la version site web du cabinet. L'import ajoute ou remplace les dossiers du fichier.</p>
     <div class="row"><button id="bkExp">Exporter tous les dossiers</button><label class="f">Importer un fichier de sauvegarde<input type="file" id="bkImp" accept=".json"></label><span class="msg" id="bkMsg"></span></div>
-  </div>
+  </details>
 </div>
 
 <!-- ===== Dossier client ===== -->
-<div class="band" id="vClient" hidden>
-  <div class="crumb"><button id="back" class="sm">← Tous les dossiers</button><label class="exsel">Exercice <select id="exSel" aria-label="Exercice"></select></label><span id="exPill" class="pill"></span><span id="saveState" class="status"></span></div>
-  <div class="top">
-    <div>
-      <h1 id="cName">Client</h1>
-      <p class="sub" id="cSub"></p>
+<div id="vClient" hidden>
+<div class="shell">
+  <aside class="side" id="side">
+    <button id="back" class="back">← Tous les dossiers</button>
+    <div class="who"><strong id="cName">Client</strong><span id="cSub"></span></div>
+    <label class="exsel">Exercice<select id="exSel" aria-label="Exercice"></select></label>
+    <span id="exPill" class="pill"></span>
+    <nav class="snav" aria-label="Sections du dossier">
+      <span class="sg">Comptabilité</span>
+      <button data-t="home" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Accueil</button>
+      <button data-t="rev" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Transactions<em class="cnt" id="navTodo" hidden></em></button>
+      <button data-t="inv" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6"/></svg>Factures</button>
+      <button data-t="je" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Écritures</button>
+      <button data-t="rec" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Conciliation</button>
+      <button data-t="rep" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Rapports</button>
+      <span class="sg">Fin d'exercice</span>
+      <button data-t="mis" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Mission de compilation</button>
+      <span class="sg">Configuration</span>
+      <button data-t="set" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Réglages</button>
+    </nav>
+    <span id="saveState" class="status"></span>
+  </aside>
+  <main class="main">
+    <div class="phead"><h1 id="pgTitle">Accueil</h1><p class="sub" id="pgSub"></p></div>
+    <nav class="subnav" id="cfgNav" hidden aria-label="Réglages">
+      <button data-t="set" aria-pressed="false">Paramètres et exercices</button>
+      <button data-t="plan" aria-pressed="false">Plan comptable</button>
+      <button data-t="rules" aria-pressed="false">Règles de classement</button>
+      <button data-t="links" aria-pressed="false">Comptes liés</button>
+      <button data-t="per" aria-pressed="false">Périodes importées</button>
+    </nav>
+
+  <!-- Accueil -->
+  <section id="tHome">
+    <div class="kpis" id="hKpi"></div>
+    <div class="hgrid">
+      <div class="panel"><h2>À faire</h2><ul class="todo" id="hTodo"><li><div>Chargement…</div></li></ul></div>
+      <div class="panel"><h2>Mois de l'exercice</h2><div class="months" id="hMonths"></div><p class="note" style="margin:10px 0 0">Cliquez sur un mois pour voir ou classer ses transactions.</p></div>
     </div>
-    <div class="gauge" aria-live="polite">
+  </section>
+
+  <!-- Révision -->
+  <section id="tRev" hidden>
+    <div class="gauge slim" aria-live="polite">
       <div class="n">
         <span>Période<b id="gPer">—</b></span>
         <span>Transactions<b id="gTot">0</b></span>
@@ -177,23 +254,6 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
       </div>
       <div class="bar"><i id="bOk"></i><i class="s" id="bSug"></i><i class="t" id="bTodo"></i></div>
     </div>
-  </div>
-  <nav class="tabs" aria-label="Sections du dossier">
-    <button data-t="rev" aria-pressed="true">Révision</button>
-    <button data-t="per" aria-pressed="false">Périodes</button>
-    <button data-t="plan" aria-pressed="false">Plan comptable</button>
-    <button data-t="rules" aria-pressed="false">Règles</button>
-    <button data-t="links" aria-pressed="false">Comptes liés</button>
-    <button data-t="inv" aria-pressed="false">Factures</button>
-    <button data-t="rec" aria-pressed="false">Conciliation</button>
-    <button data-t="je" aria-pressed="false">Écritures</button>
-    <button data-t="rep" aria-pressed="false">Rapports</button>
-    <button data-t="mis" aria-pressed="false">Mission de compilation</button>
-    <button data-t="set" aria-pressed="false">Paramètres</button>
-  </nav>
-
-  <!-- Révision -->
-  <section id="tRev">
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:flex-end">
         <div class="row" style="align-items:flex-end">
@@ -203,7 +263,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
           <label class="f" id="lTo" hidden>Au mois<input type="month" id="rTo"></label>
           <label class="f">Compte du relevé<select id="pSrc"></select></label>
           <button id="pOpen">Ouvrir la période</button>
-          <button id="pClear" class="danger sm" style="min-height:44px">Vider cette période</button>
+          
         </div>
       </div>
       <div class="drop" id="drop" style="margin-top:12px">
@@ -227,19 +287,9 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
         <div class="row"><button class="pri" id="mGo">Importer ces transactions</button><button id="mCancel">Annuler</button></div>
       </div>
       <div class="msg" id="msg"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="pClear" class="danger sm">Vider cette période</button></div>
     </div>
 
-    <div class="panel" id="chatPanel">
-      <h2>Expliquer à l'IA</h2>
-      <p class="note">Dites-lui ce qu'elle ne peut pas deviner, par exemple : « Le propriétaire est Faraz, ses virements vont en avance à l'actionnaire. Marie Roy et Luc Bédard sont sous-traitants. » Elle propose des règles, vous les approuvez, et elles servent pour tous les mois de ce client.</p>
-      <div class="chatlog" id="chatLog"></div>
-      <form id="chatForm" class="row" style="align-items:flex-end">
-        <textarea id="chatIn" style="min-height:60px;flex:1" placeholder="Écrivez à l'IA…" aria-label="Message à l'IA"></textarea>
-        <button type="button" id="mic" hidden aria-pressed="false" title="Parler au lieu d'écrire"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg> <span id="micT">Parler</span></button>
-        <button class="pri" id="chatGo">Envoyer</button>
-      </form>
-      <div class="msg" id="chatMsg"></div>
-    </div>
 
     <div class="panel">
       <div class="row" style="justify-content:space-between">
@@ -274,22 +324,34 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
       <div class="toast" id="toast" role="status"></div>
     </div>
 
-    <div class="panel" id="chkPanel">
-      <div class="row" style="justify-content:space-between">
-        <h2 style="margin:0">Points à vérifier <span class="pill" id="chkN">0</span></h2>
+    <details class="panel fold" id="chatPanel">
+      <summary><span><strong>Assistant IA</strong><small>Expliquez ce qu’elle ne peut pas deviner : propriétaire, employés, sous-traitants, virements</small></span></summary>
+      <p class="note">Dites-lui ce qu'elle ne peut pas deviner, par exemple : « Le propriétaire est Faraz, ses virements vont en avance à l'actionnaire. Marie Roy et Luc Bédard sont sous-traitants. » Elle propose des règles, vous les approuvez, et elles servent pour tous les mois de ce client.</p>
+      <div class="chatlog" id="chatLog"></div>
+      <form id="chatForm" class="row" style="align-items:flex-end">
+        <textarea id="chatIn" style="min-height:60px;flex:1" placeholder="Écrivez à l'IA…" aria-label="Message à l'IA"></textarea>
+        <button type="button" id="mic" hidden aria-pressed="false" title="Parler au lieu d'écrire"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg> <span id="micT">Parler</span></button>
+        <button class="pri" id="chatGo">Envoyer</button>
+      </form>
+      <div class="msg" id="chatMsg"></div>
+    </details>
+    <details class="panel fold" id="chkPanel" open>
+      <summary><span><strong>Points à vérifier <span class="pill" id="chkN">0</span></strong><small>Vérifications automatiques à chaque import</small></span></summary>
+      <div class="row" style="justify-content:flex-end">
         <button id="aiRev" class="sm" hidden>Revue complète par l'IA</button>
       </div>
-      <p class="note" style="margin:6px 0 0">Vérifications automatiques à chaque import. La revue par l'IA ajoute des propositions de classement et des questions à poser au client.</p>
       <ul class="chk" id="chk"></ul>
       <div id="aiBox" hidden><h2 style="margin-top:16px">Revue de l'IA</h2><ul class="chk" id="aiChk"></ul></div>
-    </div>
+    </details>
 
+    <details class="panel fold" id="sumPanel">
+      <summary><span><strong>Sommaire et export vers Sage 50</strong><small>Totaux par compte, fichier d’import et fin de la période</small></span></summary>
     <div class="two">
-      <div class="panel">
+      <div>
         <h2>Sommaire par compte</h2>
         <table class="stack"><thead><tr><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th></tr></thead><tbody id="sum"></tbody></table>
       </div>
-      <div class="panel">
+      <div>
         <h2>Exporter vers Sage 50</h2>
         <p class="note">Une écriture de journal général par transaction. Dans Sage : Fichier &gt; Importation/Exportation &gt; Importer des transactions &gt; écritures de journal général. Faites une sauvegarde avant.</p>
         <div class="row" style="margin-top:10px">
@@ -304,6 +366,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
         <pre id="exPrev"></pre>
       </div>
     </div>
+    </details>
   </section>
 
   <!-- Périodes -->
@@ -549,7 +612,9 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
     <div id="misBody"></div>
   </section>
 
-  <p class="note" style="margin-top:18px">Taxes incluses : le montant est ventilé en net, TPS 5 % et TVQ 9,975 %. Les repas ne donnent droit qu'à 50 % des CTI et RTI : ajustez dans Sage.</p>
+  </main>
+</div>
+  <p class="note" style="display:none">Taxes incluses : le montant est ventilé en net, TPS 5 % et TVQ 9,975 %. Les repas ne donnent droit qu'à 50 % des CTI et RTI : ajustez dans Sage.</p>
 </div>
 
 <dialog id="finDlg"><div>
@@ -608,7 +673,7 @@ const DEF_PLAN=`1060 Compte courant
 5460 Sous-traitance`;
 
 let db=null,sampleFn=null,downloads=null,local=false;
-let SEL=new Set(),idFilter=null,PREV=[],AIITEMS=[];let CLIENTS=[],C=null,PLAN=[],OPTS='',P=null,filter='todo',tab='rev',parsed=null,toastT=null,seq=0;
+let SEL=new Set(),idFilter=null,PREV=[],AIITEMS=[];let CLIENTS=[],C=null,PLAN=[],OPTS='',P=null,filter='todo',tab='home',parsed=null,toastT=null,seq=0;
 const LOCAL={clients:{},periodes:{}};
 
 /* ---------- plan comptable ---------- */
@@ -689,7 +754,7 @@ async function openClient(id,isNew){
   $('pMois').value=C.last||`${pm.getFullYear()}-${String(pm.getMonth()+1).padStart(2,'0')}`;
   {const e=curEx();if(e&&($('pMois').value<e.deb.slice(0,7)||$('pMois').value>e.fin.slice(0,7)))$('pMois').value=e.fin.slice(0,7)<$('pMois').value?e.fin.slice(0,7):e.deb.slice(0,7)}
   $('pSrc').value=C.src||$('pSrc').value;
-  setTab(isNew?'plan':'rev');
+  setTab(isNew?'plan':'home');
   if(isNew)$('planMsg').textContent='Nouveau dossier : versez le plan comptable du client pour commencer.';
   mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true;$('pClear').hidden=false;$('pOpen').textContent='Ouvrir la période';$('rFrom').value=$('rTo').value='';
   await openPeriod();
@@ -747,12 +812,15 @@ async function openRange(){let f=$('rFrom').value,t=$('rTo').value;const src=$('
   msg(`${P.tx.length} transaction(s) de ${moisLbl(months[0])} à ${moisLbl(months[months.length-1])}, sur ${P.parts.filter(p=>p.exists).length} mois avec des données. Les modifications sont enregistrées dans chaque mois.`);render()}
 
 /* ---------- onglets ---------- */
-function setTab(t){tab=t;document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
+const CFG=['set','plan','rules','links','per'],PGT={home:['Accueil','Où en est le dossier et ce qu’il reste à faire.'],rev:['Transactions','Déposez un relevé, puis classez les transactions du mois.'],inv:['Factures','Comptes clients et fournisseurs.'],je:['Écritures de journal','Ajustements, amortissement et soldes d’ouverture.'],rec:['Conciliation bancaire','Comparez les livres aux soldes des relevés.'],rep:['Rapports','Bilan, résultats, grand livre et autres rapports.'],mis:['Mission de compilation','Tout le dossier de fin d’exercice, étape par étape.']};
+function setTab(t){tab=t;const g=CFG.includes(t)?'set':t;document.querySelectorAll('#side [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g));document.querySelectorAll('#cfgNav [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
+  $('cfgNav').hidden=g!=='set';const pt=PGT[g]||['Réglages','Plan comptable, règles, comptes liés, exercices et paramètres du dossier.'];$('pgTitle').textContent=pt[0];$('pgSub').textContent=pt[1];window.scrollTo?.(0,0);
+  $('tHome').hidden=t!=='home';if(t==='home')renderHome();
   for(const[k,id]of[['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
   if(t==='mis')renderMis();
   if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
   if(t==='per')loadPeriods()}
-document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+document.querySelectorAll('#side [data-t],#cfgNav [data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
 let PERS=[];
 async function yearSel(){const src=$('ySrc').value,f=$('yFrom').value||'0000-00',t=$('yTo').value||'9999-99';
@@ -2157,6 +2225,36 @@ async function misPdf(kind,btn){const say=t=>$('misMsg').textContent=t;if(!downl
   catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.')}btn.disabled=false}
 
 $('perAll').onchange=loadPeriods;$('jeAll').onchange=renderJe;
+
+
+/* ---------- accueil du dossier ---------- */
+async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
+  if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
+  let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(cid+'/')).map(([,v])=>v);else{const s=await db.collection('clients').doc(cid).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){}
+  if(C?.id!==cid)return;PERS=L;
+  const ms=[];for(let m=x.deb.slice(0,7);m<=x.fin.slice(0,7);){ms.push(m);const[y,mm]=m.split('-').map(Number);m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,'0')}`}
+  const now=new Date().toISOString().slice(0,7),by=m=>L.filter(p=>p.mois===m),todo=ms.reduce((s,m)=>s+by(m).reduce((t,p)=>t+(+p.todo||0),0),0);
+  $('navTodo').hidden=!todo;$('navTodo').textContent=todo;
+  $('hMonths').innerHTML=ms.map(m=>{const P_=by(m),n=P_.reduce((s,p)=>s+(+p.n||0),0),t=P_.reduce((s,p)=>s+(+p.todo||0),0),fut=m>now;
+    const cls=!P_.length?(fut?'fut':''):t?'r':'o',st=!P_.length?(fut?'À venir':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
+    return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
+  const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
+  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} à classer`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer')}
+  const miss=ms.filter(m=>m<now&&!by(m).length);if(miss.length)add('g',`${miss.length} mois sans relevé`,miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':''),'mo:'+miss[0]+':','Déposer');
+  if(!x.ouv)add('g','Soldes d’ouverture à saisir','Les soldes au premier jour de l’exercice, pour un bilan complet.','je','Saisir');
+  try{if(!MIS||MIS.ex!==x.id)await loadMis();}catch(e){}if(C?.id!==cid)return;
+  if(MIS){const dn=Object.values(stepDone()).filter(Boolean).length;add(MIS.statut==='terminée'?'o':'g',`Mission de compilation : ${dn} / ${STEPS.length} étapes`,MIS.statut==='terminée'?'Mission terminée.':'Reprenez là où vous étiez.','mis','Continuer')}
+  else if(x.fin<=new Date().toISOString().slice(0,10))add('g','Mission de compilation à créer','L’exercice est terminé : préparez les états financiers.','mis','Créer');
+  if(x.statut==='ferme')add('o','Exercice fermé','Les livres de cet exercice sont verrouillés.','','');
+  if(!T.length)add('o','Rien en attente','Tout est classé pour cet exercice.','','');
+  $('hTodo').innerHTML=T.join('');
+  try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
+    const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
+    $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
+$('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;
+  let m=b.dataset.mo,src=b.dataset.src;const g=b.dataset.go||'';if(g.startsWith('mo:')){[,m,src]=g.split(':')}else if(g){setTab(g);return}
+  if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
+  $('pMois').value=m;if(src&&[...$('pSrc').options].some(o=>o.value===src))$('pSrc').value=src;setTab('rev');openPeriod()});
 
 /* ---------- sauvegarde ---------- */
 const SUBS=['periodes','ecritures','factures','missions'];
