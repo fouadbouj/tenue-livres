@@ -1795,22 +1795,45 @@ async function trList(){if(!LED)LED=await loadLedger();const x=curEx();
   return LED.filter(e=>e.todo&&(!x||(e.date>=x.deb&&e.date<=x.fin))).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>{const tl=e.lines.find(l=>l[0]===C.tr),o=e.lines.find(l=>l[0]!==C.tr);
     return{date:e.date,desc:e.desc||'',amt:tl?tl[1]:0,src:e.kind==='rel'?e.src:(o?.[0]||'')}})}
 const moneyA=c=>new Intl.NumberFormat('fr-CA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Math.abs(c)/100)+' $';
+const fnBase=()=>`${C.nom}_transactions_a_preciser`.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w-]+/g,'_').replace(/_+/g,'_');
+const perTxt=()=>{const x=curEx(),d=MAILL.map(t=>t.date).sort();return d.length?`du ${d[0]} au ${d[d.length-1]}`:x?`de l’exercice ${x.deb} au ${x.fin}`:''};
+async function askPdf(){if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  const cl=t=>String(t||'').replace(/[   ]/g,' ').replace(/[’‘]/g,"'").replace(/[“”«»]/g,'"').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter',orientation:'landscape'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(cl(C.nom),40,42);doc.setFontSize(11.5);doc.text('Transactions à préciser',40,60);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);const ret=MAILL.filter(t=>t.amt>0).reduce((s,t)=>s+t.amt,0),dep=MAILL.filter(t=>t.amt<0).reduce((s,t)=>s+t.amt,0),mo=c=>moneyA(c).replace(/[\u00a0\u202f]/g,' ');
+  doc.text(cl(`${MAILL.length} transaction(s) ${perTxt()} · retraits : ${mo(ret)} · dépôts : ${mo(dep)} · produit le ${new Date().toLocaleDateString('fr-CA')} · Boujrad CPA Inc.`),40,75);
+  doc.text(cl('Pour chaque transaction, indiquez dans la dernière colonne de quoi il s’agit (à qui le paiement a été fait ou de qui l’argent provient, et pourquoi), et joignez la facture s’il y a lieu.'),40,89);doc.setTextColor(0);
+    doc.autoTable({startY:102,head:[['Date','Type','Montant','Description','Compte','Précisions du client']],
+    body:MAILL.map(t=>[t.date,t.amt>0?'Retrait':'Dépôt',mo(t.amt),cl(t.desc),cl(t.src?t.src+' '+accName(t.src):''),'']),
+    theme:'grid',margin:{left:40,right:40},styles:{fontSize:8.5,cellPadding:4,valign:'top',lineColor:[200,205,215]},headStyles:{fillColor:[31,61,110],textColor:255},
+    columnStyles:{0:{cellWidth:62},1:{cellWidth:46},2:{cellWidth:68,halign:'right'},3:{cellWidth:200},4:{cellWidth:120},5:{cellWidth:'auto',minCellHeight:26}}});
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(130);doc.text(`Page ${i} de ${n}`,W-40,H-20,{align:'right'})}
+  return new Uint8Array(doc.output('arraybuffer'))}
+async function askXlsx(){if(!window.XLSX)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  const rows=[[`${C.nom} — transactions à préciser ${perTxt()}`],['Inscrivez vos précisions dans les colonnes F et G, puis retournez-nous ce fichier.'],[],
+    ['Date','Type','Montant ($)','Description (relevé)','Compte','De quoi s’agit-il? (à qui / de qui, et pourquoi)','Facture jointe? (oui/non)'],
+    ...MAILL.map(t=>[t.date,t.amt>0?'Retrait':'Dépôt',Math.abs(t.amt)/100,t.desc,t.src?`${t.src} ${accName(t.src)}`:'','',''])];
+  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:11},{wch:9},{wch:12},{wch:42},{wch:26},{wch:50},{wch:16}];
+  for(let r=4;r<rows.length;r++){const c=ws[XLSX.utils.encode_cell({r,c:2})];if(c)c.z='#,##0.00'}
+  ws['!autofilter']={ref:`A4:G${rows.length}`};const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'À préciser');
+  return new Uint8Array(XLSX.write(wb,{type:'array',bookType:'xlsx'}))}
+const b64=u8=>{let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)};
 async function openAsk(){const d=$('mailDlg');$('mailMsg').textContent='';$('mailInfo').textContent='Préparation de la liste…';d.showModal?d.showModal():d.setAttribute('open','');
   try{MAILL=await trList()}catch(e){$('mailInfo').textContent='Lecture des données impossible.';return}
-  const x=curEx(),lines=MAILL.map(t=>`- ${t.date} · ${t.amt>0?'Retrait':'Dépôt'} de ${moneyA(t.amt)} · ${t.desc}${t.src?` (compte ${t.src} ${accName(t.src)})`:''}`);
-  $('mailInfo').textContent=MAILL.length?`${MAILL.length} transaction(s) au compte transitoire ${C.tr}${x?` pour l’exercice ${x.deb} au ${x.fin}`:''}.`:'Aucune transaction au compte transitoire dans cet exercice.';
-  $('mailTo').value=C.email||'';$('mailSub').value=`${C.nom} — précisions demandées sur ${MAILL.length} transaction${MAILL.length>1?'s':''}`;
+  $('mailInfo').textContent=MAILL.length?`${MAILL.length} transaction(s) au compte transitoire ${C.tr} ${perTxt()}.`:'Aucune transaction au compte transitoire dans cet exercice.';
+  $('mailTo').value=C.email||'';if(!C.email&&typeof window.tlFindEmail==='function')window.tlFindEmail(C.nom).then(v=>{if(v&&!$('mailTo').value){$('mailTo').value=v;$('mailMsg').textContent='Courriel trouvé dans la fiche du client (Gestion du cabinet).'}}).catch(()=>{});
+  $('mailSub').value=`${C.nom} — précisions demandées sur ${MAILL.length} transaction${MAILL.length>1?'s':''}`;
+  $('mailAtt').textContent=`Pièces jointes : ${fnBase()}.pdf (pour consulter) et ${fnBase()}.xlsx (pour répondre directement dans le fichier).`;
   $('mailBody').value=`Bonjour,
 
-Dans le cadre de la tenue de livres de ${C.nom}, nous avons besoin de précisions sur les transactions ci-dessous afin de les classer dans les bons comptes.
+Dans le cadre de la tenue de livres de ${C.nom}, nous avons besoin de précisions sur ${MAILL.length} transaction${MAILL.length>1?'s':''} ${perTxt()} que nous ne pouvons pas classer sans votre aide.
 
-Pour chacune, pourriez-vous nous indiquer de quoi il s’agit (à qui le paiement a été fait ou de qui l’argent provient, et pour quelle raison) et nous transmettre la facture ou la pièce justificative, s’il y a lieu?
+Vous trouverez la liste en pièce jointe : en PDF pour la consulter, et en Excel pour y inscrire vos réponses directement. Pour chaque transaction, indiquez de quoi il s’agit (à qui le paiement a été fait ou de qui l’argent provient, et pourquoi) et joignez la facture ou la pièce justificative, s’il y a lieu.
 
-${lines.join('\n')}
+Vous pouvez nous retourner le fichier Excel complété en répondant à ce courriel ou par votre portail client.
 
-Merci de nous les faire parvenir le plus tôt possible.
-
-Cordialement,
+Merci!
 
 Boujrad CPA Inc.`;
   $('mailSend').hidden=typeof window.tlSendEmail!=='function'}
@@ -1819,15 +1842,17 @@ $('mailClose').onclick=()=>{const d=$('mailDlg');d.close?d.close():d.removeAttri
 const keepTo=()=>{const v=$('mailTo').value.trim();if($('mailSaveTo').checked&&v&&v!==C.email){C.email=v.slice(0,200);saveClient()}};
 const mailOk=()=>{const v=$('mailTo').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){$('mailMsg').textContent='Entrez une adresse courriel valide.';return false}return true};
 $('mailOpen').onclick=()=>{if(!mailOk())return;keepTo();const u=`mailto:${encodeURIComponent($('mailTo').value.trim())}?subject=${encodeURIComponent($('mailSub').value)}&body=${encodeURIComponent($('mailBody').value)}`;
-  if(u.length>1900)$('mailMsg').textContent='Message long : si votre messagerie le coupe, utilisez « Copier le message » puis collez-le.';else $('mailMsg').textContent='Votre messagerie s’ouvre avec le message prêt à envoyer.';
+  $('mailMsg').textContent='Votre messagerie s’ouvre : joignez-y le PDF et l’Excel (boutons « Télécharger »), car une messagerie ne peut pas les recevoir automatiquement.';
   const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()};
 $('mailCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('mailBody').value);$('mailMsg').textContent='Message copié.'}catch(e){$('mailBody').select();$('mailMsg').textContent='Sélectionné : faites Ctrl+C.'}};
-$('mailCsv').onclick=async()=>{if(!downloads){$('mailMsg').textContent='Téléchargement indisponible dans cette vue.';return}
-  const q=v=>`"${String(v).replace(/"/g,'""')}"`;const csv='﻿Date;Type;Montant;Description;Compte;Précisions du client\r\n'+MAILL.map(t=>[t.date,t.amt>0?'Retrait':'Dépôt',(Math.abs(t.amt)/100).toFixed(2).replace('.',','),t.desc,t.src+' '+accName(t.src),''].map(q).join(';')).join('\r\n');
-  try{await downloads.save({filename:`${C.nom}_transactions_a_preciser.csv`.replace(/[^\w.-]+/g,'_'),data:csv});$('mailMsg').textContent='Liste enregistrée : joignez-la au courriel au besoin.'}catch(e){$('mailMsg').textContent='Téléchargement annulé.'}};
-$('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend');b.disabled=true;$('mailMsg').textContent='Envoi…';
-  try{await window.tlSendEmail({to:$('mailTo').value.trim(),subject:$('mailSub').value,text:$('mailBody').value});$('mailMsg').textContent='Courriel envoyé au client.';C.demandes=[...(C.demandes||[]),{date:new Date().toISOString(),to:$('mailTo').value.trim(),n:MAILL.length}].slice(-50);saveClient()}
-  catch(e){$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
+const askDl=async(kind)=>{if(!downloads){$('mailMsg').textContent='Téléchargement indisponible dans cette vue.';return}$('mailMsg').textContent='Préparation…';
+  try{await downloads.save({filename:fnBase()+(kind==='pdf'?'.pdf':'.xlsx'),data:kind==='pdf'?await askPdf():await askXlsx()});$('mailMsg').textContent='Fichier enregistré.'}catch(e){$('mailMsg').textContent=e?.code==='declined'?'Téléchargement annulé.':'Création du fichier impossible.'}};
+$('mailPdf').onclick=()=>askDl('pdf');$('mailXls').onclick=()=>askDl('xlsx');
+$('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend');b.disabled=true;$('mailMsg').textContent='Préparation des pièces jointes…';
+  try{const att=MAILL.length?[{filename:fnBase()+'.pdf',contentType:'application/pdf',content:b64(await askPdf())},{filename:fnBase()+'.xlsx',contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',content:b64(await askXlsx())}]:[];
+    $('mailMsg').textContent='Envoi…';await window.tlSendEmail({to:$('mailTo').value.trim(),subject:$('mailSub').value,text:$('mailBody').value,attachments:att});
+    $('mailMsg').textContent=`Courriel envoyé au client avec ${att.length} pièce(s) jointe(s).`;C.demandes=[...(C.demandes||[]),{date:new Date().toISOString(),to:$('mailTo').value.trim(),n:MAILL.length}].slice(-50);saveClient()}
+  catch(e){$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Téléchargez le PDF et l’Excel, puis utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
 
 /* ---------- accueil du dossier ---------- */
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';

@@ -35,7 +35,8 @@ async function ask(input,opts={}){const prompt=typeof input==='string'?input:inp
   const text=data?.text||'';opts.onText&&opts.onText({text,delta:text});return{text,truncated:!!data?.truncated}}
 const sample=(input,opts)=>ask(input,opts);
 /* envoi de courriel par la fonction serveur « tl-email » (Resend) */
-window.tlSendEmail=async({to,subject,text})=>{const{data,error}=await sb.functions.invoke(cfg.FONCTION_COURRIEL||'tl-email',{body:{to,subject,text}});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
+window.tlFindEmail=async nom=>{const n=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(inc|ltee|ltd|enr|senc)\b\.?/g,'').replace(/[^a-z0-9]+/g,' ').trim();const{data}=await sb.from('cc_clients').select('nom,courriel').not('courriel','is',null);const k=n(nom);const m=(data||[]).find(x=>n(x.nom)===k);return m?.courriel||''};
+window.tlSendEmail=async({to,subject,text,attachments})=>{const{data,error}=await sb.functions.invoke(cfg.FONCTION_COURRIEL||'tl-email',{body:{to,subject,text,attachments}});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
 sample.json=async(input,opts)=>{const{text}=await ask(input,opts);const t=text.replace(/```json|```/g,'');const i=Math.min(...['{','['].map(c=>{const k=t.indexOf(c);return k<0?1e9:k}));
   const j=Math.max(t.lastIndexOf('}'),t.lastIndexOf(']'));if(i>=1e9||j<i)throw err('unavailable','réponse non JSON');return JSON.parse(t.slice(i,j+1))};
 sample.limits=async()=>({images:true});

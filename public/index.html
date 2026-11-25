@@ -679,13 +679,15 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     <p class="note" id="mailInfo"></p>
     <label class="f">À<input id="mailTo" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
     <label class="f" style="margin-top:8px">Objet<input id="mailSub"></label>
-    <label class="f" style="margin-top:8px">Message<textarea id="mailBody" style="min-height:300px;font-size:14px"></textarea></label>
-    <label class="row" style="gap:8px;margin-top:8px"><input type="checkbox" id="mailSaveTo" checked> Garder ce courriel dans le dossier du client</label>
+    <label class="f" style="margin-top:8px">Message<textarea id="mailBody" style="min-height:220px;font-size:14px"></textarea></label>
+    <p class="note" id="mailAtt" style="margin:6px 0 0"></p>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px"><input type="checkbox" id="mailSaveTo" checked style="width:auto;margin:0"> Garder ce courriel dans le dossier du client</label>
     <div class="row" style="margin-top:12px">
       <button type="button" class="pri" id="mailSend" hidden>Envoyer</button>
       <button type="button" id="mailOpen">Ouvrir dans ma messagerie</button>
       <button type="button" id="mailCopy">Copier le message</button>
-      <button type="button" id="mailCsv">Télécharger la liste (CSV)</button>
+      <button type="button" id="mailPdf">Télécharger le PDF</button>
+      <button type="button" id="mailXls">Télécharger l’Excel</button>
       <button type="button" id="mailClose" class="sm">Fermer</button>
     </div>
     <div class="msg" id="mailMsg"></div>
