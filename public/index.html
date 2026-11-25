@@ -4,7 +4,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tenue de livres du cabinet</title>
+<title>Logiciel comptable</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&display=swap" rel="stylesheet">
 <style>
@@ -105,6 +105,20 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 @media(max-width:800px){.top,.two{grid-template-columns:1fr}}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}}
 @media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+.exsel{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--mute);margin-left:12px}.exsel select{min-height:34px;padding:2px 8px}
+#exPill{margin-left:6px}tr.sel td{background:var(--soft)}
+.steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.steps button{min-height:36px;padding:4px 10px;font-size:13.5px;border-radius:999px}
+.steps button[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:light-dark(#fff,#0b1626)}
+.steps button .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--line);vertical-align:1px}.steps button.done .dot{background:var(--gold)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.qa td{vertical-align:top}.qa select{min-height:34px;padding:2px 6px}.qa input,.qa textarea{width:100%;min-height:34px}
+.paper{background:#fff;color:#111;border:1px solid var(--line);border-radius:6px;padding:34px 46px;margin-top:12px;font-size:14px;line-height:1.5}
+.paper .pg{padding-bottom:26px;margin-bottom:26px;border-bottom:1px dashed #bbb}.paper .pg:last-child{border:0;margin:0}
+.paper .c{text-align:center}.paper h1{font-size:20px;margin:0 0 4px}.paper h2{font-size:16px;margin:16px 0 6px}.paper h3{font-size:14px;margin:12px 0 4px}
+.paper table.rep{width:100%;max-width:640px;margin:8px auto}.paper .i{font-style:italic}.paper .sig{margin-top:34px;border-top:1px solid #111;width:260px;padding-top:4px;font-size:13px}
+.fs td.num{width:120px}.flag{color:var(--claret);font-weight:700}
+.big{font-size:17px;min-height:52px;padding:10px 20px}
+
 </style>
 <script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
 </head>
@@ -114,8 +128,8 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 <div class="band" id="vList">
   <div class="top">
     <div>
-      <h1>Dossiers de tenue de livres</h1>
-      <p class="sub">Chaque client garde son plan comptable, ses règles de classement et ses périodes. Choisissez un dossier et déposez le mois à faire.</p>
+      <h1>Dossiers clients</h1>
+      <p class="sub">Chaque client garde son plan comptable, ses règles, ses exercices et ses missions. Choisissez un dossier et déposez le mois à faire.</p>
     </div>
     <div class="panel" style="margin:0">
       <form id="newForm" class="row">
@@ -143,7 +157,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
 
 <!-- ===== Dossier client ===== -->
 <div class="band" id="vClient" hidden>
-  <div class="crumb"><button id="back" class="sm">← Tous les dossiers</button><span id="saveState" class="status"></span></div>
+  <div class="crumb"><button id="back" class="sm">← Tous les dossiers</button><label class="exsel">Exercice <select id="exSel" aria-label="Exercice"></select></label><span id="exPill" class="pill"></span><span id="saveState" class="status"></span></div>
   <div class="top">
     <div>
       <h1 id="cName">Client</h1>
@@ -169,6 +183,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
     <button data-t="rec" aria-pressed="false">Conciliation</button>
     <button data-t="je" aria-pressed="false">Écritures</button>
     <button data-t="rep" aria-pressed="false">Rapports</button>
+    <button data-t="mis" aria-pressed="false">Mission de compilation</button>
     <button data-t="set" aria-pressed="false">Paramètres</button>
   </nav>
 
@@ -235,6 +250,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
           <button id="acceptSug" class="sm" hidden>Accepter les suggestions</button>
         </div>
       </div>
+      <div class="warn" id="lockBan" hidden></div>
       <div class="fban" id="fban" hidden><span id="fbanT"></span><button class="sm" id="fbanX">Tout afficher</button></div>
       <div class="scroll" style="margin-top:10px">
         <table class="stack" id="txTable">
@@ -288,7 +304,7 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
   <!-- Périodes -->
   <section id="tPer" hidden>
     <div class="panel">
-      <h2>Périodes de ce dossier</h2>
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Périodes de l'exercice</h2><label class="row" style="gap:6px"><input type="checkbox" id="perAll"> Tous les exercices</label></div>
       <div class="scroll"><table class="stack"><thead><tr><th>Mois</th><th>Compte</th><th class="num">Transactions</th><th class="num">À classer</th><th>Statut</th><th></th></tr></thead><tbody id="plist"></tbody></table></div>
     </div>
     <div class="panel">
@@ -416,11 +432,13 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
     </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Écritures de journal</h2><div class="row"><button id="jeNew" class="pri sm">Nouvelle écriture</button><button id="jePaie" class="sm">Paie de l'actionnaire</button></div></div>
-      <p class="note">Ajustements, amortissement, fin d'année, paie de l'actionnaire. Elles entrent dans le grand livre et les rapports avec les transactions bancaires.</p>
+      <p class="note">Ajustements, amortissement, fin d'année, paie de l'actionnaire. Elles entrent dans le grand livre et les rapports avec les transactions bancaires. Les ajustements de fin d’exercice (AJE) sont repris dans la mission de compilation.</p>
+      <label class="row" style="gap:6px"><input type="checkbox" id="jeAll"> Afficher tous les exercices</label>
       <div id="jeForm" hidden class="panel" style="background:var(--bg)">
         <div class="row" style="align-items:flex-end">
           <label class="f">Date<input type="date" id="jeDate"></label>
           <label class="f">Référence<input id="jeRef" style="width:120px" placeholder="AJ-01"></label>
+          <label class="f">Type<select id="jeType"><option value="">Écriture courante</option><option value="aje">Ajustement de fin d’exercice (AJE)</option></select></label>
           <label class="f" style="flex:1;min-width:200px">Description<input id="jeDesc"></label>
         </div>
         <div class="scroll"><table style="margin-top:10px"><thead><tr><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th><th></th></tr></thead><tbody id="jeLines"></tbody></table></div>
@@ -496,9 +514,10 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
     <div class="panel">
-      <h2>Fin d'exercice</h2>
-      <p class="note">Ferme l'exercice en cours : les soldes au dernier jour deviennent les soldes d'ouverture du suivant, et le bénéfice net est reporté dans les bénéfices non répartis. Les transactions restent consultables.</p>
-      <button id="yearEnd">Passer à l'exercice suivant</button><span class="msg" id="yeMsg" style="margin-left:10px"></span>
+      <h2>Exercices</h2>
+      <p class="note">Fermer un exercice le verrouille : ses transactions, écritures, factures et soldes d'ouverture deviennent en lecture seule, et ses soldes de clôture deviennent les soldes d'ouverture figés de l'exercice suivant (le bénéfice net passe aux bénéfices non répartis). Vous pouvez le rouvrir au besoin, puis le refermer pour mettre à jour l'exercice suivant.</p>
+      <div class="scroll"><table class="stack" style="margin-top:8px"><thead><tr><th>Exercice</th><th>Statut</th><th>Soldes d'ouverture</th><th></th></tr></thead><tbody id="exList"></tbody></table></div>
+      <div class="row" style="margin-top:10px"><button id="yearEnd" class="pri">Fermer l'exercice affiché</button><button id="exReopen" hidden>Rouvrir l'exercice affiché</button><button id="exNew" class="sm">Ajouter un exercice</button><span class="msg" id="yeMsg"></span></div>
     </div>
     <div class="panel">
       <h2>Recommencer à zéro</h2>
@@ -512,6 +531,19 @@ dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);c
       <button class="danger" id="delC">Supprimer ce dossier</button>
     </div>
   </section>
+  <!-- Mission de compilation -->
+  <section id="tMis" hidden>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div><h2 style="margin:0">Mission de compilation (NCSC 4200)</h2><p class="note" id="misSub" style="margin:4px 0 0"></p></div>
+        <span class="status" id="misSave"></span>
+      </div>
+      <div id="misHead"></div>
+      <div class="msg" id="misMsg"></div>
+    </div>
+    <div id="misBody"></div>
+  </section>
+
   <p class="note" style="margin-top:18px">Taxes incluses : le montant est ventilé en net, TPS 5 % et TVQ 9,975 %. Les repas ne donnent droit qu'à 50 % des CTI et RTI : ajustez dans Sage.</p>
 </div>
 
