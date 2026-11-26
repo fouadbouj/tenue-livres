@@ -22,12 +22,13 @@
   <h1>Gestion du cabinet</h1>
   <p class="sub">Clients, contrats, échéances, facturation par débits préautorisés et tâches.</p>
   <div class="info" id="toast" hidden style="background:#e6f5ec;margin:0 0 12px;display:flex;gap:12px;align-items:center;justify-content:space-between"></div>
-  <nav class="tabs" id="tabs"><span class="tgrp">Clients</span><button data-t="cli" aria-pressed="false">Clients</button><button data-t="dem" aria-pressed="false">Documents à recevoir</button><button data-t="pc" aria-pressed="false">Impôts personnels</button><span class="tgrp">Cabinet</span><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="fact" aria-pressed="false">Facturation</button><button data-t="pay" aria-pressed="false">Paiements des clients</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="sauv" aria-pressed="false">Sauvegarde</button></nav>
-  <section id="tboard"></section><section id="tdem" hidden></section><section id="tcli" hidden></section><section id="ttache" hidden></section><section id="tfact" hidden></section><section id="tsauv" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
+  <nav class="tabs" id="tabs"><span class="tgrp">Clients</span><button data-t="cli" aria-pressed="false">Clients</button><button data-t="dem" aria-pressed="false">Documents à recevoir</button><button data-t="pc" aria-pressed="false">Impôts personnels</button><button data-t="dt" aria-pressed="false">Demandes types</button><span class="tgrp">Cabinet</span><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="fact" aria-pressed="false">Facturation</button><button data-t="pay" aria-pressed="false">Paiements des clients</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="sauv" aria-pressed="false">Sauvegarde</button></nav>
+  <section id="tboard"></section><section id="tdem" hidden></section><section id="tcli" hidden></section><section id="ttache" hidden></section><section id="tfact" hidden></section><section id="tsauv" hidden></section><section id="tdt" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="facture.js"></script>
+<script src="modeles.js"></script>
 <script src="contrat.js"></script>
 <script src="centre.js"></script>
 <script src="sauvegarde.js"></script>

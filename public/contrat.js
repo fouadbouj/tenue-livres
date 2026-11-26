@@ -27,7 +27,7 @@ const dLong=x=>x?new Date(x+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',
 const FREQ={mensuelle:'mensuellement',trimestrielle:'trimestriellement',annuelle:'annuellement'};
 
 /* Réponses par défaut du questionnaire */
-function defauts(c){return{date:new Date().toISOString().slice(0,10),signataire:{nom:c.contact||'',titre:c.type==='particulier'?'':'Président'},services:{},mode:'forfait',forfait:'',horaire:'150',
+function defauts(c){return{date:new Date().toLocaleDateString('fr-CA'),signataire:{nom:c.contact||'',titre:c.type==='particulier'?'':'Président'},services:{},mode:'forfait',forfait:'',horaire:'150',
   frequenceTdl:'mensuelle',delaiDocs:'10',duree:'indeterminee',preavis:'30',paiement:['prelevement','virement'],echeance:'30',interets:true,taux:'12',avance:false,avanceMontant:'',
   indexation:true,indexTaux:'3',portail:true,procurations:true,electronique:true,particuliers:'',clauses:'',
   dpa:true,dpaMontant:'',dpaJour:'1',dpaDebut:(()=>{const n=new Date();return new Date(Date.UTC(n.getFullYear(),n.getMonth()+1,1)).toISOString().slice(0,10)})(),dpaRenonce:true}}

@@ -87,6 +87,21 @@ async function restaurer(f,pw){await load(ZIPJS);zip.configure({useWebWorkers:fa
   for(const t of TABLES.map(x=>x[0]).filter(t=>RESTORABLE.has(t))){const rows=j.tables[t]||[];for(let i=0;i<rows.length;i+=500){const{error}=await sb().from(t).upsert(rows.slice(i,i+500));if(error)throw new Error(`${t} : ${error.message}`)}n+=rows.length;$('rsM').textContent=`Restauration… ${n} ligne(s)`}
   return n}
 
+/* Dossier d'un client qui part : fiche, contrats signés, factures, accord de DPA, échanges du portail */
+window.dossierClientZip=async function(c,d){const files=[],add=(n,t)=>files.push([n,t]),nom=safe(c.nom);
+  const fiche={...c};delete fiche.checklist;delete fiche.notes;fiche.contacts=(c.contacts||[]).map(p=>[p.nom,p.role,p.courriel,p.telephone].filter(Boolean).join(' / ')).join(' | ');
+  add('fiche-client.csv',csv([fiche]));
+  (d.contrats||[]).filter(k=>k.html&&k.statut!=='annulé').forEach(k=>add(`contrats/${safe(k.numero)}.html`,k.signe_le?k.html.replace('</body>',`<p style="border:2px solid #1d7a4f;padding:10px">Accepté électroniquement par ${esc(k.signe_nom)}${k.signe_titre?', '+esc(k.signe_titre):''} le ${new Date(k.signe_le).toLocaleString('fr-CA')}.</p></body>`):k.html));
+  (d.factures||[]).filter(f=>f.statut!=='annulée').forEach(f=>add(`factures/${safe(f.numero)}.html`,window.FACTURE.factureHtml(f,c)));
+  add('factures/liste-des-factures.csv',csv((d.factures||[]).map(({lignes,emetteur,lot_id,...f})=>({...f,description:(lignes||[]).map(l=>l.description).join(' | ')}))));
+  if((d.accords||[]).length)add('accord-debits-preautorises.csv',csv(d.accords.map(({compte,specimen,signe_par,...a})=>({...a,compte:'•••'+String(compte).slice(-3)}))));
+  if((d.messages||[]).length)add('messages-du-portail.csv',csv(d.messages.map(({fichiers,user_id,...m})=>({...m,fichiers:(fichiers||[]).map(f=>f.nom).join(' | ')}))));
+  if((d.publications||[]).length)add('documents-transmis-par-le-cabinet.csv',csv(d.publications.map(({fichiers,...p})=>({...p,fichiers:(fichiers||[]).map(f=>f.nom).join(' | ')}))));
+  if((d.demandes||[]).length)add('demandes-de-documents-tps-tvq.csv',csv(d.demandes.map(({jeton,fichiers,...x})=>({...x,fichiers:(fichiers||[]).map(f=>f.nom).join(' | ')}))));
+  add('LISEZMOI.txt',`DOSSIER CLIENT — ${c.nom}\nRemis par Boujrad CPA Inc. le ${new Date().toLocaleDateString('fr-CA')}.\n\nfiche-client.csv : coordonnées et renseignements du dossier (Excel).\ncontrats/ : contrats de services (ouvrir dans un navigateur; imprimable en PDF).\nfactures/ : chaque facture (ouvrir dans un navigateur) et la liste complète (Excel).\nLes autres fichiers CSV contiennent l'accord de débits préautorisés, les échanges du portail et les documents transmis.\n\nLa comptabilité (états financiers, rapports et grand livre) est remise dans une archive distincte produite par le logiciel comptable.\n`);
+  await load(ZIPJS);zip.configure({useWebWorkers:false});const w=new zip.ZipWriter(new zip.BlobWriter('application/zip'));for(const[n,t]of files)await w.add(`${nom}/${n}`,new zip.TextReader(t));const blob=await w.close();
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Dossier_${nom.replace(/\s+/g,'_')}_${new Date().toLocaleDateString('fr-CA')}.zip`;document.body.appendChild(a);a.click();a.remove()};
+
 window.rSauv=async function(){const{data}=await sb().from('cc_parametres').select('valeur').eq('cle','sauvegarde').maybeSingle();const s=data?.valeur;const jours=s?Math.floor((Date.now()-new Date(s.date))/864e5):null;
   $('tsauv').innerHTML=`<div class="card"><h2>Sauvegarde complète</h2>
     <div class="${!s||jours>31?'alert':'info'}" style="margin-bottom:14px">${s?`<strong>Dernière sauvegarde : ${new Date(s.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}</strong> (${jours===0?'aujourd’hui':`il y a ${jours} jour${jours>1?'s':''}`}) · ${s.clients} client(s), ${s.dossiers} dossier(s) comptable(s)${s.par?' · par '+esc(s.par):''}.${jours>31?' Faites-en une nouvelle.':''}`:'<strong>Aucune sauvegarde encore.</strong> Faites la première maintenant.'}</div>

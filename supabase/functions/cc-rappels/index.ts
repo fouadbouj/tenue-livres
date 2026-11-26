@@ -47,8 +47,16 @@ function corpsHtml(text: string) {
   const e = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
   const lignes = text.replace(/\r/g, "").trim().split("\n");
   if ((lignes[lignes.length - 1] || "").trim() === "Boujrad CPA Inc.") { lignes.pop(); while (lignes.length && !lignes[lignes.length - 1].trim()) lignes.pop(); }
-  const paras = lignes.join("\n").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
-    .map((p) => `<p style="margin:0 0 14px">${e(p).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#1f3d6e">$1</a>').replace(/\n/g, "<br>")}</p>`).join("");
+  const lien = (t: string) => e(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#1f3d6e">$1</a>');
+  const paras = lignes.join("\n").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => {
+    const L = p.split("\n"), puces = L.filter((l) => /^[•\-] /.test(l.trim()));
+    if (puces.length && puces.length >= L.length - 1) {
+      const titre = L.length > puces.length ? L[0].trim() : "";
+      const t = titre ? `<p style="margin:0 0 4px;font-weight:700;color:#0b1626">${lien(titre)}</p>` : "";
+      return `${t}<ul style="margin:0 0 14px;padding-left:22px">${puces.map((l) => `<li style="margin:0 0 3px">${lien(l.trim().slice(2))}</li>`).join("")}</ul>`;
+    }
+    return `<p style="margin:0 0 14px">${lien(p).replace(/\n/g, "<br>")}</p>`;
+  }).join("");
   const nom = Deno.env.get("SIGNATURE_NOM") || "Administration";
   const tel = Deno.env.get("SIGNATURE_TEL");
   const mail = (Deno.env.get("COURRIEL_EXPEDITEUR") || "admin@boujradcpa.com").replace(/^.*<|>.*$/g, "").trim();

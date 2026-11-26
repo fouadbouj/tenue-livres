@@ -19,7 +19,7 @@ async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4]=await Promise.all([
   ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
-function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
+function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv','dt'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,dt:rDt,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
 
 /* ---------- documents à recevoir ---------- */
 function rDem(){const nm=id=>CLI.find(c=>c.id===id)?.nom||'?';
@@ -56,11 +56,11 @@ function rCli(){if(EDIT)return rFiche();
 
 function rFiche(){const c=EDIT,neuf=!c.id;if(neuf)FT='fiche';
   const tabs=[['fiche','Fiche'],['contrat','Contrat de services'],['factu','Facturation'],['portail','Portail et documents'],['suivi','Tâches et journal']];
-  $('tcli').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div><button class="sm" id="cCancel">← Tous les clients</button></div>${c.id?`<span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span>`:''}</div>
+  $('tcli').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div><button class="sm" id="cCancel">← Tous les clients</button></div>${c.id?`<div class="row" style="gap:6px;align-items:center"><span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span><button class="sm" id="cDt">Demande type</button>${(c.statut||'actif')!=='inactif'?'<button class="sm danger" id="cFin">Fin de mandat</button>':''}</div>`:''}</div>
     <h2 style="margin:12px 0 4px">${neuf?'Nouveau client':esc(c.nom)}</h2>${c.id?`<nav class="tabs">${tabs.map(([k,l])=>`<button data-ft="${k}" aria-pressed="${FT===k}">${l}</button>`).join('')}</nav>`:''}<div id="fBody" style="margin-top:14px"></div></div>`;
-  ({fiche:fFiche,contrat:fContrat,factu:fFact,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
+  ({fin:fFin,fiche:fFiche,contrat:fContrat,factu:fFact,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
 
-function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par actions',province:'QC',frequence:'trimestrielle',fin_exercice:'12-31',depuis:new Date().toISOString().slice(0,10),ouverture:new Date().toISOString().slice(0,10),tps_tvq:true,spcc_dpe:true,actif:true,contacts:[],checklist:{},documents:'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',...EDIT};
+function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par actions',province:'QC',frequence:'trimestrielle',fin_exercice:'12-31',depuis:new Date().toLocaleDateString('fr-CA'),ouverture:new Date().toLocaleDateString('fr-CA'),tps_tvq:true,spcc_dpe:true,actif:true,contacts:[],checklist:{},documents:'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',...EDIT};
   const v=k=>esc(c[k]??''),inp=(id,l,k,t='text',ph='')=>`<label class="f"><b>${l}</b><input id="${id}" type="${t}" value="${v(k)}" placeholder="${ph}"></label>`,sel=(id,l,k,o)=>`<label class="f"><b>${l}</b><select id="${id}">${o.map(x=>{const[val,lab]=Array.isArray(x)?x:[x,x];return `<option value="${val}"${String(c[k]??'')===val?' selected':''}>${lab}</option>`}).join('')}</select></label>`;
   const grp=c.groupe?CLI.filter(x=>x.groupe===c.groupe&&x.id!==c.id):[];
   $('fBody').innerHTML=`<h3>Identification</h3><div class="grid">${sel('cTy','Type','type',[['entreprise','Entreprise'],['particulier','Particulier']])}<label class="f"><b class="req">Nom (raison sociale ou nom complet)</b><input id="cN" value="${v('nom')}"></label>
@@ -82,10 +82,10 @@ function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par
     <div class="row" style="margin-top:12px"><button class="pri" id="cSave">${c.id?'Enregistrer':'Créer le client'}</button>${c.id?'<button class="sm danger" id="cDel">Supprimer le client</button>':''}<span class="msg" id="cM"></span></div>`}
 const pRow=(p={})=>`<div class="row pers" style="gap:8px;margin-bottom:6px;align-items:flex-end">${[['nom','Nom'],['role','Rôle (actionnaire, conjoint…)'],['courriel','Courriel'],['telephone','Téléphone']].map(([k,l])=>`<label class="f" style="flex:1;min-width:150px"><b>${l}</b><input data-p="${k}" value="${esc(p[k]||'')}"></label>`).join('')}<button class="sm danger" data-pdel>Retirer</button></div>`;
 async function saveFiche(){const c=EDIT,g=id=>$(id)?.value.trim()||null,tx=$('cTx')?.checked!==false&&$('cTy').value!=='particulier',st=$('cSt').value;
-  const chk={...(c.checklist||{})};document.querySelectorAll('[data-chk]:not([disabled])').forEach(x=>{if(x.checked)chk[x.dataset.chk]=chk[x.dataset.chk]||new Date().toISOString().slice(0,10);else delete chk[x.dataset.chk]});
+  const chk={...(c.checklist||{})};document.querySelectorAll('[data-chk]:not([disabled])').forEach(x=>{if(x.checked)chk[x.dataset.chk]=chk[x.dataset.chk]||new Date().toLocaleDateString('fr-CA');else delete chk[x.dataset.chk]});
   const row={type:$('cTy').value,nom:g('cN'),forme:$('cFo').value,statut:st,groupe:g('cGr'),responsable:g('cRe'),ouverture:g('cOu'),langue:$('cLa').value,contact:g('cC'),courriel:g('cE'),telephone:g('cTel'),adresse:g('cAd'),ville:g('cVi'),province:g('cPr'),code_postal:g('cCp'),
     neq:g('cNeq'),no_entreprise:g('cBn'),no_tps:g('cTps'),no_tvq:g('cTvq'),fin_exercice:/^\d\d-\d\d$/.test($('cX')?.value||'')?$('cX').value:'12-31',spcc_dpe:!!$('cDpe')?.checked,employeur:!!$('cEmp')?.checked,tps_tvq:tx,
-    frequence:$('cF')?.value||'trimestrielle',depuis:g('cD')||new Date().toISOString().slice(0,10),documents:g('cT')||c.documents||'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',actif:tx&&st==='actif'&&!!$('cA')?.checked,
+    frequence:$('cF')?.value||'trimestrielle',depuis:g('cD')||new Date().toLocaleDateString('fr-CA'),documents:g('cT')||c.documents||'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',actif:tx&&st==='actif'&&!!$('cA')?.checked,
     contacts:[...document.querySelectorAll('.pers')].map(r=>Object.fromEntries([...r.querySelectorAll('[data-p]')].map(i=>[i.dataset.p,i.value.trim()]))).filter(p=>p.nom||p.courriel),checklist:chk,notes:g('cNo'),updated_at:new Date().toISOString()};
   if(!row.nom){$('cM').textContent='Nom requis.';$('cM').className='msg err';return}
   const r=c.id?await sb.from('cc_clients').update(row).eq('id',c.id).select().single():await sb.from('cc_clients').insert(row).select().single();
@@ -140,7 +140,7 @@ async function kSave(){const d=kData(),row={client_id:EDIT.id,numero:CED.numero,
   const r=CED.id?await sb.from('cc_contrats').update(row).eq('id',CED.id).select().single():await sb.from('cc_contrats').insert({...row,statut:'brouillon'}).select().single();
   if(r.error){$('kM').textContent=r.error.message;$('kM').className='msg err';return null}CED.id=r.data.id;const i=CTR.findIndex(x=>x.id===r.data.id);i>=0?CTR[i]=r.data:CTR.push(r.data);$('kM').textContent='Brouillon enregistré.';$('kM').className='msg ok';notify('Brouillon du contrat enregistré');return r.data}
 function kNew(src){const c=EDIT,yr=new Date().getFullYear(),n=CTR.filter(x=>(x.numero||'').startsWith(`C-${yr}-`)).length+1;
-  const base=src?JSON.parse(JSON.stringify(src.donnees)):window.CONTRAT.defauts(c);base.sigNom=base.signataire?.nom||'';base.sigTitre=base.signataire?.titre||'';base.date=new Date().toISOString().slice(0,10);
+  const base=src?JSON.parse(JSON.stringify(src.donnees)):window.CONTRAT.defauts(c);base.sigNom=base.signataire?.nom||'';base.sigTitre=base.signataire?.titre||'';base.date=new Date().toLocaleDateString('fr-CA');
   if(!src){base.services={};if(c.type==='particulier')base.services.t1={on:true};else{['tdl','tps','compil','t2'].forEach(k=>base.services[k]={on:true});if(c.employeur)['paie','releves'].forEach(k=>base.services[k]={on:true});base.services.conseil={on:true}}}
   CED={id:null,numero:`C-${yr}-${String(n).padStart(3,'0')}`,d:base};fContrat()}
 document.addEventListener('input',e=>{const t=e.target;if(!CED||!$('kFrame'))return;
@@ -151,14 +151,14 @@ document.addEventListener('change',e=>{const t=e.target;if(!CED||!$('kFrame'))re
 
 /* ---------- tâches et journal ---------- */
 const PRI={haute:'r',normale:'',basse:'g'};
-const tRow=(t,cli)=>{const ret=t.statut!=='fait'&&t.echeance&&t.echeance<new Date().toISOString().slice(0,10);return `<tr${t.statut==='fait'?' style="opacity:.55"':''}><td><strong>${esc(t.titre)}</strong>${t.details?`<br><small class="sub">${esc(t.details)}</small>`:''}${cli&&t.client_id?`<br><a href="#" data-cli="${t.client_id}"><small>${esc(CLI.find(c=>c.id===t.client_id)?.nom||'')}</small></a>`:''}</td><td>${t.echeance?`<span class="${ret?'pill r':''}">${dl(t.echeance)}</span>`:'—'}</td><td>${esc(t.responsable||'—')}</td><td><span class="pill ${PRI[t.priorite]}">${esc(t.priorite)}</span></td><td><div class="row" style="gap:6px">${t.statut==='fait'?`<button class="sm" data-tdo="${t.id}" data-v="à faire">Rouvrir</button>`:`<button class="sm pri" data-tdo="${t.id}" data-v="fait">Fait</button>`}<button class="sm danger" data-tdel="${t.id}">×</button></div></td></tr>`};
+const tRow=(t,cli)=>{const ret=t.statut!=='fait'&&t.echeance&&t.echeance<new Date().toLocaleDateString('fr-CA');return `<tr${t.statut==='fait'?' style="opacity:.55"':''}><td><strong>${esc(t.titre)}</strong>${t.details?`<br><small class="sub">${esc(t.details)}</small>`:''}${cli&&t.client_id?`<br><a href="#" data-cli="${t.client_id}"><small>${esc(CLI.find(c=>c.id===t.client_id)?.nom||'')}</small></a>`:''}</td><td>${t.echeance?`<span class="${ret?'pill r':''}">${dl(t.echeance)}</span>`:'—'}</td><td>${esc(t.responsable||'—')}</td><td><span class="pill ${PRI[t.priorite]}">${esc(t.priorite)}</span></td><td><div class="row" style="gap:6px">${t.statut==='fait'?`<button class="sm" data-tdo="${t.id}" data-v="à faire">Rouvrir</button>`:`<button class="sm pri" data-tdo="${t.id}" data-v="fait">Fait</button>`}<button class="sm danger" data-tdel="${t.id}">×</button></div></td></tr>`};
 const tForm=p=>`<div class="row" style="gap:8px;align-items:flex-end;margin-top:10px"><label class="f" style="flex:2;min-width:200px"><b>Nouvelle tâche</b><input id="${p}T" placeholder="Ex. Relancer pour les relevés de décembre"></label><label class="f"><b>Échéance</b><input id="${p}E" type="date"></label><label class="f" style="width:140px"><b>Responsable</b><input id="${p}R"></label><label class="f"><b>Priorité</b><select id="${p}P"><option>normale</option><option>haute</option><option>basse</option></select></label><button class="pri" data-tadd="${p}">Ajouter</button></div>`;
 function fSuivi(){const c=EDIT,T=TCH.filter(t=>t.client_id===c.id).sort((a,b)=>(a.statut==='fait')-(b.statut==='fait')||(a.echeance||'9').localeCompare(b.echeance||'9')),N=NOT.filter(n=>n.client_id===c.id);
   $('fBody').innerHTML=`<h3 style="margin-top:0">Tâches</h3><table><thead><tr><th>Tâche</th><th>Échéance</th><th>Responsable</th><th>Priorité</th><th></th></tr></thead><tbody>${T.map(t=>tRow(t)).join('')||'<tr><td colspan="5" class="sub">Aucune tâche.</td></tr>'}</tbody></table>${tForm('f')}
     <h3>Journal du dossier</h3><div class="row" style="gap:8px;align-items:flex-end"><label class="f"><b>Type</b><select id="nTy"><option value="note">Note</option><option value="appel">Appel</option><option value="rencontre">Rencontre</option><option value="courriel">Courriel</option></select></label><label class="f" style="flex:1"><b>Ce qui s’est dit ou fait</b><input id="nTx"></label><button class="pri" id="nAdd">Ajouter</button></div>
     <div style="display:grid;gap:8px;margin-top:12px">${N.map(n=>`<div style="border-left:3px solid var(--gold);padding:4px 12px"><small class="sub">${new Date(n.created_at).toLocaleString('fr-CA',{dateStyle:'medium',timeStyle:'short'})} · ${esc(n.type)}${n.auteur?' · '+esc(n.auteur):''}</small><div style="white-space:pre-wrap">${esc(n.texte)}</div></div>`).join('')||'<p class="sub">Aucune entrée.</p>'}</div>`}
 let TF='ouvertes';
-function rTache(){const auj=new Date().toISOString().slice(0,10),L=TCH.filter(t=>TF==='toutes'||(TF==='faites'?t.statut==='fait':t.statut!=='fait')).sort((a,b)=>(a.echeance||'9').localeCompare(b.echeance||'9'));
+function rTache(){const auj=new Date().toLocaleDateString('fr-CA'),L=TCH.filter(t=>TF==='toutes'||(TF==='faites'?t.statut==='fait':t.statut!=='fait')).sort((a,b)=>(a.echeance||'9').localeCompare(b.echeance||'9'));
   const ret=TCH.filter(t=>t.statut!=='fait'&&t.echeance&&t.echeance<auj).length;
   $('ttache').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div class="row" style="gap:6px">${[['ouvertes','À faire'],['faites','Faites'],['toutes','Toutes']].map(([k,l])=>`<button class="sm${TF===k?' pri':''}" data-tf="${k}">${l}</button>`).join('')}</div>${ret?`<span class="pill r">${ret} en retard</span>`:''}</div>
     <div class="scroll" style="margin-top:10px"><table><thead><tr><th>Tâche</th><th>Échéance</th><th>Responsable</th><th>Priorité</th><th></th></tr></thead><tbody>${L.map(t=>tRow(t,1)).join('')||'<tr><td colspan="5" class="sub">Aucune tâche.</td></tr>'}</tbody></table></div>
@@ -181,11 +181,11 @@ function obligations(c,y1,y2){const out=[],st=c.statut||'actif';if(st==='inactif
     if(c.employeur){for(let m=1;m<=12;m++)add(`das:${y}-${String(m).padStart(2,'0')}`,'DAS','Remise des retenues à la source (DAS)',`${y}-${String(m+1>12?1:m+1).padStart(2,'0')}-15`.replace(/^\d{4}/,m===12?y+1:y),`Paies de ${new Date(Date.UTC(y,m-1,15)).toLocaleDateString('fr-CA',{month:'long',year:'numeric'})}`);
       add('t4:'+y,'Relevés','Feuillets T4 et relevés RL-1 (et sommaires)',ymd(fMois(y+1,2)),`Année ${y}`);add('cnesst:'+y,'Relevés','Déclaration des salaires CNESST',`${y+1}-03-15`,`Année ${y}`)}}
   const dep=c.depuis||c.ouverture;return out.filter(o=>!dep||o.date>=dep)}
-let EM=new Date().toISOString().slice(0,7);
+let EM=new Date().toLocaleDateString('fr-CA').slice(0,7);
 function etatOb(o){const f=ECH.find(e=>e.client_id===o.client_id&&e.cle===o.cle);if(f)return{ok:1,txt:`Fait le ${dl(f.fait_le)}`};
   if(o.type==='TPS/TVQ'){const fin=o.cle.slice(4),p=PUB.find(p=>p.client_id===o.client_id&&p.periode_fin===fin&&p.montant>0);if(p?.paye_le)return{ok:1,txt:'Payé par le client'};if(p)return{txt:'Déclaration publiée, paiement à confirmer'};const d=DEM.find(d=>d.client_id===o.client_id&&d.fin===fin);if(d)return{txt:['reçue','apportée au bureau'].includes(d.statut)?'Documents reçus':'Documents : '+d.statut}}
   return{}}
-function rBoard(){const[y,m]=EM.split('-').map(Number),deb=`${EM}-01`,fin=ymd(fMois(y,m)),auj=ymd(new Date());
+function rBoard(){const[y,m]=EM.split('-').map(Number),deb=`${EM}-01`,fin=ymd(fMois(y,m)),auj=new Date().toLocaleDateString('fr-CA');
   const ALL=CLI.flatMap(c=>obligations(c,y-1,y+1)),mois=ALL.filter(o=>o.date>=deb&&o.date<=fin).sort((a,b)=>a.date.localeCompare(b.date)),
     retard=ALL.filter(o=>o.date<deb&&o.date>=ymd(new Date(Date.UTC(y,m-7,1)))&&o.date<auj&&!etatOb(o).ok).sort((a,b)=>a.date.localeCompare(b.date));
   const types=[...new Set(mois.map(o=>o.type))],nom=id=>CLI.find(c=>c.id===id)?.nom||'?';
@@ -289,7 +289,7 @@ function rPay(){const P=PUB.filter(p=>p.montant>0&&p.organisme!=='Aucun paiement
   const cles=[...new Set(P.map(p=>p.periode_fin||(p.echeance||'').slice(0,7)||'—'))].sort().reverse();if(!PAYF||!cles.includes(PAYF))PAYF=cles[0]||'';
   const lbl=k=>/^\d{4}-\d\d-\d\d$/.test(k)?'Périodes se terminant le '+dLong(k):/^\d{4}-\d\d$/.test(k)?'Date limite en '+new Date(k+'-15T12:00').toLocaleDateString('fr-CA',{month:'long',year:'numeric'}):'Sans date';
   const L=P.filter(p=>(p.periode_fin||(p.echeance||'').slice(0,7)||'—')===PAYF).sort((a,b)=>(!!a.paye_le-!!b.paye_le)||(a.echeance||'').localeCompare(b.echeance||''));
-  const auj=new Date().toISOString().slice(0,10),nP=L.filter(p=>p.paye_le).length,tot=L.reduce((s,p)=>s+ +p.montant,0),totP=L.filter(p=>p.paye_le).reduce((s,p)=>s+ +p.montant,0);
+  const auj=new Date().toLocaleDateString('fr-CA'),nP=L.filter(p=>p.paye_le).length,tot=L.reduce((s,p)=>s+ +p.montant,0),totP=L.filter(p=>p.paye_le).reduce((s,p)=>s+ +p.montant,0);
   const nouv=PUB.filter(p=>p.paye_le&&!p.paye_vu);nouv.forEach(p=>NEWPAY.add(p.id));if(nouv.length)sb.from('cc_publications').update({paye_vu:true}).in('id',nouv.map(p=>p.id)).then(()=>{nouv.forEach(p=>p.paye_vu=true);badge()});
   const nom=id=>CLI.find(c=>c.id===id)?.nom||'—';
   $('tpay').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-end"><label class="f" style="width:440px;max-width:100%"><b>Période</b><select id="payF">${cles.map(k=>`<option value="${k}"${k===PAYF?' selected':''}>${lbl(k)}</option>`).join('')||'<option>Aucun paiement publié</option>'}</select></label>
@@ -346,14 +346,14 @@ const acActif=id=>ACCD.find(a=>a.client_id===id&&a.statut==='actif');
 const STF={'à prélever':'g','transmise':'g','payée':'ok','rejetée':'r','à payer':'r','annulée':''};
 const emetteur=()=>({nom:'Boujrad CPA Inc.',adresse:'220-672, boulevard des Laurentides',ville:'Laval (Québec) H7G 2V9',tps:PAR.tps||'',tvq:PAR.tvq||'',courriel:PAR.courriel||''});
 const nomC=id=>CLI.find(c=>c.id===id)?.nom||'?';
-function prochainJour(j){const n=new Date(),d=new Date(n.getFullYear(),n.getMonth(),j);if(d<=n)d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,10)}
+function prochainJour(j){const n=new Date(),d=new Date(n.getFullYear(),n.getMonth(),j);if(d<=n)d.setMonth(d.getMonth()+1);return d.toLocaleDateString('fr-CA')}
 function joursOuvrables(a,b){let n=0;const d=new Date(a+'T12:00');const e=new Date(b+'T12:00');while(d<e){d.setDate(d.getDate()+1);if(d.getDay()%6)n++}return n}
 function rFact(){const tabs=[['prel','Prélèvements du mois'],['fac','Factures'],['cc','Comptes clients'],['par','Paramètres']];
   $('tfact').innerHTML=`<div class="card"><nav class="tabs">${tabs.map(([k,l])=>`<button data-fv="${k}" aria-pressed="${FV===k}">${l}</button>`).join('')}</nav><div id="fvBody" style="margin-top:14px"></div></div>`;
   ({prel:vPrel,fac:vFac,cc:vCC,par:vPar})[FV]()}
 
 /* -- prélèvements -- */
-function vPrel(){if(!FD)FD=prochainJour(+(PAR.jour||1));const per=FD.slice(0,7),jr=+FD.slice(8,10),auj=new Date().toISOString().slice(0,10),lim=new Date(Date.now()+10*864e5).toISOString().slice(0,10);
+function vPrel(){if(!FD)FD=prochainJour(+(PAR.jour||1));const per=FD.slice(0,7),jr=+FD.slice(8,10),auj=new Date().toLocaleDateString('fr-CA'),lim=new Date(Date.now()+10*864e5).toLocaleDateString('fr-CA');
   const actifs=ACCD.filter(a=>a.statut==='actif'&&(CLI.find(c=>c.id===a.client_id)?.statut||'actif')==='actif');
   const rows=actifs.map(a=>{const pre=!a.renonce_preavis&&a.signe_le&&new Date(a.signe_le)>new Date(new Date(FD+'T12:00')-10*864e5),avant=a.debut>FD,autreJour=a.jour!==jr;
     const fm=FAC.find(f=>f.client_id===a.client_id&&f.periode===per&&f.mode==='dpa'&&f.statut!=='annulée'),extra=FAC.filter(f=>f.client_id===a.client_id&&f.mode==='dpa'&&f.statut==='à prélever'&&f!==fm&&f.date<=FD);
@@ -375,7 +375,7 @@ function vPrel(){if(!FD)FD=prochainJour(+(PAR.jour||1));const per=FD.slice(0,7),
       <td><div class="row" style="gap:6px">${l.contenu&&l.statut!=='annulé'?`<button class="sm" data-ldl="${l.id}">Télécharger</button>`:''}${l.statut==='généré'?`<button class="sm" data-lst="${l.id}" data-v="transmis">Transmis à Desjardins</button>`:''}${['généré','transmis'].includes(l.statut)?`<button class="sm pri" data-lst="${l.id}" data-v="traité">Prélèvements reçus</button><button class="sm danger" data-lst="${l.id}" data-v="annulé">Annuler</button>`:''}</div></td></tr>`).join('')||'<tr><td colspan="6" class="sub">Aucun fichier.</td></tr>'}</tbody></table>
     <p class="sub" style="font-size:13px">Étapes : créez les factures (elles apparaissent dans le portail des clients), générez le fichier, puis déposez-le dans AccèsD Affaires (Transmission de données – dépôt ou retrait direct) au plus tard à midi, 2 jours ouvrables avant la date du prélèvement. Quand l’argent est reçu, cliquez sur « Prélèvements reçus ». Un débit refusé se marque dans l’onglet Factures.</p>`}
 async function creerFactures(){const per=FD.slice(0,7),jr=+FD.slice(8,10),rows=ACCD.filter(a=>a.statut==='actif'&&a.jour===jr&&a.debut<=FD&&(CLI.find(c=>c.id===a.client_id)?.statut||'actif')==='actif'&&!(!a.renonce_preavis&&a.signe_le&&new Date(a.signe_le)>new Date(new Date(FD+'T12:00')-10*864e5))&&!FAC.some(f=>f.client_id===a.client_id&&f.periode===per&&f.mode==='dpa'&&f.statut!=='annulée'));
-  const ins=rows.map(a=>{const k=CTR.find(x=>x.id===a.contrat_id),t=F().taxes(a.montant);return{client_id:a.client_id,periode:per,date:new Date().toISOString().slice(0,10),mode:'dpa',statut:'à prélever',emetteur:emetteur(),
+  const ins=rows.map(a=>{const k=CTR.find(x=>x.id===a.contrat_id),t=F().taxes(a.montant);return{client_id:a.client_id,periode:per,date:new Date().toLocaleDateString('fr-CA'),mode:'dpa',statut:'à prélever',emetteur:emetteur(),
     lignes:[{description:`Honoraires professionnels — ${F().MOIS(per)}${k?` (contrat ${k.numero})`:''}`,montant:+a.montant}],...t}});
   if(!ins.length)return;const{error}=await sb.from('cc_factures').insert(ins);const msg=error?'Création impossible : '+error.message:`${ins.length} facture(s) créée(s). Elles sont visibles dans le portail des clients.`;await load();$('fdM')&&($('fdM').textContent=msg);notify(msg,!!error)}
 async function genererFichier(){const p=PAR,need=[['organisme',/^\d{10}$/,'numéro d’organisme Desjardins (10 chiffres)'],['nomCourt',/./,'nom abrégé'],['nomLong',/./,'nom complet'],['transitRetour',/^\d{5}$/,'transit du compte de retour'],['compteRetour',/^[\d-]{5,12}$/,'compte de retour']].filter(([k,re])=>!re.test(p[k]||''));
@@ -386,7 +386,7 @@ async function genererFichier(){const p=PAR,need=[['organisme',/^\d{10}$/,'numé
   if(!tx.length)return;if(!confirm(`Générer le fichier Desjardins : ${tx.length} débit(s), ${fmt(tx.reduce((s,t)=>s+t.montant,0))}, le ${dl(FD)}?`))return;
   const tot=F().r2(tx.reduce((s,t)=>s+t.montant,0));const{data:lot,error}=await sb.from('cc_lots_dpa').insert({date_prelevement:FD,nb:tx.length,total:tot,statut:'généré'}).select().single();
   if(error){$('fdM').textContent=error.message;return}
-  let txt;try{txt=F().fichier005(p,lot.numero_fichier,new Date().toISOString().slice(0,10),FD,tx)}catch(err){$('fdM').textContent='Fichier invalide : '+err.message;await sb.from('cc_lots_dpa').delete().eq('id',lot.id);return}
+  let txt;try{txt=F().fichier005(p,lot.numero_fichier,new Date().toLocaleDateString('fr-CA'),FD,tx)}catch(err){$('fdM').textContent='Fichier invalide : '+err.message;await sb.from('cc_lots_dpa').delete().eq('id',lot.id);return}
   await sb.from('cc_lots_dpa').update({contenu:txt}).eq('id',lot.id);await sb.from('cc_factures').update({statut:'transmise',lot_id:lot.id}).in('id',ids);
   telecharger(`DPA-Desjardins-${String(lot.numero_fichier).padStart(4,'0')}-${FD}.txt`,txt);await load();$('fdM').textContent='Fichier généré et téléchargé. Déposez-le dans AccèsD Affaires.';$('fdM').className='msg ok';notify('Fichier Desjardins généré et téléchargé')}
 function telecharger(nom,txt){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download=nom;document.body.appendChild(a);a.click();a.remove()}
@@ -400,7 +400,7 @@ const facTable=(L,cli)=>`<table><thead><tr><th>Facture</th>${cli?'<th>Client</th
   <td><span class="pill ${STF[f.statut]}">${esc(f.statut)}</span>${f.paye_le?`<br><small class="sub">${dl(f.paye_le)}</small>`:''}</td><td><div class="row" style="gap:6px"><button class="sm" data-fprint="${f.id}">Voir</button>${['transmise','à payer','rejetée','à prélever'].includes(f.statut)?`<button class="sm pri" data-fst="${f.id}" data-v="payée">Payée</button>`:''}${f.statut==='transmise'?`<button class="sm danger" data-fst="${f.id}" data-v="rejetée">Débit refusé</button>`:''}${f.statut==='rejetée'&&acActif(f.client_id)?`<button class="sm" data-fst="${f.id}" data-v="à prélever">Reprélever</button>`:''}${['à prélever','à payer','rejetée'].includes(f.statut)?`<button class="sm danger" data-fst="${f.id}" data-v="annulée">Annuler</button>`:''}</div></td></tr>`).join('')||`<tr><td colspan="${cli?7:6}" class="sub">Aucune facture.</td></tr>`}</tbody></table>`;
 function facForm(cid){const c=CLI.find(x=>x.id===cid);return `<div class="card" style="box-shadow:none;border:1px solid var(--line);margin-top:12px"><h3 style="margin-top:0">Nouvelle facture</h3><div class="grid">
   <label class="f"><b class="req">Client</b><select id="fnC">${CLI.map(x=>`<option value="${x.id}"${x.id===cid?' selected':''}>${esc(x.nom)}</option>`).join('')}</select></label>
-  <label class="f"><b>Paiement</b><select id="fnM"><option value="dpa"${acActif(cid)?' selected':''}>Débit préautorisé (prochain fichier)</option><option value="autre"${acActif(cid)?'':' selected'}>Virement ou autre</option></select></label><label class="f"><b>Payable au plus tard le</b><input type="date" id="fnE" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"></label></div>
+  <label class="f"><b>Paiement</b><select id="fnM"><option value="dpa"${acActif(cid)?' selected':''}>Débit préautorisé (prochain fichier)</option><option value="autre"${acActif(cid)?'':' selected'}>Virement ou autre</option></select></label><label class="f"><b>Payable au plus tard le</b><input type="date" id="fnE" value="${new Date(Date.now()+30*864e5).toLocaleDateString('fr-CA')}"></label></div>
   <div id="fnL">${[0,1].map(()=>fnRow()).join('')}</div><button class="sm" id="fnAdd">+ Ligne</button>
   <label class="opt"><input type="checkbox" id="fnT" checked> <span>Taxable (TPS et TVQ)</span></label><label class="f"><b>Note sur la facture (facultatif)</b><input id="fnN"></label>
   <div class="row" style="margin-top:10px"><button class="pri" id="fnGo">Créer la facture</button><button class="sm" id="fnX">Annuler</button><span class="msg" id="fnMsg"></span></div>
@@ -431,7 +431,7 @@ function fFact(){const c=EDIT,a=acOf(c.id),fs=FAC.filter(f=>f.client_id===c.id).
       <div class="row" style="gap:6px;margin-top:8px">${a.statut==='actif'?`<button class="sm" data-acst="${a.id}" data-v="suspendu">Suspendre</button>`:''}${a.statut==='suspendu'?`<button class="sm" data-acst="${a.id}" data-v="actif">Réactiver</button>`:''}${a.statut!=='annulé'?`<button class="sm danger" data-acst="${a.id}" data-v="annulé">Annuler l’accord (révocation)</button>`:''}</div></div>`:'<p class="sub">Aucun accord. Il se signe avec le contrat dans le portail (contrat avec « Paiement par débits préautorisés »), ou saisissez ci-dessous un accord signé sur papier.</p>'}
     <details class="fold" style="margin-top:10px"${a?'':' open'}><summary><span>${a?'Remplacer par un accord papier':'Saisir un accord signé sur papier'}</span></summary><div class="grid" style="margin-top:8px">
       <label class="f"><b class="req">Titulaire du compte</b><input id="apT" value="${esc(c.nom)}"></label><label class="f"><b class="req">Institution (3 chiffres)</b><input id="apI" placeholder="815" maxlength="3"></label><label class="f"><b class="req">Transit (5 chiffres)</b><input id="apR" maxlength="5"></label><label class="f"><b class="req">Compte</b><input id="apC" maxlength="12"></label>
-      <label class="f"><b class="req">Montant mensuel avant taxes</b><input id="apM" inputmode="decimal"></label><label class="f"><b>Jour du mois</b><input id="apJ" value="${esc(PAR.jour||'1')}"></label><label class="f"><b>Premier prélèvement</b><input id="apD" type="date" value="${prochainJour(+(PAR.jour||1))}"></label><label class="f"><b>Date de signature</b><input id="apS" type="date" value="${new Date().toISOString().slice(0,10)}"></label></div>
+      <label class="f"><b class="req">Montant mensuel avant taxes</b><input id="apM" inputmode="decimal"></label><label class="f"><b>Jour du mois</b><input id="apJ" value="${esc(PAR.jour||'1')}"></label><label class="f"><b>Premier prélèvement</b><input id="apD" type="date" value="${prochainJour(+(PAR.jour||1))}"></label><label class="f"><b>Date de signature</b><input id="apS" type="date" value="${new Date().toLocaleDateString('fr-CA')}"></label></div>
       <label class="opt"><input type="checkbox" id="apP"> <span>Le client a renoncé au préavis de 10 jours avant le premier prélèvement</span></label><div class="row" style="margin-top:8px"><button class="pri" id="apGo">Enregistrer l’accord</button><span class="msg" id="apMsg"></span></div></details>
     <div class="row" style="justify-content:space-between;margin-top:18px"><h3 style="margin:0">Factures${imp?` · <span style="color:var(--red)">impayé ${fmt(imp)}</span>`:''}</h3><button class="pri" data-fnew="${c.id}">+ Nouvelle facture</button></div><div id="fnBox"></div><div class="scroll" style="margin-top:8px">${facTable(fs)}</div>`}
 
@@ -453,9 +453,9 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
   if(ds.fprint){const f=FAC.find(x=>x.id===ds.fprint);kPrint(F().factureHtml(f,CLI.find(c=>c.id===f.client_id)||{}));return}
   if(ds.fst){const f=FAC.find(x=>x.id===ds.fst),v=ds.v;
     if(v==='annulée'&&!confirm(`Annuler la facture ${f.numero}?`))return;
-    const up={statut:v};if(v==='payée')up.paye_le=new Date().toISOString().slice(0,10);if(v==='à prélever')up.lot_id=null;
+    const up={statut:v};if(v==='payée')up.paye_le=new Date().toLocaleDateString('fr-CA');if(v==='à prélever')up.lot_id=null;
     await sb.from('cc_factures').update(up).eq('id',f.id);
-    if(v==='rejetée')await sb.from('cc_taches').insert({client_id:f.client_id,titre:`Débit refusé — facture ${f.numero} (${fmt(f.total)})`,details:'Communiquer avec le client, confirmer son compte, puis cliquer sur « Reprélever » dans la facture.',echeance:new Date(Date.now()+3*864e5).toISOString().slice(0,10),priorite:'haute'});
+    if(v==='rejetée')await sb.from('cc_taches').insert({client_id:f.client_id,titre:`Débit refusé — facture ${f.numero} (${fmt(f.total)})`,details:'Communiquer avec le client, confirmer son compte, puis cliquer sur « Reprélever » dans la facture.',echeance:new Date(Date.now()+3*864e5).toLocaleDateString('fr-CA'),priorite:'haute'});
     await load();notify({payée:'Facture marquée payée',rejetée:'Débit refusé : une tâche de relance a été créée',annulée:'Facture annulée','à prélever':'Facture remise au prochain prélèvement'}[v]);return}
   if('fnew' in ds){$('fnBox').innerHTML=facForm(ds.fnew||CLI[0]?.id);return}
   if(b.id==='fnAdd'){$('fnL').insertAdjacentHTML('beforeend',fnRow());return}
@@ -464,7 +464,7 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     if(!lignes.length){$('fnMsg').textContent='Ajoutez au moins une ligne avec un montant.';return}const cid=$('fnC').value,m=$('fnM').value;
     if(m==='dpa'&&!acActif(cid)){$('fnMsg').textContent='Ce client n’a pas d’accord de DPA actif : choisissez « Virement ou autre ».';return}
     const t=F().taxes(lignes.reduce((s,l)=>s+l.montant,0),$('fnT').checked);b.disabled=true;
-    const{error}=await sb.from('cc_factures').insert({client_id:cid,lignes,...t,mode:m,statut:m==='dpa'?'à prélever':'à payer',echeance:m==='autre'?$('fnE').value||null:null,emetteur:emetteur(),note:$('fnN').value.trim()||null,date:new Date().toISOString().slice(0,10)});
+    const{error}=await sb.from('cc_factures').insert({client_id:cid,lignes,...t,mode:m,statut:m==='dpa'?'à prélever':'à payer',echeance:m==='autre'?$('fnE').value||null:null,emetteur:emetteur(),note:$('fnN').value.trim()||null,date:new Date().toLocaleDateString('fr-CA')});
     if(error){$('fnMsg').textContent=error.message;b.disabled=false;return}await load();notify('Facture créée');return}
   if(b.id==='parSave'){const v={};document.querySelectorAll('[data-par]').forEach(i=>v[i.dataset.par]=i.value.trim());
     if(v.organisme&&!/^\d{10}$/.test(v.organisme)){$('parM').textContent='Le numéro d’organisme doit avoir 10 chiffres.';return}
@@ -478,6 +478,67 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     await sb.from('cc_dpa_accords').update({statut:'annulé',annule_le:new Date().toISOString(),note:'Remplacé'}).eq('client_id',EDIT.id).eq('statut','actif');
     const{error}=await sb.from('cc_dpa_accords').insert({client_id:EDIT.id,categorie:EDIT.type==='particulier'?'personnel':'entreprise',titulaire:g('apT'),institution:g('apI'),transit:g('apR'),compte:g('apC'),montant:m,jour:j,debut:g('apD'),renonce_preavis:$('apP').checked,signe_le:g('apS')+'T12:00:00',signe_nom:g('apT'),source:'papier',statut:'actif'});
     if(error){$('apMsg').textContent=error.message;return}await load();notify('Accord de débits préautorisés enregistré');return}});
+
+/* ---------- demandes types par service ---------- */
+let DTC='',DTM='incorporation',DTE=false,MOV={};
+function dtBody(){const m=window.MODELES.liste.find(x=>x.id===DTM),c=CLI.find(x=>x.id===DTC);const o=MOV[DTM];
+  if(o)return{sujet:o.sujet,texte:o.corps.replace('{CONTACT}',c?.contact?' '+c.contact:'')};return{sujet:m.sujet+(c?` — ${c.nom}`:''),texte:window.MODELES.texte(m,c)}}
+async function rDt(){if(!window.MODELES){$('tdt').innerHTML='<div class="card"><p class="msg err">Modèles indisponibles.</p></div>';return}
+  const{data}=await sb.from('cc_parametres').select('valeur').eq('cle','modeles').maybeSingle();MOV=data?.valeur||{};
+  const c=CLI.find(x=>x.id===DTC),b=dtBody();DTE=false;
+  $('tdt').innerHTML=`<div class="card"><h2>Demande type au client</h2><p class="sub" style="font-size:14px">Choisissez le service : le courriel avec la liste complète des renseignements et documents requis se prépare tout seul. Modifiez-le au besoin, puis envoyez.</p>
+    <div class="grid"><label class="f"><b>Service</b><select id="dtM">${window.MODELES.liste.map(m=>`<option value="${m.id}"${m.id===DTM?' selected':''}>${esc(m.nom)}${MOV[m.id]?' (modèle modifié)':''}</option>`).join('')}</select></label>
+      <label class="f"><b>Client</b><select id="dtC"><option value="">— Pas encore client (courriel libre) —</option>${CLI.filter(x=>(x.statut||'actif')!=='inactif').map(x=>`<option value="${x.id}"${x.id===DTC?' selected':''}>${esc(x.nom)}</option>`).join('')}</select></label>
+      <label class="f"><b class="req">Courriel</b><input id="dtE" type="email" value="${esc(c?.courriel||'')}"></label></div>
+    <label class="f" style="margin-top:10px"><b>Objet</b><input id="dtS" value="${esc(b.sujet)}"></label>
+    <label class="f" style="margin-top:10px"><b>Message</b><textarea id="dtT" style="min-height:420px;font-size:14px;line-height:1.5">${esc(b.texte)}</textarea></label>
+    <div class="row" style="margin-top:10px"><button class="pri" id="dtGo">Envoyer</button><button id="dtCp">Copier le message</button><button class="sm" id="dtSv">Enregistrer ce texte comme modèle</button>${MOV[DTM]?'<button class="sm" id="dtRs">Revenir au modèle d’origine</button>':''}<span class="msg" id="dtMsg"></span></div>
+    <p class="sub" style="font-size:13px">Le courriel part de admin@boujradcpa.com avec la signature du cabinet. Pour un client existant, l’envoi est noté dans son journal et une tâche de suivi est créée pour dans 7 jours.</p></div>`}
+document.addEventListener('input',e=>{if(e.target.id==='dtT'||e.target.id==='dtS')DTE=true});
+document.addEventListener('change',e=>{const t=e.target;if(t.id!=='dtM'&&t.id!=='dtC')return;if(DTE&&!confirm('Remplacer le message modifié par le texte du modèle?')){if(t.id==='dtM')t.value=DTM;else t.value=DTC;return}
+  if(t.id==='dtM')DTM=t.value;else DTC=t.value;rDt()});
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.id==='dtGo'){const to=$('dtE').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)){$('dtMsg').textContent='Entrez une adresse courriel valide.';$('dtMsg').className='msg err';return}
+    b.disabled=true;const m=window.MODELES.liste.find(x=>x.id===DTM);
+    try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to,subject:$('dtS').value,text:$('dtT').value});
+      if(DTC){await sb.from('cc_notes').insert({client_id:DTC,type:'courriel',texte:`Demande type envoyée : ${m.nom} (à ${to})`,auteur:who()});
+        await sb.from('cc_taches').insert({client_id:DTC,titre:`Suivi : ${m.nom} — renseignements attendus`,echeance:new Date(Date.now()+7*864e5).toLocaleDateString('fr-CA'),priorite:'normale'})}
+      notify(`Demande « ${m.nom} » envoyée à ${to}`);DTE=false;await load()}catch(err){$('dtMsg').textContent='Envoi impossible : '+err.message;$('dtMsg').className='msg err';notify('Envoi impossible',1)}b.disabled=false;return}
+  if(b.id==='dtCp'){try{await navigator.clipboard.writeText($('dtT').value);notify('Message copié')}catch(err){$('dtT').select()}return}
+  if(b.id==='dtSv'){const corps=$('dtT').value.replace(/^Bonjour[^,\n]*,/,'Bonjour{CONTACT},');MOV[DTM]={sujet:$('dtS').value.replace(/ — [^—]+$/,''),corps};
+    const{error}=await sb.from('cc_parametres').upsert({cle:'modeles',valeur:MOV,updated_at:new Date().toISOString()});if(!error){notify('Modèle enregistré pour les prochaines demandes');DTE=false;rDt()}return}
+  if(b.id==='dtRs'){if(!confirm('Revenir au texte d’origine de ce modèle?'))return;delete MOV[DTM];await sb.from('cc_parametres').upsert({cle:'modeles',valeur:MOV,updated_at:new Date().toISOString()});notify('Modèle d’origine rétabli');DTE=false;rDt();return}
+  if(b.id==='cDt'){DTC=EDIT.id;DTE=false;TAB='dt';render();window.scrollTo(0,0);return}});
+
+/* ---------- fin de mandat ---------- */
+const nrm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\b(inc|ltee|ltd|enr|senc)\b\.?/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+async function fFin(){const c=EDIT,a=acActif(c.id),fp=FAC.filter(f=>f.client_id===c.id&&f.statut==='à prélever'),acc=ACC.filter(x=>x.client_id===c.id);
+  let tl=[];try{const{data}=await sb.from('tl_docs').select('id,data').eq('coll','clients');tl=(data||[]).filter(r=>{const n=nrm(r.data?.nom);return n&&(n===nrm(c.nom)||(c.groupe&&nrm(r.data?.nom).includes(nrm(c.groupe))))})}catch(e){}
+  if(FT!=='fin'||EDIT!==c||!$('fBody'))return;
+  $('fBody').innerHTML=`<div class="alert" style="margin-bottom:14px"><strong>Fin de mandat</strong>Le client nous quitte : arrêtez les prélèvements et les rappels, puis remettez-lui son dossier (ou à son nouveau comptable).</div>
+    <h3 style="margin-top:0">1. Remettre le dossier</h3>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="pri" id="finZip">Télécharger le dossier du client (ZIP)</button><span class="sub" style="font-size:13px;align-self:center">Fiche, contrats signés, factures, accord de DPA et échanges du portail.</span></div>
+    <p style="margin:12px 0 4px"><strong>Comptabilité</strong> : dans le logiciel comptable, ouvrez le dossier, puis <em>Exporter > Archive du dossier en PDF</em>, choisissez « Tous les exercices » et cochez « Inclure les données ». Le nouveau comptable reçoit tous les rapports, états financiers et le grand livre.</p>
+    ${tl.length?tl.map(r=>`<a class="btn sm" href="index.html#c=${encodeURIComponent(r.id)}&t=exp" target="_blank" rel="noopener" style="display:inline-block;margin:4px 8px 0 0">Ouvrir le dossier comptable « ${esc(r.data.nom)} »</a>`).join(''):'<p class="sub" style="font-size:13px">Aucun dossier comptable au même nom trouvé : ouvrez-le depuis le logiciel comptable.</p>'}
+    <h3>2. Fermer le dossier</h3><div style="display:grid;gap:6px">
+      <label class="opt"><input type="checkbox" id="fin1" checked> <span>Mettre le dossier « inactif » et arrêter les demandes de documents et les rappels</span></label>
+      ${a?`<label class="opt"><input type="checkbox" id="fin2" checked> <span>Annuler l’accord de débits préautorisés (${fmt(a.montant)} + taxes par mois) : aucun prélèvement ne sera plus fait</span></label>`:''}
+      ${fp.length?`<label class="opt"><input type="checkbox" id="fin3"> <span>Annuler aussi les ${fp.length} facture(s) « à prélever » non transmises (${fmt(fp.reduce((s,f)=>s+ +f.total,0))}) — laissez décoché pour facturer le travail déjà fait</span></label>`:''}
+      ${acc.length?`<label class="opt"><input type="checkbox" id="fin4"> <span>Retirer l’accès au portail client (${acc.length} accès) — laissez décoché quelques semaines s’il doit récupérer ses documents</span></label>`:''}</div>
+    <div class="grid" style="margin-top:10px"><label class="f"><b>Date de fin du mandat</b><input type="date" id="finD" value="${new Date().toLocaleDateString('fr-CA')}"></label><label class="f"><b>Motif (interne)</b><input id="finR" placeholder="Ex. déménagement, nouveau comptable"></label></div>
+    <div class="row" style="margin-top:12px"><button class="pri" id="finGo">Confirmer la fin de mandat</button><button class="sm" id="finX">Annuler</button></div>`}
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||!EDIT?.id)return;const c=EDIT;
+  if(b.id==='cFin'){FT='fin';rFiche();return}
+  if(b.id==='finX'){FT='fiche';rFiche();return}
+  if(b.id==='finZip'){b.disabled=true;try{await window.dossierClientZip(c,{contrats:CTR.filter(x=>x.client_id===c.id),factures:FAC.filter(x=>x.client_id===c.id),accords:ACCD.filter(x=>x.client_id===c.id),messages:MSG.filter(x=>x.client_id===c.id),publications:PUB.filter(x=>x.client_id===c.id),demandes:DEM.filter(x=>x.client_id===c.id)});notify('Dossier du client téléchargé')}catch(err){notify('Téléchargement impossible : '+err.message,1)}b.disabled=false;return}
+  if(b.id==='finGo'){if(!confirm(`Confirmer la fin du mandat de ${c.nom}?`))return;b.disabled=true;const d=$('finD').value,now=new Date().toISOString();
+    try{if($('fin1')?.checked)await sb.from('cc_clients').update({statut:'inactif',actif:false,updated_at:now}).eq('id',c.id);
+      if($('fin2')?.checked)await sb.from('cc_dpa_accords').update({statut:'annulé',annule_le:now,note:'Fin de mandat le '+d}).eq('client_id',c.id).eq('statut','actif');
+      if($('fin3')?.checked)await sb.from('cc_factures').update({statut:'annulée',note:'Fin de mandat'}).eq('client_id',c.id).eq('statut','à prélever');
+      if($('fin4')?.checked)await sb.from('cc_acces').delete().eq('client_id',c.id);
+      await sb.from('cc_demandes').update({statut:'annulée'}).eq('client_id',c.id).in('statut',['à envoyer','envoyée']);
+      await sb.from('cc_notes').insert({client_id:c.id,type:'note',texte:`Fin de mandat le ${d}.${$('finR').value.trim()?' Motif : '+$('finR').value.trim():''}`,auteur:who()});
+      await load();EDIT=CLI.find(x=>x.id===c.id)||null;FT='fiche';TAB='cli';render();notify(`Fin de mandat enregistrée pour ${c.nom}`)}catch(err){notify('Impossible : '+err.message,1);b.disabled=false}}});
 
 /* ---------- événements : dossiers, contrats, tâches, échéancier ---------- */
 const who=()=>$('whoE')?.textContent||'';
@@ -519,7 +580,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
   if(ds.tf){TF=ds.tf;rTache();return}
   if(b.id==='nAdd'){const tx=$('nTx').value.trim();if(!tx)return;const{error}=await sb.from('cc_notes').insert({client_id:EDIT.id,type:$('nTy').value,texte:tx.slice(0,5000),auteur:who()});if(!error){await load();notify('Ajouté au journal du dossier')}return}
   /* échéancier */
-  if(ds.em){if(ds.em==='0')EM=new Date().toISOString().slice(0,7);else{const[y,m]=EM.split('-').map(Number),d=new Date(Date.UTC(y,m-1+ +ds.em,1));EM=d.toISOString().slice(0,7)}rBoard();return}
+  if(ds.em){if(ds.em==='0')EM=new Date().toLocaleDateString('fr-CA').slice(0,7);else{const[y,m]=EM.split('-').map(Number),d=new Date(Date.UTC(y,m-1+ +ds.em,1));EM=d.toISOString().slice(0,7)}rBoard();return}
   if(ds.done){const[cid,cle]=ds.done.split('|');b.disabled=true;const{error}=await sb.from('cc_echeances').insert({client_id:cid,cle,par:who()});if(!error){await load();notify('Échéance marquée comme faite')}return}
   if(ds.undo){const[cid,cle]=ds.undo.split('|');await sb.from('cc_echeances').delete().eq('client_id',cid).eq('cle',cle);await load();return}
   if(b.id==='bPrint'){window.print();return}
