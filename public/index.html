@@ -397,6 +397,17 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="warn" id="yWarn" hidden></div>
       <div class="msg" id="yMsg"></div>
     </div>
+    <div class="panel" id="arcPanel">
+      <h2>Archive du dossier en PDF</h2>
+      <p class="note">Un fichier ZIP avec, pour chaque exercice : bilan, état des résultats, balance de vérification, grand livre, journal général, rapports de TPS/TVQ, DAS, comptes clients et fournisseurs, et le dossier de mission (états financiers, lettre, déclaration, feuilles de travail) s’il y a lieu. À faire à la fermeture de chaque exercice, ou pour remettre le dossier au nouveau comptable d’un client qui part.</p>
+      <div class="row" style="align-items:flex-end;margin-top:8px">
+        <label class="f">Exercice<select id="arcEx"></select></label>
+        <label class="f">Mot de passe (facultatif)<input type="password" id="arcPw" autocomplete="new-password" placeholder="Aucun"></label>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px"><input type="checkbox" id="arcData" checked style="width:auto;margin:0"> Inclure les données pour reprendre le dossier ailleurs (grand livre Excel et fichier d’importation)</label>
+      <div class="row" style="margin-top:10px"><button class="pri" id="arcGo">Télécharger l’archive</button></div>
+      <div class="msg" id="arcMsg"></div>
+    </div>
   </section>
 
   <!-- Paie -->

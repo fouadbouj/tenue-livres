@@ -294,7 +294,7 @@ function setTab(t){tab=t;const g=CFG.includes(t)?'set':t;document.querySelectorA
   for(const[k,id]of[['exp','tExp'],['pay','tPay'],['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
   if(t==='mis')renderMis();
   if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
-  if(t==='per'||t==='exp')loadPeriods();if(t==='pay')renderPay();if(t==='exp')$('expPer').textContent=P?`${moisLbl(P.mois||$('pMois').value)} · ${$('pSrc').value} ${accName($('pSrc').value)}`:'aucun';navPush()}
+  if(t==='per'||t==='exp')loadPeriods();if(t==='exp')fillArcEx();if(t==='pay')renderPay();if(t==='exp')$('expPer').textContent=P?`${moisLbl(P.mois||$('pMois').value)} · ${$('pSrc').value} ${accName($('pSrc').value)}`:'aucun';navPush()}
 document.querySelectorAll('#side [data-t],#cfgNav [data-t]').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
 let PERS=[];
@@ -1861,6 +1861,37 @@ $('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend
     const dl=$('mailDlg');dl.close?dl.close():dl.removeAttribute('open');notify(`Courriel envoyé à ${dest} avec le PDF et l’Excel joints`);if(document.querySelector('#side [data-t=home][aria-current]')||!$('tHome')?.hidden)renderHome().catch(()=>{})}
   catch(e){notify('Envoi impossible : le courriel n’est pas parti',1);$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Téléchargez le PDF et l’Excel, puis utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
 
+
+
+/* ---------- archive PDF du dossier (fermeture d'exercice ou transfert au nouveau comptable) ---------- */
+function fillArcEx(){const L=(C.ex||[]).slice().sort((a,b)=>a.deb.localeCompare(b.deb));$('arcEx').innerHTML=(L.length>1?'<option value="*">Tous les exercices</option>':'')+L.map(x=>`<option value="${esc(x.id)}"${x.id===C.exCur?' selected':''}>${esc(exLbl(x))}${x.statut==='ferme'?' · fermé':''}</option>`).join('')||'<option value="">Aucun exercice</option>'}
+async function captureDl(fn){const out=[],orig=downloads;downloads={save:async o=>{out.push(o)}};try{await fn()}finally{downloads=orig}return out}
+async function arcBuild(exIds,withData,say){const orig=C.exCur,files=[],REPS=[['bs','01_Bilan'],['is','02_Etat_des_resultats'],['tb','03_Balance_de_verification'],['gl','04_Grand_livre'],['jr','05_Journal_general'],['tx','06_TPS-TVQ_sommaire'],['txd','07_TPS-TVQ_detail']];
+  const keepREP=REP,keepF=$('repFrom').value,keepT=$('repTo').value,keepAcc=$('repAcc').value;let n=0;
+  try{await loadInv();const hasInv=INV.length>0;let hasPay=false;try{await loadPay();hasPay=PAY.length>0}catch(e){}
+    for(const id of exIds){useEx(id,true);const x=curEx(),dir=`${x.deb}_au_${x.fin}`;LED=null;$('repFrom').value=x.deb;$('repTo').value=x.fin;$('repAcc').value='';
+      const list=[...REPS,...(hasPay?[['das','08_DAS']]:[]),...(hasInv?[['ar','09_Comptes_clients'],['ap','10_Comptes_fournisseurs']]:[])];
+      for(const[r,nm]of list){say(`${exLbl(x)} : ${nm.slice(3).replace(/_/g,' ')}…`);REP=r;await runRep(!LED);const got=await captureDl(()=>$('repPdf').onclick());if(got[0])files.push([`${dir}/${nm}.pdf`,got[0].data]);n++}
+      if(await loadMis()){for(const[k,nm]of[['ef','11_Etats_financiers'],['let','12_Lettre_de_mission'],['dec','13_Declaration_de_la_direction'],['wp','14_Dossier_de_travail']]){say(`${exLbl(x)} : mission (${nm.slice(3).replace(/_/g,' ')})…`);const got=await captureDl(()=>misPdf(k,document.createElement('button')));if(got[0])files.push([`${dir}/Mission_de_compilation/${nm}.pdf`,got[0].data])}}}
+    if(withData){say('Données du dossier…');LED=await loadLedger();const PL=Object.fromEntries(PLAN);const c2=v=>(v/100).toFixed(2).replace('.',',');const q=v=>{v=String(v??'');return /[;"\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};
+      const rows=['Date;Référence;Description;Compte;Nom du compte;Débit;Crédit'];LED.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>e.lines.forEach(([a,v])=>{if(v)rows.push([e.date,e.ref,e.desc,a,PL[a]||'',v>0?c2(v):'',v<0?c2(-v):''].map(q).join(';'))}));
+      files.push(['Donnees/grand-livre-complet.csv','﻿'+rows.join('\r\n')]);files.push(['Donnees/plan-comptable.csv','﻿Compte;Nom\r\n'+PLAN.map(([n,t])=>q(n)+';'+q(t)).join('\r\n')]);
+      const one={format:'tenue-livres-v1',date:new Date().toISOString(),clients:[{id:C.id,data:JSON.parse(JSON.stringify(C))}]};
+      for(const sub of SUBS){if(local){const src=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je||{}):sub==='missions'?(LOCAL.mis||{}):sub==='paies'?(LOCAL.pay||{}):(LOCAL.inv||{});one.clients[0][sub]=Object.entries(src).filter(([k])=>k.startsWith(C.id+'/')).map(([k,v])=>({id:k.split('/')[1],data:v}))}
+        else one.clients[0][sub]=(await db.collection('clients').doc(C.id).collection(sub).get()).docs.map(d=>({id:d.id,data:d.data()}))}
+      files.push(['Donnees/dossier-importable.json',JSON.stringify(one)])}
+    files.push(['LISEZMOI.txt',`ARCHIVE DU DOSSIER — ${C.nom}\nProduite le ${new Date().toLocaleDateString('fr-CA')} par Boujrad CPA Inc.\n\nUn dossier par exercice, avec les rapports en PDF (prêts à imprimer) et, s'il y a lieu, le dossier de la mission de compilation.\n${withData?`\nDonnees/grand-livre-complet.csv : toutes les écritures comptables (s'ouvre dans Excel; s'importe dans tout logiciel comptable).\nDonnees/plan-comptable.csv : le plan comptable.\nDonnees/dossier-importable.json : le dossier complet dans un format ouvert, pour le reprendre dans le logiciel de Boujrad CPA Inc. ou le convertir pour un autre logiciel.\n`:''}`])}
+  finally{useEx(orig,true);REP=keepREP;$('repFrom').value=keepF;$('repTo').value=keepT;$('repAcc').value=keepAcc;LED=null}
+  return files}
+$('arcGo').onclick=async()=>{const b=$('arcGo'),say=t=>$('arcMsg').textContent=t,v=$('arcEx').value;if(!v){say('Définissez d’abord un exercice dans Paramètres.');return}
+  const ids=v==='*'?(C.ex||[]).slice().sort((a,c)=>a.deb.localeCompare(c.deb)).map(x=>x.id):[v];b.disabled=true;
+  try{const files=await arcBuild(ids,$('arcData').checked,say);say('Compression…');await loadScript('https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.52/dist/zip.min.js');zip.configure({useWebWorkers:false});
+    const pw=$('arcPw').value;const w=new zip.ZipWriter(new zip.Uint8ArrayWriter(),pw?{password:pw,encryptionStrength:3}:{});
+    for(const[n,d]of files)await w.add(n,typeof d==='string'?new zip.TextReader(d):new zip.Uint8ArrayReader(d instanceof Uint8Array?d:new Uint8Array(d)));
+    const data=await w.close(),name=`${C.nom}_archive_${v==='*'?'tous_les_exercices':curEx()?.fin||''}.zip`.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_');
+    if(downloads)await downloads.save({filename:name,data});else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/zip'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+    say(`${files.length} fichier(s) dans l’archive.`);notify(`Archive du dossier téléchargée (${files.filter(f=>f[0].endsWith('.pdf')).length} PDF)`)}
+  catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Archive impossible : '+(e?.message||'réessayez.'));notify('Archive impossible',1)}b.disabled=false};
 
 /* ---------- réponses du client : import du fichier Excel rempli et reclassement ---------- */
 let ANS=[];
