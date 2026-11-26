@@ -78,6 +78,7 @@ function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par
       <div id="cTxBloc2"${c.tps_tvq===false?' hidden':''}><label class="f" style="margin-top:10px"><b>Documents demandés (texte du courriel de rappel)</b><textarea id="cT">${v('documents')}</textarea></label>
       <label class="opt"><input type="checkbox" id="cA"${c.actif?' checked':''}> <span>Envoyer automatiquement les demandes de documents et les rappels</span></label></div></div>
     <h3>Ouverture du dossier</h3><div style="display:grid;gap:4px">${CHK.map(([k,l,auto])=>{const ok=auto?chkAuto(c,k):!!c.checklist?.[k];return `<label class="opt"><input type="checkbox" data-chk="${k}"${ok?' checked':''}${auto?' disabled':''}> <span>${l}${auto?' <small class="sub">(automatique)</small>':c.checklist?.[k]?` <small class="sub">(${dl(c.checklist[k])})</small>`:''}</span></label>`}).join('')}</div>
+    <label class="f" style="margin-top:12px"><b>Description de l’entreprise</b><small class="sub" style="font-weight:400">Activités, clientèle, employés, véhicules, particularités. L’IA s’en sert pour proposer le plan comptable et classer les transactions.</small><textarea id="cDs" placeholder="Ex. firme d’ingénieurs en structure, 2 employés, un véhicule, bureau loué à Laval">${v('description')}</textarea></label>
     <label class="f" style="margin-top:12px"><b>Notes internes</b><textarea id="cNo">${v('notes')}</textarea></label>
     <div class="row" style="margin-top:12px"><button class="pri" id="cSave">${c.id?'Enregistrer':'Créer le client'}</button>${c.id?'<button class="sm danger" id="cDel">Supprimer le client</button>':''}<span class="msg" id="cM"></span></div>`}
 const pRow=(p={})=>`<div class="row pers" style="gap:8px;margin-bottom:6px;align-items:flex-end">${[['nom','Nom'],['role','Rôle (actionnaire, conjoint…)'],['courriel','Courriel'],['telephone','Téléphone']].map(([k,l])=>`<label class="f" style="flex:1;min-width:150px"><b>${l}</b><input data-p="${k}" value="${esc(p[k]||'')}"></label>`).join('')}<button class="sm danger" data-pdel>Retirer</button></div>`;
@@ -86,9 +87,10 @@ async function saveFiche(){const c=EDIT,g=id=>$(id)?.value.trim()||null,tx=$('cT
   const row={type:$('cTy').value,nom:g('cN'),forme:$('cFo').value,statut:st,groupe:g('cGr'),responsable:g('cRe'),ouverture:g('cOu'),langue:$('cLa').value,contact:g('cC'),courriel:g('cE'),telephone:g('cTel'),adresse:g('cAd'),ville:g('cVi'),province:g('cPr'),code_postal:g('cCp'),
     neq:g('cNeq'),no_entreprise:g('cBn'),no_tps:g('cTps'),no_tvq:g('cTvq'),fin_exercice:/^\d\d-\d\d$/.test($('cX')?.value||'')?$('cX').value:'12-31',spcc_dpe:!!$('cDpe')?.checked,employeur:!!$('cEmp')?.checked,tps_tvq:tx,
     frequence:$('cF')?.value||'trimestrielle',depuis:g('cD')||new Date().toLocaleDateString('fr-CA'),documents:g('cT')||c.documents||'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',actif:tx&&st==='actif'&&!!$('cA')?.checked,
-    contacts:[...document.querySelectorAll('.pers')].map(r=>Object.fromEntries([...r.querySelectorAll('[data-p]')].map(i=>[i.dataset.p,i.value.trim()]))).filter(p=>p.nom||p.courriel),checklist:chk,notes:g('cNo'),updated_at:new Date().toISOString()};
+    contacts:[...document.querySelectorAll('.pers')].map(r=>Object.fromEntries([...r.querySelectorAll('[data-p]')].map(i=>[i.dataset.p,i.value.trim()]))).filter(p=>p.nom||p.courriel),checklist:chk,notes:g('cNo'),description:g('cDs'),updated_at:new Date().toISOString()};
   if(!row.nom){$('cM').textContent='Nom requis.';$('cM').className='msg err';return}
-  const r=c.id?await sb.from('cc_clients').update(row).eq('id',c.id).select().single():await sb.from('cc_clients').insert(row).select().single();
+  const sv=x=>c.id?sb.from('cc_clients').update(x).eq('id',c.id).select().single():sb.from('cc_clients').insert(x).select().single();
+  let r=await sv(row);if(r.error&&/description/.test(r.error.message||'')){const{description:_,...rest}=row;r=await sv(rest);if(!r.error)notify('Fiche enregistrée, sauf la description : exécutez d’abord la mise à jour SQL (centre_dossiers.sql).',1)}
   if(r.error){$('cM').textContent=r.error.message;$('cM').className='msg err';return}
   await load();EDIT=CLI.find(x=>x.id===r.data.id)||r.data;TAB='cli';render();$('cM').textContent=c.id?'Enregistré.':'Client créé. Prochaine étape : le contrat de services.';$('cM').className='msg ok';notify(c.id?'Fiche client enregistrée':'Client créé')}
 
@@ -653,14 +655,14 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
 /* ---------- connexion (membres du cabinet seulement) ---------- */
 
 /* ---------- Assistant IA (bouton flottant) : gestion du cabinet ---------- */
-const IA_CHAMPS={nom:'Nom',courriel:'Courriel',telephone:'Téléphone',adresse:'Adresse',ville:'Ville',code_postal:'Code postal',contact:'Personne-ressource',statut:'Statut',forme:'Forme juridique',fin_exercice:'Fin d’exercice (MM-JJ)',frequence:'Fréquence TPS/TVQ',responsable:'Responsable',groupe:'Groupe',neq:'NEQ',no_entreprise:'No d’entreprise',no_tps:'No TPS',no_tvq:'No TVQ',langue:'Langue',employeur:'Employeur',tps_tvq:'Inscrit TPS/TVQ'};
+const IA_CHAMPS={nom:'Nom',description:'Description de l’entreprise',courriel:'Courriel',telephone:'Téléphone',adresse:'Adresse',ville:'Ville',code_postal:'Code postal',contact:'Personne-ressource',statut:'Statut',forme:'Forme juridique',fin_exercice:'Fin d’exercice (MM-JJ)',frequence:'Fréquence TPS/TVQ',responsable:'Responsable',groupe:'Groupe',neq:'NEQ',no_entreprise:'No d’entreprise',no_tps:'No TPS',no_tvq:'No TVQ',langue:'Langue',employeur:'Employeur',tps_tvq:'Inscrit TPS/TVQ'};
 const iaCli=id=>CLI.find(c=>c.id===id);
 async function iaContexteC(){const auj=new Date().toLocaleDateString('fr-CA'),[y,m]=auj.split('-').map(Number),deb=auj.slice(0,8)+'01',fin=ymd(fMois(y,m));
   const ALL=CLI.flatMap(c=>obligations(c,y-1,y+1)),ob=ALL.filter(o=>!etatOb(o).ok&&o.date<=fin&&o.date>=ymd(new Date(Date.UTC(y,m-4,1)))).sort((a,b)=>a.date.localeCompare(b.date));
   const nom=id=>iaCli(id)?.nom||'—';
   return `Onglet affiché : ${TAB}${EDIT?` · fiche ouverte : ${EDIT.nom} (${EDIT.id})`:''}.
-Clients (id | nom | statut | type/forme | fin d'exercice | TPS/TVQ | courriel | responsable | groupe) :
-${CLI.map(c=>[c.id,c.nom,c.statut||'actif',[c.type,c.forme].filter(Boolean).join('/'),c.fin_exercice,c.tps_tvq?c.frequence:'non inscrit',c.courriel||'',c.responsable||'',c.groupe||''].join(' | ')).join('\n')}
+Clients (id | nom | statut | type/forme | fin d'exercice | TPS/TVQ | courriel | responsable | groupe | description) :
+${CLI.map(c=>[c.id,c.nom,c.statut||'actif',[c.type,c.forme].filter(Boolean).join('/'),c.fin_exercice,c.tps_tvq?c.frequence:'non inscrit',c.courriel||'',c.responsable||'',c.groupe||'',(c.description||'').replace(/\s+/g,' ').slice(0,160)].join(' | ')).join('\n')}
 
 Tâches ouvertes (id | titre | client | échéance | priorité | responsable) :
 ${TCH.filter(t=>t.statut!=='fait').map(t=>[t.id,t.titre,t.client_id?nom(t.client_id):'cabinet',t.echeance||'',t.priorite,t.responsable||''].join(' | ')).join('\n')||'aucune'}

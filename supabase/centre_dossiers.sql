@@ -6,6 +6,7 @@
 
 -- Fiche client complète (cc_clients reste la table des clients : entreprises et particuliers)
 alter table public.cc_clients add column if not exists type         text not null default 'entreprise'; -- entreprise | particulier
+alter table public.cc_clients add column if not exists description  text;                                 -- description de l'entreprise (utilisée par l'IA)
 alter table public.cc_clients add column if not exists statut       text not null default 'actif';      -- prospect | actif | inactif
 alter table public.cc_clients add column if not exists forme        text;   -- société par actions, entreprise individuelle, société de personnes, OBNL…
 alter table public.cc_clients add column if not exists telephone    text;

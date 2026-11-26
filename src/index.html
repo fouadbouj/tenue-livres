@@ -649,6 +649,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <label class="f">Format de date Sage<select id="sDf"><option value="yy">mm-jj-aa (exigé par l'import Sage)</option><option value="yyyy">mm-jj-aaaa</option><option value="dmys">jj/mm/aaaa</option><option value="dmy">jj-mm-aaaa</option><option value="ymd">aaaa-mm-jj</option></select></label>
       </div>
       <label class="f" style="margin-top:10px">Courriel du client (demandes de précisions)<input id="sEmail" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
+      <label class="f" style="margin-top:10px">Description de l'entreprise (activités, employés, véhicules… : l'IA s'en sert pour classer)<textarea id="sDesc" style="min-height:70px"></textarea></label><p class="note" id="sDescSrc" style="margin:2px 0 0"></p>
       <label class="f" style="margin-top:10px">Notes pour l'IA (ex. « les virements à Jean Tremblay sont des salaires »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
@@ -729,6 +730,16 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
   <div class="row"><button class="pri" id="finDl">Télécharger le fichier</button><button id="finCp">Copier</button><button id="finX">Fermer</button></div>
   <div class="msg" id="finMsg"></div>
 </div></dialog>
+<dialog id="pdDlg" style="max-width:760px;width:94vw"><form id="pdForm" method="dialog">
+  <h2 style="margin-top:0">Nouveau dossier : <span id="pdNom"></span></h2>
+  <p class="note" style="margin-top:0">Le plan comptable part de notre plan de base, avec les comptes propres au secteur. Chaque compte est déjà associé à son code IGRF pour la T2.</p>
+  <label class="f">Type d'entreprise<select id="pdType"></select></label>
+  <label class="f" style="margin-top:8px">Description de l'entreprise <small class="note">(activités, clientèle, employés, véhicules, particularités : l'IA s'en sert pour le plan et le classement)</small><textarea id="pdDesc" style="min-height:80px" placeholder="Ex. firme d'ingénieurs en structure, 2 employés, un véhicule, bureau loué à Laval"></textarea></label>
+  <div class="row" style="gap:6px 20px;margin-top:8px"><label class="opt"><input type="checkbox" id="pdTx" checked> Inscrite à la TPS/TVQ</label><label class="opt"><input type="checkbox" id="pdEmp"> A des employés (paie et DAS)</label><label class="opt"><input type="checkbox" id="pdInd"> Entreprise individuelle (non incorporée)</label></div>
+  <div class="row" style="margin-top:10px;align-items:center"><button type="button" id="pdAi">Proposer des comptes avec l'IA</button><span class="msg" id="pdMsg"></span></div>
+  <div id="pdOut" style="max-height:38vh;overflow:auto;margin-top:8px"></div>
+  <div class="row" style="margin-top:12px"><button type="button" class="pri" id="pdGo">Créer le dossier</button><button type="button" id="pdSage">Importer plutôt le plan de Sage</button><button type="button" id="pdX">Annuler</button></div>
+</form></dialog>
 <dialog id="accDlg"><form id="accForm" method="dialog">
   <h2>Nouveau compte</h2>
   <p class="note">Il sera ajouté au plan de ce client et signalé comme « à créer dans Sage » jusqu'à ce que vous confirmiez.</p>
@@ -916,7 +927,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -944,11 +955,76 @@ function renderList(){
 }
 $('cq').oninput=renderList;
 $('clist').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(tr)openClient(tr.dataset.id)};
-$('newForm').onsubmit=e=>{e.preventDefault();const nom=$('newName').value.trim();if(!nom)return;
-  const id=local?'c'+Date.now():db.collection('clients').doc().id;
-  C={id,nom,plan:DEF_PLAN,rules:[],dfmt:'yy',notes:'',last:''};Object.assign(C,detectSpecial(C));C.src=PLAN[0]?.[0]||'1060';
+$('newForm').onsubmit=e=>{e.preventDefault();const nom=$('newName').value.trim();if(!nom)return;pdOuvrir(nom)};
+
+/* ---------- plan comptable type : base + modules par secteur, IGRF préassocié ---------- */
+const DEF_GIFI={1010:'1001',1040:'1007',1055:'1002',1060:'1002',1065:'1002',1067:'1003',1100:'1180',1200:'1062',1205:'1063',1210:'1060',1215:'1483',1220:'1400',1225:'1301',1230:'1240',1250:'1483',1300:'1121',1320:'1484',1325:'1480',1500:'2300',1510:'2240',1700:'1740',1705:'1741',1710:'1787',1715:'1788',1720:'1774',1725:'1775',1730:'1742',1735:'1743',1740:'1918',1745:'1919',1750:'1680',1755:'1681',1760:'1600',1800:'1774',1805:'1775',1850:'2012',1860:'2018',
+ 2050:'2701',2100:'2621',2110:'2620',2120:'2624',2125:'2624',2130:'2627',2140:'2707',2145:'2707',2150:'2707',2160:'2680',2170:'2962',2180:'2770',2190:'2629',2310:'2680',2315:'2680',2320:'2680',2325:'2680',2330:'2680',2335:'2680',2400:'2920',2600:'3143',2610:'3141',2620:'3321',2640:'3261',2650:'3300',3100:'3500',3200:'3541',3500:'3600',3600:'3700',
+ 4010:'8000',4020:'8000',4030:'8000',4050:'8141',4080:'8000',4400:'8090',4410:'8096',4420:'8242',4450:'8210',4460:'8230',5010:'8320',5030:'8360',5040:'8457',5050:'8320',5100:'9060',5110:'8622',5120:'8620',
+ 6010:'8521',6020:'8690',6030:'8715',6040:'8710',6050:'8714',6060:'8860',6065:'8863',6070:'8810',6075:'8811',6080:'9150',6090:'9225',6100:'9220',6110:'8911',6120:'8960',6130:'9224',6140:'8962',6150:'9281',6160:'8915',6170:'8523',6180:'9200',6190:'8876',6200:'8761',6210:'8760',6220:'9180',6230:'8590',6240:'8522',6250:'9275',6260:'9130',6270:'8716',6280:'8231',6300:'8670',6310:'9270',6320:'9270',9010:'9990'};
+const SECTEURS={
+ general:{nom:'Général (tout type d’entreprise)',c:[]},
+ professionnel:{nom:'Professionnels : ingénieurs, architectes, consultants, avocats',c:[['1260','Travaux en cours','1125'],['4035','Débours refacturés aux clients','8000'],['6025','Assurance responsabilité professionnelle','8690'],['6085','Logiciels techniques et licences (CAO, etc.)','9150'],['6205','Cotisations à l’ordre professionnel','8761']]},
+ sante:{nom:'Santé : clinique, dentiste, physiothérapie',c:[['4031','Honoraires de soins','8000'],['4032','Ventes de produits','8000'],['5051','Fournitures médicales et cliniques','8320'],['6025','Assurance responsabilité professionnelle','8690'],['6086','Logiciel de gestion de clinique','9150'],['6205','Cotisations à l’ordre professionnel','8761']]},
+ construction:{nom:'Construction et rénovation',c:[['1265','Retenues de garantie à recevoir','1068'],['1268','Travaux en cours','1125'],['1765','Équipement lourd','1746'],['1766','Amortissement cumulé - équipement lourd','1747'],['2115','Retenues de garantie à payer','2623'],['2185','Facturation progressive excédentaire','2770'],['4060','Revenus de contrats','8000'],['5055','Location d’équipement de chantier','8451'],['5060','Petits outils','9131'],['5115','Cotisations CCQ et avantages','8622'],['6026','Assurance chantier et cautionnement','8690'],['6215','Licence RBQ et permis','8764']]},
+ restaurant:{nom:'Restauration et bar',c:[['2122','Pourboires à remettre','2624'],['4011','Ventes de nourriture','8000'],['4012','Ventes de boissons alcoolisées','8000'],['4013','Ventes par plateformes de livraison','8000'],['5011','Coût des aliments','8320'],['5012','Coût des boissons','8320'],['5013','Emballages et contenants','8320'],['6121','Entretien de l’équipement de cuisine','8964'],['6216','Permis d’alcool et permis du MAPAQ','8764'],['6261','Uniformes et buanderie','9134'],['6275','Commissions des plateformes de livraison','9273']]},
+ immeubles:{nom:'Immeubles locatifs',c:[['2186','Dépôts des locataires','2961'],['4051','Loyers résidentiels','8141'],['4052','Loyers commerciaux','8141'],['4053','Stationnement et buanderie','8141'],['6051','Intérêts hypothécaires','8713'],['6122','Déneigement et entretien du terrain','9010'],['6123','Conciergerie','9010'],['6221','Taxes municipales','9180'],['6222','Taxes scolaires','9180'],['6225','Frais de gestion immobilière','8871']]},
+ detail:{nom:'Commerce de détail et commerce en ligne',c:[['4015','Ventes en ligne','8000'],['5015','Droits de douane et courtage','8457'],['5025','Pertes et vols de stock','8458'],['6011','Publicité en ligne','8521'],['6271','Frais de plateforme de commerce électronique','9273']]},
+ transport:{nom:'Transport et camionnage',c:[['1731','Camions et remorques','1742'],['1736','Amortissement cumulé - camions et remorques','1743'],['4040','Revenus de transport','8000'],['5061','Carburant des camions','9224'],['5062','Péages et pesées','9274'],['6027','Assurance camions et cargaison','8690'],['6141','Pneus et réparations des camions','8962'],['6151','Permis IFTA, IRP et immatriculation','9281']]},
+ holding:{nom:'Société de portefeuille (holding)',c:[['1221','Avances aux filiales','2243'],['1511','Actions de filiales','2242'],['4411','Dividendes de filiales','8096'],['4412','Frais de gestion facturés aux filiales','8239'],['4451','Gains en capital','8211'],['6066','Frais de gestion de placements','8869']]},
+ services:{nom:'Services : entretien, esthétique, coiffure, formation',c:[['4021','Ventes de produits','8000'],['5016','Produits utilisés pour les services','8320'],['6012','Commissions de plateformes de réservation','9273']]},
+ autonome:{nom:'Travailleur autonome (entreprise individuelle)',ind:1,c:[['6105','Bureau à domicile','8810']]}};
+function planType(type,{tx,emp,ind},extras=[]){const S=SECTEURS[type]||SECTEURS.general,indiv=ind||S.ind;const L=DEF_PLAN.split('\n').map(l=>{const m=l.match(/^(\S+)\s+(.*)$/);return m?[m[1],m[2]]:null}).filter(Boolean);
+  const out=L.filter(([n])=>!(!tx&&+n>=2310&&+n<=2335)&&!(!emp&&['2120','2125','2130','5100','5110','5120'].includes(n))&&!(indiv&&['1225','2160','2170','2640','3100','3200','3500','3600','9000','9010'].includes(n)));
+  const G={};out.forEach(([n])=>{if(DEF_GIFI[n])G[n]=DEF_GIFI[n]});
+  if(indiv){out.push(['3110','Mise de fonds du propriétaire'],['3120','Retraits du propriétaire'],['3130','Capital du propriétaire'])}
+  [...S.c,...extras].forEach(([n,nm,g])=>{if(out.some(x=>x[0]===n))return;out.push([n,nm]);if(g&&!indiv)G[n]=g});
+  if(indiv)Object.keys(G).forEach(k=>delete G[k]);
+  out.sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true}));return{plan:out.map(p=>p.join(' ')).join('\n'),gifi:G}}
+let FICHE=null,PDX=[];
+function iaProfil(){const d=C?.desc||FICHE?.description||'';const f=FICHE||{};const parts=[];if(d)parts.push('Description : '+d);
+  if(C?.profil?.type&&SECTEURS[C.profil.type])parts.push('Secteur : '+SECTEURS[C.profil.type].nom);
+  const tx=f.tps_tvq??C?.profil?.tx,emp=f.employeur??C?.profil?.emp;if(tx!=null)parts.push('Inscrite TPS/TVQ : '+(tx?'oui':'non'));if(emp!=null)parts.push('Employeur (paie, DAS) : '+(emp?'oui':'non'));if(f.forme)parts.push('Forme : '+f.forme);
+  return parts.length?'Profil de l’entreprise — '+parts.join(' · '):''}
+async function chargerFiche(){FICHE=null;try{if(window.tlFiche&&C)FICHE=await window.tlFiche(C.nom)}catch(e){}if(C&&tab==='set')renderSettings()}
+function pdOuvrir(nom){$('pdNom').textContent=nom;$('pdType').innerHTML=Object.entries(SECTEURS).map(([k,v])=>`<option value="${k}">${esc(v.nom)}</option>`).join('');$('pdDesc').value='';$('pdOut').innerHTML='';$('pdMsg').textContent='';PDX=[];
+  $('pdAi').disabled=!sampleFn;$('pdTx').checked=true;$('pdEmp').checked=false;$('pdInd').checked=false;
+  if(window.tlFiche)window.tlFiche(nom).then(f=>{if(!f)return;if(f.description)$('pdDesc').value=f.description;if(f.tps_tvq!=null)$('pdTx').checked=!!f.tps_tvq;if(f.employeur!=null)$('pdEmp').checked=!!f.employeur;if(/individuelle/i.test(f.forme||''))$('pdInd').checked=true;$('pdMsg').textContent='Renseignements repris de la fiche du client dans Gestion du cabinet.'}).catch(()=>{});
+  pdApercu();const d=$('pdDlg');try{d.showModal()}catch(e){d.setAttribute('open','')}}
+function pdApercu(){const t=$('pdType').value,S=SECTEURS[t];const r=planType(t,{tx:$('pdTx').checked,emp:$('pdEmp').checked,ind:$('pdInd').checked},PDX.filter(x=>x.on).map(x=>[x.n,x.nm,x.g]));
+  const nb=r.plan.split('\n').length;$('pdOut').innerHTML=`<p class="note" style="margin:0 0 6px">${nb} comptes au plan${S.c.length?` dont ${S.c.length} propres au secteur`:''}${PDX.length?` · ${PDX.filter(x=>x.on).length} proposé(s) par l’IA`:''}.</p>`+
+    (S.c.length?`<p style="margin:4px 0"><strong>Comptes du secteur :</strong> ${S.c.map(c=>esc(c[0]+' '+c[1])).join(' · ')}</p>`:'')+
+    (PDX.length?`<p style="margin:8px 0 4px"><strong>Proposés par l’IA</strong> (décochez ceux que vous ne voulez pas) :</p>${PDX.map((x,i)=>`<label class="opt" style="display:flex;gap:6px"><input type="checkbox" data-pdx="${i}"${x.on?' checked':''}> ${esc(x.n+' '+x.nm)}${x.g?` <small class="note">IGRF ${esc(x.g)}</small>`:''}${x.pq?` <small class="note">— ${esc(x.pq)}</small>`:''}</label>`).join('')}`:'')}
+async function pdAi(){const desc=$('pdDesc').value.trim();if(!desc){$('pdMsg').textContent='Décrivez d’abord l’entreprise.';return}$('pdAi').disabled=true;$('pdMsg').textContent='L’IA analyse la description…';
+  try{const base=planType($('pdType').value,{tx:$('pdTx').checked,emp:$('pdEmp').checked,ind:$('pdInd').checked}).plan;
+    const r=await sampleFn.json(`Tu es CPA au Québec. On crée le plan comptable d'un nouveau client de tenue de livres.
+Description de l'entreprise : ${desc}
+Secteurs offerts (id : nom) : ${Object.entries(SECTEURS).map(([k,v])=>k+' : '+v.nom).join(' ; ')}
+Plan actuel (avec le secteur choisi) :
+${base}
+
+1) Choisis le secteur le plus approprié (id).
+2) Propose au plus 10 comptes supplémentaires vraiment utiles pour CETTE entreprise et absents du plan, avec un numéro libre qui respecte les plages (1xxx actif, 2xxx passif, 3xxx avoir, 4xxx revenus, 5xxx coût des ventes, 6xxx dépenses) et le code IGRF de l'ARC le plus précis (liste officielle ci-dessous; jamais un code de total).
+3) Indique aussi si l'entreprise semble avoir des employés et être inscrite à la TPS/TVQ (true, false ou null si on ne sait pas).
+Codes IGRF :
+${igrfListe()}
+
+Réponds uniquement en JSON : {"secteur":"professionnel","employes":true,"tpstvq":true,"comptes":[{"numero":"6087","nom":"...","igrf":"9150","pourquoi":"..."}]}`,{modelTier:'default'});
+    if(r?.secteur&&SECTEURS[r.secteur])$('pdType').value=r.secteur;if(typeof r?.employes==='boolean')$('pdEmp').checked=r.employes;if(typeof r?.tpstvq==='boolean')$('pdTx').checked=r.tpstvq;
+    const cur=planType($('pdType').value,{tx:$('pdTx').checked,emp:$('pdEmp').checked,ind:$('pdInd').checked}).plan.split('\n').map(l=>l.split(' ')[0]);
+    PDX=(Array.isArray(r?.comptes)?r.comptes:[]).filter(c=>/^[1-6]\d{3}$/.test(String(c.numero))&&!cur.includes(String(c.numero))&&c.nom).slice(0,10).map(c=>({n:String(c.numero),nm:String(c.nom).slice(0,60),g:igrfOk(String(c.igrf||''))?String(c.igrf):'',pq:String(c.pourquoi||'').slice(0,100),on:true}));
+    $('pdMsg').textContent=`Secteur suggéré : ${SECTEURS[$('pdType').value].nom}. ${PDX.length} compte(s) proposé(s).`;pdApercu()}
+  catch(e){$('pdMsg').textContent='L’IA n’a pas pu répondre.'}$('pdAi').disabled=!sampleFn}
+function pdCreer(sage){const nom=$('pdNom').textContent;const d=$('pdDlg');d.close?d.close():d.removeAttribute('open');
+  const id=local?'c'+Date.now():db.collection('clients').doc().id;const prof={type:$('pdType').value,tx:$('pdTx').checked,emp:$('pdEmp').checked,ind:$('pdInd').checked};
+  const r=sage?{plan:DEF_PLAN,gifi:{}}:planType(prof.type,prof,PDX.filter(x=>x.on).map(x=>[x.n,x.nm,x.g]));
+  C={id,nom,plan:r.plan,gifi:r.gifi,desc:$('pdDesc').value.trim(),profil:prof,rules:[],dfmt:'yy',notes:'',last:''};Object.assign(C,detectSpecial(C));C.src=PLAN[0]?.[0]||'1060';
   setPlan();C.src=srcAccounts()[0]?.[0]||'';saveClient();$('newName').value='';
-  if(!local)CLIENTS.push({id,...cleanClient(C)});openClient(id,true)};
+  if(!local)CLIENTS.push({id,...cleanClient(C)});openClient(id,!!sage)}
+$('pdType').onchange=()=>{PDX=[];pdApercu()};['pdTx','pdEmp','pdInd'].forEach(k=>$(k).onchange=pdApercu);
+$('pdOut').addEventListener('change',e=>{const i=e.target.dataset.pdx;if(i!=null){PDX[+i].on=e.target.checked;pdApercu()}});
+$('pdAi').onclick=pdAi;$('pdGo').onclick=()=>pdCreer(false);$('pdSage').onclick=()=>pdCreer(true);$('pdX').onclick=()=>{const d=$('pdDlg');d.close?d.close():d.removeAttribute('open')};
+
 
 /* ---------- ouverture d'un dossier ---------- */
 async function openClient(id,isNew){
@@ -956,7 +1032,7 @@ async function openClient(id,isNew){
   C=JSON.parse(JSON.stringify(c));C.id=id;setPlan();migrateEx();fillExSel();useEx(C.exCur,true);MIS=null;
   $('vList').hidden=true;$('vClient').hidden=false;window.scrollTo(0,0);
   $('cName').textContent=C.nom;$('cSub').textContent=`${PLAN.length} comptes au plan · ${(C.rules||[]).length} règles apprises · transitoire ${C.tr||'non défini'}`;
-  fillSelects();renderRules();renderSettings();renderChat();$('planTxt').value=C.plan;await loadInv();$('planMsg').textContent='';
+  FICHE=null;chargerFiche();fillSelects();renderRules();renderSettings();renderChat();$('planTxt').value=C.plan;await loadInv();$('planMsg').textContent='';
   const now=new Date(),pm=new Date(now.getFullYear(),now.getMonth()-1,1);
   $('pMois').value=C.last||`${pm.getFullYear()}-${String(pm.getMonth()+1).padStart(2,'0')}`;
   {const e=curEx();if(e&&($('pMois').value<e.deb.slice(0,7)||$('pMois').value>e.fin.slice(0,7)))$('pMois').value=e.fin.slice(0,7)<$('pMois').value?e.fin.slice(0,7):e.deb.slice(0,7)}
@@ -985,7 +1061,8 @@ async function iaContexte(){
   if(!LED)LED=await loadLedger();const[d,f]=exRange(),auj=new Date().toLocaleDateString('fr-CA'),fin=f&&f<auj?f:auj;
   const B=balances(LED,null,fin),I=balances(LED,d,fin);const sol=[...B].filter(([a,c])=>c&&+String(a)[0]<4).concat([...I].filter(([a,c])=>c&&+String(a)[0]>=4)).sort((x,y)=>x[0].localeCompare(y[0]));
   const T=(await iaTx()).filter(x=>x.tr&&!lk(x.date));
-  return `Dossier ouvert : ${C.nom}. Exercice du ${d||'?'} au ${f||'?'}. Onglet affiché : ${tab}. Compte transitoire : ${C.tr||'non défini'}.
+  return `Dossier ouvert : ${C.nom}. ${iaProfil()}${C.notes?' Notes du cabinet : '+C.notes:''}
+Exercice du ${d||'?'} au ${f||'?'}. Onglet affiché : ${tab}. Compte transitoire : ${C.tr||'non défini'}.
 ${P?`Période ouverte à l'écran : ${P.mois} (${P.src}).`:''}
 Plan comptable (numéro nom) :
 ${PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p.join(' ')).join('\n')}
@@ -1366,7 +1443,7 @@ dropzone($('drop'),handle);
 /* ---------- IA : fournisseurs inconnus ---------- */
 async function aiSuggest(txs){
   const descs=[...new Set(txs.filter(t=>t.st==='transit'&&t.unk).map(t=>t.desc))].slice(0,150);if(!descs.length)return 0;
-  const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nPour chaque description de transaction bancaire ci-dessous, donne le compte de dépense ou de revenu le plus probable dans CE plan (numéro exact). Si c'est un nom de personne, un virement ou trop vague pour savoir, mets null. taxable = true si la dépense porte normalement TPS/TVQ au Québec.\n${descs.map((k,i)=>i+'. '+k).join('\n')}\n\nRéponds uniquement avec un tableau JSON : [{"i":0,"compte":"5310","taxable":true}]`,{modelTier:'default'});
+  const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${iaProfil()?`\n${iaProfil()}\n`:''}${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nPour chaque description de transaction bancaire ci-dessous, donne le compte de dépense ou de revenu le plus probable dans CE plan (numéro exact). Si c'est un nom de personne, un virement ou trop vague pour savoir, mets null. taxable = true si la dépense porte normalement TPS/TVQ au Québec.\n${descs.map((k,i)=>i+'. '+k).join('\n')}\n\nRéponds uniquement avec un tableau JSON : [{"i":0,"compte":"5310","taxable":true}]`,{modelTier:'default'});
   const ok=new Set(PLAN.map(p=>p[0]));let n=0;
   (Array.isArray(r)?r:[]).forEach(x=>{const d=descs[x.i];const a=x.compte==null?null:String(x.compte);if(d==null||!a||!ok.has(a)||a===C.tr)return;
     txs.filter(t=>t.desc===d&&t.st==='transit').forEach(t=>{Object.assign(t,{acct:a,tax:!!x.taxable,st:'suggere',why:'Suggéré par l’IA : à vérifier',unk:false});n++})});
@@ -1434,7 +1511,7 @@ $('fbanX').onclick=()=>{idFilter=null;render()};
 $('aiRev').onclick=async()=>{
   const b=$('aiRev');b.disabled=true;b.textContent='L’IA révise la période…';
   const rows=P.tx.map((t,i)=>`${i} | ${t.date} | ${t.desc} | ${(t.amt/100).toFixed(2)} | ${t.acct} ${accName(t.acct)} | ${t.tax?'taxes incl.':'sans taxes'}${t.st==='transit'?' | TRANSITOIRE':''}`).join('\n');
-  try{const r=await sampleFn.json(`Tu es un technicien comptable expérimenté au Québec qui révise la tenue de livres de « ${C.nom} » pour ${moisLbl(P.mois)}, compte ${P.src} ${accName(P.src)}.\nPlan comptable :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`Notes du cabinet : ${C.notes}\n`:''}\nTransactions (index | date | description | montant, négatif = sortie | compte | taxes) :\n${rows}\n\nDonne au plus 8 points de révision utiles et concrets : classements probablement erronés (avec le compte que tu proposes, numéro du plan), transactions au transitoire dont tu peux deviner la nature, traitement TPS/TVQ douteux, éléments inhabituels, et questions précises à poser au client. Pas de généralités ni de répétitions. Réponds uniquement avec un tableau JSON : [{"niveau":"haut|moyen|bas","titre":"court","detail":"une ou deux phrases","lignes":[0,3]}]`,{modelTier:'complex'});
+  try{const r=await sampleFn.json(`Tu es un technicien comptable expérimenté au Québec qui révise la tenue de livres de « ${C.nom} »${iaProfil()?' ('+iaProfil()+')':''} pour ${moisLbl(P.mois)}, compte ${P.src} ${accName(P.src)}.\nPlan comptable :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`Notes du cabinet : ${C.notes}\n`:''}\nTransactions (index | date | description | montant, négatif = sortie | compte | taxes) :\n${rows}\n\nDonne au plus 8 points de révision utiles et concrets : classements probablement erronés (avec le compte que tu proposes, numéro du plan), transactions au transitoire dont tu peux deviner la nature, traitement TPS/TVQ douteux, éléments inhabituels, et questions précises à poser au client. Pas de généralités ni de répétitions. Réponds uniquement avec un tableau JSON : [{"niveau":"haut|moyen|bas","titre":"court","detail":"une ou deux phrases","lignes":[0,3]}]`,{modelTier:'complex'});
     AIITEMS=(Array.isArray(r)?r:[]).slice(0,8).map(x=>({lvl:['haut','moyen','bas'].includes(x.niveau)?x.niveau:'moyen',title:String(x.titre||'').slice(0,140),detail:String(x.detail||'').slice(0,400),ids:(Array.isArray(x.lignes)?x.lignes:[]).map(i=>P.tx[+i]?.id).filter(Boolean)})).filter(x=>x.title);
     if(!AIITEMS.length)AIITEMS=[{lvl:'ok',title:'L’IA n’a rien relevé de particulier.',detail:'',ids:[]}];
   }catch(e){AIITEMS=[{lvl:'moyen',title:'Revue par l’IA impossible pour le moment',detail:e.code==='rate_limited'?'Trop de demandes, réessayez dans une minute.':'Réessayez plus tard.',ids:[]}]}
@@ -1684,7 +1761,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   if(REP==='gifi'){const[exD]=exRange();const B=balances(E,null,t),I=balances(E,f||exD,t);const G=C.gifi||{};
     const acc=[...new Map([...[...B].filter(([a,c])=>c&&+String(a)[0]<4),...[...I].filter(([a,c])=>c&&+String(a)[0]>=4)])].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true}));
     const sum=new Map();acc.forEach(([a,c])=>{const k=G[a]||'?';const v=['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c;sum.set(k,(sum.get(k)||0)+v)});
-    h=`<h2>Codes IGRF (annexes 100 et 125 de la T2) au ${esc(t)}</h2><div class="row" style="margin:6px 0 10px"><label class="sm" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:6px 12px">Importer les IGRF de la T2 de l’an dernier<input type="file" id="gifiFile" accept=".csv,.xlsx,.xls,.txt,.pdf" hidden></label><button class="sm" id="gifiAi" ${sampleFn?'':'disabled'}>Suggérer les codes avec l'IA</button><button class="sm" id="gifiExp">Exporter pour la T2 (CSV)</button><span class="note" id="gifiMsg">Corrigez un code directement dans la colonne IGRF.</span></div>
+    h=`<h2>Codes IGRF (annexes 100 et 125 de la T2) au ${esc(t)}</h2><div class="row" style="margin:6px 0 10px"><label class="sm" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:6px 12px">Importer les IGRF de la T2 de l’an dernier<input type="file" id="gifiFile" accept=".csv,.xlsx,.xls,.txt,.pdf" hidden></label><button class="sm" id="gifiAi" ${sampleFn?'':'disabled'}>Suggérer les codes avec l'IA</button><button class="sm" id="gifiStd">Codes du plan type</button><button class="sm" id="gifiExp">Exporter pour la T2 (CSV)</button><span class="note" id="gifiMsg">Corrigez un code directement dans la colonne IGRF.</span></div>
       <datalist id="igrfDl">${Object.entries(IGRF).filter(([c])=>!igrfTot(c)).map(([c,d])=>`<option value="${c}">${esc(d)}</option>`).join('')}</datalist><table class="rep"><tr class="sec"><td>Compte</td><td>IGRF</td><td class="num">Montant</td></tr>${acc.map(([a,c])=>`<tr><td>${link(a)}</td><td style="white-space:nowrap"><input data-gifi="${esc(a)}" list="igrfDl" value="${esc(G[a]||'')}" style="width:80px;min-height:32px;padding:2px 6px${G[a]&&!igrfOk(G[a])?';border-color:#c0392b':''}" inputmode="numeric"> <small style="color:${G[a]&&!igrfOk(G[a])?'#c0392b':'var(--mute,#667)'}">${G[a]?(IGRF[G[a]]?esc(IGRF[G[a]])+(igrfTot(G[a])?' — code de total, à éviter':''):'Code inconnu'):''}</small></td><td class="num">${fmtN(['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c)}</td></tr>`).join('')}</table>
       <h2 style="margin-top:16px">Sommaire par code</h2><table class="rep"><tr class="sec"><td>Code IGRF</td><td class="num">Montant</td></tr>${[...sum].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`<tr><td>${k==='?'?'<span class="bad-b">Sans code</span>':esc(k)+(IGRF[k]?' '+esc(IGRF[k]):'')}</td><td class="num">${fmtN(v)}</td></tr>`).join('')}</table>`+gifiCtl(E)}
   if(REP==='jr'){let x='';E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).forEach(e=>{x+=`<tr class="grp"><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td colspan="2">${esc(e.desc)}</td></tr>`;e.lines.forEach(([a,c])=>x+=`<tr><td></td><td class="ind" colspan="1">${esc(a)} ${esc(accName(a))}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`)});
@@ -1777,6 +1854,10 @@ async function gifiExport(){if(!LED)LED=await loadLedger();const t=$('repTo').va
   try{await downloads.save({filename:name,data:csv});$('repMsg').textContent='Fichier IGRF enregistré (code, montant) : importez-le dans votre logiciel de T2.'}catch(e){$('repMsg').textContent='Téléchargement annulé.'}}
 $('repOut').addEventListener('change',e=>{if(e.target.id==='gifiFile'){const f=e.target.files[0];e.target.value='';if(f)gifiImport(f)}});
 $('repOut').addEventListener('click',e=>{if(e.target.id==='gifiExp')gifiExport()});
+function gifiStd(){const ref=new Map();DEF_PLAN.split('\n').forEach(l=>{const m=l.match(/^(\S+)\s+(.*)$/);if(m&&DEF_GIFI[m[1]])ref.set(m[1]+'|'+norm(m[2]),DEF_GIFI[m[1]])});Object.values(SECTEURS).forEach(S=>S.c.forEach(([n,nm,g])=>{if(g)ref.set(n+'|'+norm(nm),g)}));
+  const G=C.gifi=C.gifi||{};let n=0;PLAN.forEach(([a,t])=>{if(G[a])return;const g=ref.get(a+'|'+norm(t));if(g){G[a]=g;n++}});saveClient();runRep();setTimeout(()=>{const m=$('gifiMsg');if(m)m.textContent=n?`${n} compte(s) associé(s) selon le plan type (même numéro et même nom).`:'Aucun compte de ce plan ne correspond au plan type (numéro et nom identiques).'},50)}
+$('repOut').addEventListener('click',e=>{if(e.target.id==='gifiStd')gifiStd()});
+
 /* fermeture d'exercice : voir module Exercices */
 
 /* ---------- soldes d'ouverture ---------- */
@@ -2016,8 +2097,8 @@ function renderRules(){const R=C.rules||[];$('rCount').textContent=R.length;
   $('baseRules').innerHTML=baseResolved().map(r=>`<tr><td>${esc(r.p)}</td><td>${r.a?esc(r.a+' '+accName(r.a)):'<span class="why">aucun compte correspondant</span>'}</td><td>${r.t?'Oui':'Non'}</td></tr>`).join('')}
 $('rules').onclick=e=>{const b=e.target.closest('button');const p=b?.dataset.p;if(p==null)return;const i=b.dataset.i!=null?+b.dataset.i:C.rules.findIndex(r=>r.p===p);if(i>=0)C.rules.splice(i,1);saveClient();reclass();renderRules();render();savePer()};
 $('rAdd').onclick=()=>{const p=norm($('rP').value);if(!p)return;C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a:$('rA').value,t:$('rT').checked});$('rP').value='';saveClient();reclass();renderRules();render();savePer()};
-function renderSettings(){renderExList();$('sEmail').value=C.email||'';$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
-$('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
+function renderSettings(){renderExList();$('sEmail').value=C.email||'';$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDesc').value=C.desc||'';$('sDescSrc').textContent=FICHE?.description&&!C.desc?'Description reprise de la fiche du client dans Gestion du cabinet : '+FICHE.description.slice(0,160):'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
+$('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.desc=$('sDesc').value.trim();C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
   $('cName').textContent=C.nom;reclass();saveClient();fillExSel();render();if(P&&P.tx.length)savePer();$('sMsg').textContent='Enregistré.'};
 let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
   C.deleted=true;saveClient();const i=CLIENTS.findIndex(c=>c.id===C.id);if(i>=0)CLIENTS[i].deleted=true;$('back').click()};
@@ -2809,7 +2890,7 @@ function ansRender(){const n=ANS.filter(a=>a.m&&a.expl.trim()).length,nm=ANS.fil
       <td>${a.m&&a.expl.trim()?`<input type="checkbox" data-anst="${i}"${a.tax?' checked':''} title="TPS/TVQ incluses">`:''}</td></tr>`).join('')}</tbody></table>`;
   $('ansApply').hidden=!n;$('ansAi').hidden=!(n&&sampleFn)}
 async function ansAi(){const L=ANS.map((a,i)=>({i,a})).filter(({a})=>a.m&&a.expl.trim());if(!L.length||!sampleFn)return;$('ansMsg').textContent='L’IA propose les comptes…';$('ansAi').disabled=true;
-  try{const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nLe client a expliqué les transactions bancaires suivantes. Pour chacune, donne le compte le plus approprié dans CE plan (numéro exact, jamais le compte transitoire ${C.tr}) et indique si la TPS et la TVQ s'appliquent (achat ou vente taxable au Québec). Si l'explication est insuffisante, compte = null.\n${L.map(({i,a})=>`${i}. ${a.m.sortie?'Sortie':'Entrée'} de ${(a.c/100).toFixed(2)} $ le ${a.date} · relevé : « ${a.desc} » · explication du client : « ${a.expl} »`).join('\n')}\nRéponds en JSON seulement : [{"i":numéro,"compte":"numéro ou null","taxable":true|false}]`);
+  try{const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${iaProfil()?`\n${iaProfil()}\n`:''}${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nLe client a expliqué les transactions bancaires suivantes. Pour chacune, donne le compte le plus approprié dans CE plan (numéro exact, jamais le compte transitoire ${C.tr}) et indique si la TPS et la TVQ s'appliquent (achat ou vente taxable au Québec). Si l'explication est insuffisante, compte = null.\n${L.map(({i,a})=>`${i}. ${a.m.sortie?'Sortie':'Entrée'} de ${(a.c/100).toFixed(2)} $ le ${a.date} · relevé : « ${a.desc} » · explication du client : « ${a.expl} »`).join('\n')}\nRéponds en JSON seulement : [{"i":numéro,"compte":"numéro ou null","taxable":true|false}]`);
     const ok=new Set(PLAN.map(p=>p[0]));let n=0;(Array.isArray(r)?r:[]).forEach(x=>{const a=ANS[x.i];const c=x.compte==null?null:String(x.compte);if(!a||!c||!ok.has(c)||c===C.tr)return;if(!a.acct){a.acct=c;a.tax=!!x.taxable;a.ai=true;n++}});
     $('ansMsg').textContent=n?`L’IA a proposé ${n} compte(s). Vérifiez-les, puis cliquez sur « Appliquer ».`:'L’IA n’a pas pu proposer de compte : choisissez-les dans la liste.';ansRender()}
   catch(e){$('ansMsg').textContent='Suggestion par l’IA impossible pour le moment : choisissez les comptes dans la liste.'}$('ansAi').disabled=false}
