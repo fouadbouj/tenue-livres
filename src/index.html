@@ -1061,8 +1061,9 @@ async function iaContexte(){
   if(!LED)LED=await loadLedger();const[d,f]=exRange(),auj=new Date().toLocaleDateString('fr-CA'),fin=f&&f<auj?f:auj;
   const B=balances(LED,null,fin),I=balances(LED,d,fin);const sol=[...B].filter(([a,c])=>c&&+String(a)[0]<4).concat([...I].filter(([a,c])=>c&&+String(a)[0]>=4)).sort((x,y)=>x[0].localeCompare(y[0]));
   const T=(await iaTx()).filter(x=>x.tr&&!lk(x.date));
+  const ecran=tab==='rep'?` Rapport affiché : ${({bs:'bilan',is:'état des résultats',tb:'balance de vérification',gl:'grand livre',jr:'journal général',tx:'TPS/TVQ',gifi:'IGRF'})[REP]||REP} du ${$('repFrom').value||'?'} au ${$('repTo').value||'?'}${REP==='gl'&&$('repAcc').value?' pour le compte '+$('repAcc').value+' '+accName($('repAcc').value):''}.`:'';
   return `Dossier ouvert : ${C.nom}. ${iaProfil()}${C.notes?' Notes du cabinet : '+C.notes:''}
-Exercice du ${d||'?'} au ${f||'?'}. Onglet affiché : ${tab}. Compte transitoire : ${C.tr||'non défini'}.
+Exercice du ${d||'?'} au ${f||'?'}. Onglet affiché : ${tab}.${ecran} (L'utilisateur navigue pendant qu'il vous parle : « ce compte », « ce rapport » renvoient à ce qui est affiché.) Compte transitoire : ${C.tr||'non défini'}.
 ${P?`Période ouverte à l'écran : ${P.mois} (${P.src}).`:''}
 Plan comptable (numéro nom) :
 ${PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p.join(' ')).join('\n')}

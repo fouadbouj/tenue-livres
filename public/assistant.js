@@ -18,6 +18,11 @@ const css=`#iaBtn{position:fixed;right:22px;bottom:22px;z-index:900;width:56px;h
 #iaF{display:flex;gap:8px;padding:10px;border-top:1px solid #e3e6ec;background:#fff;align-items:stretch;margin:0}#iaPan #iaIn{flex:1;resize:none;height:46px!important;min-height:0!important;max-height:140px;border:1px solid #d0d5dd!important;border-radius:10px;padding:11px 12px;font:inherit;font-size:14.5px;box-shadow:none;outline-offset:0}
 #iaPan #iaGo{border:0;border-radius:10px;background:#0b1626;color:#fff;padding:0 16px;cursor:pointer;font-weight:600;font-size:14px;min-height:0!important;height:46px!important}#iaGo:disabled{opacity:.5}
 .iadots{display:inline-flex;gap:4px}.iadots i{width:6px;height:6px;border-radius:50%;background:#98a2b3;animation:iab 1s infinite}.iadots i:nth-child(2){animation-delay:.15s}.iadots i:nth-child(3){animation-delay:.3s}@keyframes iab{0%,80%{opacity:.3}40%{opacity:1}}
+#iaPan header #iaMic,#iaPan header #iaMin{margin-left:6px}#iaPan header #iaMic.on{background:#c0392b;border-color:#c0392b}
+#iaVoix{display:none;align-items:center;gap:8px;padding:6px 12px;background:#fff7e6;border-top:1px solid #f0dcae;font-size:12.5px;color:#7a5a12}#iaPan.voix #iaVoix{display:flex}
+#iaVoix i{width:9px;height:9px;border-radius:50%;background:#c0392b;animation:iab 1.2s infinite}#iaVoix span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#iaVoix label{display:flex;gap:4px;align-items:center;cursor:pointer;white-space:nowrap}#iaPan #iaVoix input{width:14px!important;height:14px!important;min-height:0!important;margin:0}
+#iaPan.mini{height:auto!important}#iaPan.mini #iaLog{max-height:150px;flex:none}#iaPan.mini #iaSug{display:none}
+#iaBtn.ecoute{background:#c0392b}
 @media print{#iaBtn,#iaPan{display:none!important}}`;
 const ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18.5 9.4 13.8 11.2 12 16 10.2 11.2 5.5 9.4 10.2 7.6z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>';
 
@@ -62,24 +67,48 @@ async function tour(){BUSY=true;render();$('iaGo').disabled=true;
       for(const a of actions){if(!a||!A.actions[a.type])continue;if(A.actions[a.type].auto){try{const res=await A.actions[a.type].executer(a);LOG.push({r:'sys',t:res||'Fait'})}catch(e){LOG.push({r:'sys',t:'Impossible : '+e.message})}}else{try{if(A.actions[a.type].capture)a._avant=A.actions[a.type].capture(a)}catch(e){}LOG.push({r:'act',a,s:''})}}
       break}}
   catch(e){LOG.push({r:'ai',t:'Je n’ai pas pu répondre ('+(e.message||'erreur')+'). Réessayez dans un instant.'})}
-  BUSY=false;save();render();$('iaGo').disabled=false;$('iaIn').focus()}
+  BUSY=false;save();render();$('iaGo').disabled=false;if(!VOIX)$('iaIn').focus();
+  if(VOIX){const last=[...LOG].reverse().find(m=>m.r==='ai');const att=LOG.some(m=>m.r==='act'&&!m.s);const t=(last?last.t:'')+(att?' Dites « confirme » pour appliquer, ou « annule ».':'');if(t)dire(t);else ecouter()}}
 
-function envoyer(t){t=String(t||'').trim();if(!t||BUSY)return;LOG.push({r:'me',t});$('iaIn').value='';tour()}
+
+/* ---------- mode vocal : reconnaissance continue (fr-CA) + réponses lues à voix haute ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let REC=null,VOIX=false,PARLE=false,tampon='',minuterie=null;
+const CONF=/^(oui|ok|confirme|confirmer|vas-y|vas y|go|c'est bon|parfait|approuve|applique)\b/i,ANNU=/^(non|annule|annuler|laisse faire|oublie)\b/i;
+function dire(t){if(!$('iaTts')?.checked||!window.speechSynthesis)return;const u=new SpeechSynthesisUtterance(String(t).slice(0,600));u.lang='fr-CA';
+  const v=speechSynthesis.getVoices().find(v=>/fr-CA/i.test(v.lang))||speechSynthesis.getVoices().find(v=>/^fr/i.test(v.lang));if(v)u.voice=v;
+  PARLE=true;try{REC&&REC.abort()}catch(e){}u.onend=u.onerror=()=>{PARLE=false;if(VOIX)ecouter()};speechSynthesis.cancel();speechSynthesis.speak(u)}
+function ecouter(){if(!SR||!VOIX||PARLE||BUSY)return;try{REC.start()}catch(e){}}
+function voix(on){if(on&&!SR){LOG.push({r:'sys',t:'La reconnaissance vocale n’est pas offerte par ce navigateur : utilisez Chrome ou Edge.'});render();return}
+  VOIX=on;try{sessionStorage.setItem('ia-voix',on?'1':'')}catch(e){}$('iaPan').classList.toggle('voix',on);$('iaMic').classList.toggle('on',on);$('iaMic').setAttribute('aria-pressed',on);$('iaBtn').classList.toggle('ecoute',on);
+  if(on){if(!REC){REC=new SR();REC.lang='fr-CA';REC.continuous=true;REC.interimResults=true;
+      REC.onresult=e=>{let fin='',tmp='';for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin+=r[0].transcript;else tmp+=r[0].transcript}
+        if(fin)tampon=(tampon+' '+fin).trim();$('iaHeard').textContent=(tampon+' '+tmp).trim()||'Je vous écoute…';
+        clearTimeout(minuterie);if(tampon&&!tmp)minuterie=setTimeout(()=>{const t=tampon;tampon='';$('iaHeard').textContent='…';envoyer(t)},1300)};
+      REC.onend=()=>{if(VOIX&&!PARLE&&!BUSY)setTimeout(ecouter,250)};REC.onerror=e=>{if(e.error==='not-allowed'){voix(false);LOG.push({r:'sys',t:'Le micro est bloqué : autorisez-le dans le navigateur.'});render()}}}
+    ecouter()}else{try{REC&&REC.abort()}catch(e){}speechSynthesis?.cancel();clearTimeout(minuterie);tampon=''}}
+function confirmerTout(oui){const P=LOG.map((m,i)=>[m,i]).filter(([m])=>m.r==='act'&&!m.s);if(!P.length)return false;
+  (async()=>{for(const[m]of P){if(!oui){m.s='no';continue}m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok'}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}}save();render();
+    const r=P.map(([m])=>m.s==='ok'?m.res:m.s==='no'?'Annulé':m.res).join('. ');if(VOIX)dire(r)})();return true}
+function envoyer(t){t=String(t||'').trim();if(!t||BUSY)return;LOG.push({r:'me',t});$('iaIn').value='';
+  if(t.length<40&&(CONF.test(t)||ANNU.test(t))&&confirmerTout(CONF.test(t))){save();render();return}
+  tour()}
 
 function init(cfg){A={exemples:[],outils:{},actions:{},accueil:'Bonjour! Que puis-je faire pour vous?',...cfg};load();
   if(!$('iaBtn')){const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
     document.body.insertAdjacentHTML('beforeend',`<button id="iaBtn" type="button" aria-label="Assistant IA" title="Assistant IA">${ICON}</button>
-    <section id="iaPan" hidden role="dialog" aria-label="Assistant IA"><header>${ICON.replace('<svg','<svg width="20" height="20"')}<div><b>Assistant IA</b><small id="iaSub"></small></div><button type="button" id="iaNew">Nouvelle conversation</button><button type="button" id="iaX" aria-label="Fermer">✕</button></header>
-    <div id="iaLog"></div><form id="iaF"><textarea id="iaIn" placeholder="Demandez quelque chose…" aria-label="Message à l’assistant"></textarea><button id="iaGo">Envoyer</button></form></section>`);
+    <section id="iaPan" hidden role="dialog" aria-label="Assistant IA"><header>${ICON.replace('<svg','<svg width="20" height="20"')}<div><b>Assistant IA</b><small id="iaSub"></small></div><button type="button" id="iaNew">Nouvelle</button><button type="button" id="iaMic" title="Parler à l’assistant" aria-pressed="false">🎤 Voix</button><button type="button" id="iaMin" title="Réduire pour naviguer">▁</button><button type="button" id="iaX" aria-label="Fermer">✕</button></header>
+    <div id="iaLog"></div><div id="iaVoix"><i></i><span id="iaHeard">Je vous écoute… naviguez librement dans l’intranet et parlez-moi.</span><label><input type="checkbox" id="iaTts" checked> Réponses à voix haute</label></div><form id="iaF"><textarea id="iaIn" placeholder="Demandez quelque chose…" aria-label="Message à l’assistant"></textarea><button id="iaGo">Envoyer</button></form></section>`);
     $('iaBtn').onclick=()=>{const p=$('iaPan');p.hidden=!p.hidden;if(!p.hidden){render();$('iaIn').focus()}};
     $('iaX').onclick=()=>{$('iaPan').hidden=true};
     $('iaNew').onclick=()=>{if(BUSY)return;LOG=[];save();render()};
+    $('iaMic').onclick=()=>voix(!VOIX);$('iaMin').onclick=()=>$('iaPan').classList.toggle('mini');
     $('iaF').onsubmit=e=>{e.preventDefault();envoyer($('iaIn').value)};
     $('iaIn').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();envoyer($('iaIn').value)}};
     $('iaLog').onclick=async e=>{const b=e.target.closest('button');if(!b)return;
       if(b.dataset.ex){envoyer(b.dataset.ex);return}
       if(b.dataset.no){LOG[+b.dataset.no].s='no';save();render();return}
       if(b.dataset.ok){const m=LOG[+b.dataset.ok];m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok'}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}save();render()}}}
-  $('iaSub').textContent=A.nom;render()}
+  $('iaSub').textContent=A.nom;render();
+  try{if(sessionStorage.getItem('ia-voix')==='1'&&SR){$('iaPan').hidden=false;$('iaPan').classList.add('mini');voix(true)}}catch(e){}}
 window.ASSISTANT={init,refresh:()=>render(),demander:t=>{const p=$('iaPan');if(!p)return;p.hidden=false;render();envoyer(t)}};
 })();
