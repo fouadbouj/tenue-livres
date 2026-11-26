@@ -81,5 +81,5 @@ function init(cfg){A={exemples:[],outils:{},actions:{},accueil:'Bonjour! Que pui
       if(b.dataset.no){LOG[+b.dataset.no].s='no';save();render();return}
       if(b.dataset.ok){const m=LOG[+b.dataset.ok];m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok'}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}save();render()}}}
   $('iaSub').textContent=A.nom;render()}
-window.ASSISTANT={init,refresh:()=>render()};
+window.ASSISTANT={init,refresh:()=>render(),demander:t=>{const p=$('iaPan');if(!p)return;p.hidden=false;render();envoyer(t)}};
 })();
