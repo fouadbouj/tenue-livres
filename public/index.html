@@ -603,14 +603,16 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         </div>
       </div>
       <div class="row" style="align-items:flex-end;margin-top:12px">
-        <label class="f">Du<input type="date" id="repFrom"></label>
+        <label class="f" id="repFromL">Du<input type="date" id="repFrom"></label>
         <label class="f">Au<input type="date" id="repTo"></label>
+        <label class="f" id="repCmpL" hidden>Comparatif<select id="repCmp"><option value="0">Aucun</option><option value="1" selected>1 an</option><option value="2">2 ans</option><option value="3">3 ans</option></select></label>
         <label class="f" id="repAccL" hidden>Compte<select id="repAcc"><option value="">Tous les comptes</option></select></label>
         <button id="repGo" class="pri">Afficher</button>
         <button id="repPdf" class="sm pri">PDF</button>
         <button id="repCsv" class="sm">Excel (CSV)</button>
         <button id="repCp" class="sm">Copier</button>
       </div>
+      <div class="row" style="margin-top:6px;gap:6px"><span class="note" id="repHint"></span><button class="sm" id="repEx">Exercice complet</button></div>
       <div class="msg" id="repMsg"></div>
       <div class="scroll" style="margin-top:10px"><div id="repOut"></div></div>
     </div>

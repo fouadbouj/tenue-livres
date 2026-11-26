@@ -150,6 +150,7 @@ const optsSel=v=>{let o='<option value="__new">+ Nouveau compte…</option>'+OPT
 const newAccts=()=>C&&Array.isArray(C.sage)?PLAN.filter(p=>!C.sage.includes(p[0])):[];
 function usedNew(){if(!P)return[];const nw=new Map(newAccts());const used=new Set();P.tx.forEach(t=>lines(t).forEach(([a])=>{if(nw.has(a))used.add(a)}));return [...used].sort().map(a=>[a,nw.get(a)])}
 const isHeader=(n,t)=>/^(TOTAL|NET\b|SOUS-TOTAL)/.test(norm(t))||(/^\d{4}$/.test(n)&&+n%1000===0);
+const bnrAcc=()=>findAcc(/NON REPARTIS|NON DISTRIBUES/)||findAcc(/BENEFICES REPORTES/)||findAcc(/^SURPLUS(?!.*APPORT)/)||'3560';
 const findAcc=(re,exp)=>{const L=PLAN.filter(([n,t])=>re.test(norm(t))&&!isHeader(n,t));return (exp?L.find(([n])=>/^[5-9]/.test(n)):L[0])?.[0]||''};
 function detectSpecial(c){const pl=parsePlanText(c.plan),f=re=>pl.find(([,t])=>re.test(norm(t)))?.[0]||'';
   return {tr:f(/TRANSITOIRE|D'ATTENTE|EN SUSPENS|SUSPENSE|A CLASSER/)||c.tr||'',tpsA:f(/\bCTI\b/)||f(/TPS.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tpsA||'',tvqA:f(/\bRTI\b/)||f(/TVQ.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tvqA||'',tpsV:f(/TPS.*(PERCUE|A PAYER|FACTUREE)/)||c.tpsV||'',tvqV:f(/TVQ.*(PERCUE|A PAYER|FACTUREE)/)||c.tvqV||''}}
@@ -789,7 +790,7 @@ async function loadLedger(){
   return E}
 function balances(E,from,to,ouvTo=to){/* soldes au "to" ; pour revenus/charges : depuis le début d'exercice ou "from" */
   const[exD]=exRange();const m=new Map();const add=(a,c)=>m.set(a,(m.get(a)||0)+c);
-  const ouv=C.ouv&&(!ouvTo||C.ouv.date<=ouvTo)?C.ouv:null;const re=findAcc(/NON REPARTIS|NON DISTRIBUES|BENEFICES REPORTES|SURPLUS/)||'3560';
+  const ouv=C.ouv&&(!ouvTo||C.ouv.date<=ouvTo)?C.ouv:null;const re=bnrAcc()||'3560';
   if(ouv)Object.entries(ouv.s||{}).forEach(([a,c])=>{if(+String(a)[0]>=4)add(re,c);else add(a,c)});
   const isStart=from||exD||'';
   E.forEach(e=>{if(to&&e.date>to)return;if(ouv&&e.date<ouv.date)return;e.lines.forEach(([a,c])=>{if(+String(a)[0]>=4&&isStart&&e.date<isStart)add(re,c);else add(a,c)})});
@@ -801,30 +802,50 @@ function groups(acctSet,first){/* regroupe les comptes du plan par sections Sage
   out.push(cur);[...acctSet].filter(a=>first.includes(String(a)[0])&&!PLAN.some(p=>p[0]===a)).forEach(a=>out[out.length-1].items.push(a));
   return out.filter(g=>g.items.length)}
 let REP='bs',LED=null;
-function initRep(){const[d,f]=exRange();if(!$('repFrom').value)$('repFrom').value=d;if(!$('repTo').value)$('repTo').value=f||new Date().toISOString().slice(0,10);
+function repUI(){$('repCmpL').hidden=!['bs','is'].includes(REP);$('repFromL').hidden=REP==='bs'||REP==='ap'||REP==='ar'}
+function initRep(){const[d,f]=exRange();['repFrom','repTo'].forEach(id=>{const el=$(id);el.min=d||'';el.max=f||'';if(el.value&&d&&f&&(el.value<d||el.value>f))el.value=''});repUI();
+  $('repHint').textContent=d?`Exercice du ${d} au ${f}. Inscrivez les dates à afficher, puis cliquez sur Afficher.`:'';
   $('repAcc').innerHTML='<option value="">Tous les comptes</option>'+OPTS;if(!d)$('repMsg').textContent='Indiquez le début et la fin de l’exercice dans Paramètres (ou les soldes d’ouverture dans Écritures).';runRep()}
-document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';runRep()});
-$('repGo').onclick=()=>runRep(true);
+document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';repUI();runRep()});
+$('repGo').onclick=()=>runRep(true);$('repCmp').onchange=()=>runRep();
+$('repEx').onclick=()=>{const[d,f]=exRange();$('repFrom').value=d;$('repTo').value=f;runRep()};
+/* comparatifs : mêmes dates, 1 à 3 ans plus tôt, calculés dans le contexte de l'exercice concerné */
+const shiftY=(d,k)=>{if(!d)return d;const[y,m,j]=d.split('-').map(Number);const last=new Date(Date.UTC(y-k,m,0)).getUTCDate();return `${y-k}-${String(m).padStart(2,'0')}-${String(Math.min(j,last)).padStart(2,'0')}`};
+const veille=d=>new Date(new Date(d+'T12:00Z')-864e5).toISOString().slice(0,10);
+function ouvInitial(){const L=(C.ex||[]).filter(x=>x.ouv).sort((a,b)=>a.deb.localeCompare(b.deb));return L[0]?.ouv||C.ouv||null}
+function colBal(E,f,t){/* {B (bilan), I (résultats), ni} pour une période antérieure, ou null si les données n'existent pas */
+  const ex=(C.ex||[]).find(x=>x.deb<=t&&x.fin>=t);
+  if(ex){const sv=[C.exDeb,C.exFin,C.ouv];C.exDeb=ex.deb;C.exFin=ex.fin;C.ouv=ex.ouv||null;
+    try{const st=f&&f>=ex.deb?f:ex.deb;const I=balances(E,st,t);if(!E.some(e=>e.date<=t&&e.date>=ex.deb)&&!ex.ouv)return null;return{B:balances(E,null,t),I,ni:[...I].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0)}}finally{[C.exDeb,C.exFin,C.ouv]=sv}}
+  const o=ouvInitial();if(!o||t!==veille(o.date))return null;
+  const B=new Map(),I=new Map();const re=bnrAcc()||'3560';let ni=0;
+  Object.entries(o.s||{}).forEach(([a,c])=>{if(+String(a)[0]>=4){I.set(a,c);ni-=c}else B.set(a,(B.get(a)||0)+c)});
+  const[exD]=exRange();return{B,I:f&&shiftY(f,-1)===exD?I:null,ni,pre:true}}
 async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p>';
   try{if(!LED||force)LED=await loadLedger()}catch(e){$('repOut').innerHTML='<p class="msg err">Lecture des données impossible.</p>';return}
   const f=$('repFrom').value,t=$('repTo').value,E=LED;
+  if(!t||(!f&&!['bs','ap','ar'].includes(REP))){const[d0,f0]=exRange();$('repOut').innerHTML=`<p class="note" style="padding:18px 0">Inscrivez ${['bs','ap','ar'].includes(REP)?'la date':'les dates du début et de la fin'} de la période${d0?` (exercice du ${esc(d0)} au ${esc(f0)})`:''}, puis cliquez sur <strong>Afficher</strong>.</p>`;$('repMsg').textContent='';return}
   const todo=E.filter(e=>e.todo&&(!f||e.date>=f)&&(!t||e.date<=t)).length;
   const tr=t=>`<tr${t[2]?` class="${t[2]}"`:''}>${t[0]}</tr>`;
   const link=a=>`<a data-gl="${esc(a)}">${esc(a)} ${esc(accName(a))}</a>`;
   let h='',warn=todo?`<p class="msg err">${todo} transaction(s) encore au compte transitoire ${esc(C.tr)} dans cette période.</p><div class="row" style="margin:-4px 0 10px"><button class="sm pri" data-askcli>Demander les détails au client</button><button class="sm" data-ansimp>Importer les réponses du client</button></div>`:'';
-  if(REP==='bs'){const B=balances(E,null,t);const[exD]=exRange();const ni=[...balances(E,f||exD,t)].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
-    const sect=(title,first,sign)=>{const set=new Set([...B].filter(([a,c])=>c&&first.includes(String(a)[0])).map(([a])=>a));let tot=0;let x=`<tr class="sec"><td colspan="2">${title}</td></tr>`;
-      groups(set,first).forEach(g=>{let st=0;if(g.title)x+=`<tr class="grp"><td colspan="2">${esc(g.title)}</td></tr>`;g.items.forEach(a=>{const v=sign*B.get(a);st+=v;x+=`<tr><td class="ind">${link(a)}</td><td class="num">${fmtN(v)}</td></tr>`});if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td><td class="num">${fmtN(st)}</td></tr>`;tot+=st});
-      return[x,tot]};
-    const[a,ta]=sect('Actif','1',1),[p,tp]=sect('Passif','2',-1);let[c,tc]=sect('Avoir des actionnaires','3',-1);
-    c+=`<tr><td class="ind">Bénéfice net (perte) de l'exercice</td><td class="num">${fmtN(ni)}</td></tr>`;tc+=ni;
-    const ok=Math.abs(ta-tp-tc)<1;
-    h=`<h2>Bilan au ${esc(t)}</h2><table class="rep">${a}<tr class="tot"><td>Total de l'actif</td><td class="num">${fmtN(ta)}</td></tr>${p}<tr class="sub"><td>Total du passif</td><td class="num">${fmtN(tp)}</td></tr>${c}<tr class="sub"><td>Total de l'avoir</td><td class="num">${fmtN(tc)}</td></tr><tr class="tot"><td>Total du passif et de l'avoir</td><td class="num">${fmtN(tp+tc)}</td></tr></table>
-      <p class="${ok?'ok-b':'bad-b'}">${ok?'Le bilan balance.':`Écart de ${fmtN(ta-tp-tc)} $ : vérifiez les soldes d'ouverture.`}</p>`}
-  if(REP==='is'){const B=balances(E,f,t);const set=new Set([...B].filter(([a,c])=>c&&+String(a)[0]>=4).map(([a])=>a));
-    const sect=(title,first,sign)=>{let tot=0,x=`<tr class="sec"><td colspan="2">${title}</td></tr>`;groups(set,first).forEach(g=>{let st=0;if(g.title)x+=`<tr class="grp"><td colspan="2">${esc(g.title)}</td></tr>`;g.items.forEach(a=>{const v=sign*B.get(a);st+=v;x+=`<tr><td class="ind">${link(a)}</td><td class="num">${fmtN(v)}</td></tr>`});if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td><td class="num">${fmtN(st)}</td></tr>`;tot+=st});return[x,tot]};
-    const[r,tr_]=sect('Revenus','4',-1),[d,td]=sect('Dépenses','56789',1);
-    h=`<h2>État des résultats du ${esc(f)} au ${esc(t)}</h2><table class="rep">${r}<tr class="sub"><td>Total des revenus</td><td class="num">${fmtN(tr_)}</td></tr>${d}<tr class="sub"><td>Total des dépenses</td><td class="num">${fmtN(td)}</td></tr><tr class="tot"><td>Bénéfice net (perte)</td><td class="num">${fmtN(tr_-td)}</td></tr></table>`}
+  if(REP==='bs'||REP==='is'){const nC=+$('repCmp').value||0,[exD]=exRange(),cur={B:balances(E,null,t),I:balances(E,f||exD,t)};cur.ni=[...cur.I].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
+    const cols=[{t,f,...cur}];for(let k=1;k<=nC;k++){const tk=shiftY(t,k),fk=shiftY(f||exD,k);cols.push({t:tk,f:fk,...(colBal(E,fk,tk)||{})})}
+    const M=REP==='bs'?'B':'I',ok=c=>!!c[M],head=`<tr class="grp"><td></td>${cols.map(c=>`<td class="num">${esc(REP==='bs'?c.t:(c.f+' au '+c.t))}${ok(c)?'':'<br><small>non disponible</small>'}</td>`).join('')}</tr>`;
+    const val=(c,a,sign)=>ok(c)?sign*(c[M].get(a)||0):null,cell=v=>`<td class="num">${v==null?'':fmtN(v)}</td>`;
+    const sect=(title,first,sign)=>{const set=new Set(cols.flatMap(c=>ok(c)?[...c[M]].filter(([a,v])=>v&&first.includes(String(a)[0])&&(REP==='bs'||+String(a)[0]>=4)).map(([a])=>a):[]));
+      const tot=cols.map(c=>ok(c)?0:null);let x=`<tr class="sec"><td colspan="${cols.length+1}">${title}</td></tr>`;
+      groups(set,first).forEach(g=>{const st=cols.map(c=>ok(c)?0:null);if(g.title)x+=`<tr class="grp"><td colspan="${cols.length+1}">${esc(g.title)}</td></tr>`;
+        g.items.forEach(a=>{const v=cols.map(c=>val(c,a,sign));v.forEach((y,i)=>{if(y!=null)st[i]+=y});x+=`<tr><td class="ind">${link(a)}</td>${v.map(cell).join('')}</tr>`});
+        if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td>${st.map(cell).join('')}</tr>`;st.forEach((y,i)=>{if(y!=null)tot[i]+=y})});return[x,tot]};
+    const row=(cls,l,v)=>`<tr class="${cls}"><td>${l}</td>${v.map(cell).join('')}</tr>`,sub=(a,b,sg=1)=>a.map((y,i)=>y==null||b[i]==null?null:y+sg*b[i]);
+    if(REP==='bs'){const[a,ta]=sect('Actif','1',1),[p,tp]=sect('Passif','2',-1);let[c,tc]=sect('Avoir des actionnaires','3',-1);const ni=cols.map(k=>ok(k)?k.ni:null);
+      c+=row('','<span class="ind">Bénéfice net (perte) de l\'exercice</span>',ni);tc=sub(tc,ni);const pa=sub(tp,tc),okB=Math.abs(ta[0]-tp[0]-tc[0])<1;
+      h=`<h2>Bilan au ${esc(t)}</h2><table class="rep">${nC?head:''}${a}${row('tot','Total de l\'actif',ta)}${p}${row('sub','Total du passif',tp)}${c}${row('sub','Total de l\'avoir',tc)}${row('tot','Total du passif et de l\'avoir',pa)}</table>
+        <p class="${okB?'ok-b':'bad-b'}">${okB?'Le bilan balance.':`Écart de ${fmtN(ta[0]-tp[0]-tc[0])} $ : vérifiez les soldes d'ouverture.`}</p>`}
+    else{const[r,tr_]=sect('Revenus','4',-1),[d,td]=sect('Dépenses','56789',1);
+      h=`<h2>État des résultats du ${esc(f)} au ${esc(t)}</h2><table class="rep">${nC?head:''}${r}${row('sub','Total des revenus',tr_)}${d}${row('sub','Total des dépenses',td)}${row('tot','Bénéfice net (perte)',sub(tr_,td,-1))}</table>`}
+    if(nC&&cols.slice(1).some(c=>!ok(c)))h+=`<p class="note">Les années sans données dans ce dossier (ni exercice ni soldes d’ouverture correspondants) sont indiquées « non disponible ».</p>`}
   if(REP==='tb'){const B=balances(E,null,t);const[exD]=exRange();const I=balances(E,f||exD,t);let D=0,K=0,x='';
     const all=new Map([...[...B].filter(([a])=>+String(a)[0]<4),...[...I].filter(([a])=>+String(a)[0]>=4)]);
     [...all].filter(([,c])=>c).sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true})).forEach(([a,c])=>{c>0?D+=c:K-=c;x+=`<tr><td>${link(a)}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`});
@@ -850,7 +871,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   if(REP==='jr'){let x='';E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).forEach(e=>{x+=`<tr class="grp"><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td colspan="2">${esc(e.desc)}</td></tr>`;e.lines.forEach(([a,c])=>x+=`<tr><td></td><td class="ind" colspan="1">${esc(a)} ${esc(accName(a))}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`)});
     h=`<h2>Journal général du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td>Date</td><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${x||'<tr><td colspan="4" class="empty">Aucune écriture.</td></tr>'}</table>`}
   $('repOut').innerHTML=warn+h;$('repMsg').textContent=`${E.length} écritures dans le dossier · ${C.nom}`}
-$('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');if(g){REP='gl';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r==='gl'));$('repAccL').hidden=false;$('repAcc').value=g.dataset.gl;runRep();return}
+$('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');if(g){REP='gl';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r==='gl'));$('repAccL').hidden=false;$('repAcc').value=g.dataset.gl;if(!$('repFrom').value)$('repFrom').value=exRange()[0];repUI();runRep();return}
   const o=e.target.closest('[data-open]');if(o){const[m,src,desc]=o.dataset.open.split('|');setTab('rev');if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
     $('pMois').value=m;if(![...$('pSrc').options].some(x=>x.value===src))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(src)}">${esc(src)}</option>`);$('pSrc').value=src;
     filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()}});
@@ -1136,7 +1157,7 @@ const exOf=d=>(C?.ex||[]).find(x=>d>=x.deb&&d<=x.fin)?.id||'';
 const exLbl=x=>x?`${x.deb} au ${x.fin}`:'';
 const finOf=d=>{const x=new Date(d+'T12:00');x.setFullYear(x.getFullYear()+1);x.setDate(x.getDate()-1);return x.toISOString().slice(0,10)};
 const dLong=d=>d?new Date(d+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'}):'[date]';
-const reAcct=()=>findAcc(/NON REPARTIS|NON DISTRIBUES|BENEFICES REPORTES|SURPLUS/)||'3560';
+const reAcct=()=>bnrAcc()||'3560';
 const isDiv=a=>String(a)[0]==='3'&&/DIVIDENDE/.test(norm(accName(a)));
 function migrateEx(){if(!Array.isArray(C.ex))C.ex=[];
   if(!C.ex.length&&(C.exDeb||C.ouv)){const[d,f]=exRange();if(d)C.ex.push({id:d,deb:d,fin:f||finOf(d),statut:'ouvert',ouv:C.ouv||null})}
@@ -1147,7 +1168,7 @@ function syncEx(){if(!C.exDeb)return;let e=curEx();
   if(e.statut==='ferme')return;e.deb=C.exDeb;e.fin=C.exFin||finOf(C.exDeb);e.ouv=C.ouv||null}
 function useEx(id,quiet){const e=(C.ex||[]).find(x=>x.id===id);if(e){C.exCur=e.id;C.exDeb=e.deb;C.exFin=e.fin;C.ouv=e.ouv||null}
   fillExSel();LED=null;MIS=null;if(quiet)return;saveClient();renderSettings();
-  $('repFrom').value=C.exDeb||'';$('repTo').value=C.exFin||'';
+  $('repFrom').value='';$('repTo').value='';
   const m=$('pMois').value;if(e&&(m<e.deb.slice(0,7)||m>e.fin.slice(0,7)))$('pMois').value=(C.last&&C.last<=e.fin.slice(0,7)&&C.last>=e.deb.slice(0,7))?C.last:e.fin.slice(0,7);
   setTab(tab);if(tab==='rev'&&mode==='m')openPeriod()}
 function fillExSel(){const L=C.ex||[];
