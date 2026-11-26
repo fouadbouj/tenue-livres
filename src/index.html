@@ -928,7 +928,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],immoOk:c.immoOk||{},rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -1522,11 +1522,14 @@ $('ask').onclick=()=>askAI(false);
 const EXEMPT=/ASSURANCE|FRAIS BANC|FRAIS DE BANQUE|INTERET|SALAIRE|IMMATRICUL|PERMIS|TAXES MUNICIPALES|TAXES FONCIERES|DONS|AMENDE|PENALITE|RETRAIT|ACTIONNAIRE|EMPRUNT|PRET/;
 const TAXABLE=new RegExp([CAT.carb,CAT.elec,CAT.tel,CAT.log,CAT.four,CAT.pub,CAT.veh].map(r=>r.source).join('|'));
 const BIGSKIP=/LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC|SOUS.?TRAIT|HONORAIRE|AVANCE|DIVIDENDE|INTERET|ASSURANCE|FRAIS BANCAIRE|COTISATION|TAXES|PERMIS|ABONNEMENT|TELECOM|ELECTRICITE|CARBURANT|PUBLICITE|REPAS|DEPLACEMENT|FORMATION|DONS?\b|SERVICES PROFESSIONNELS|CONSULTANT/;
-/* Seuls les comptes où un achat peut être une immobilisation déclenchent « Dépense importante » ; un virement à une personne n'en est jamais une. */
-const IMMO=/MATERIEL|EQUIPEMENT|OUTIL|MOBILIER|AMEUBLEMENT|ORDINATEUR|INFORMATIQUE|LOGICIEL|ENTRETIEN|REPARATION|AMELIORATION|RENOVATION|FOURNITURE|MATERIAUX|ACHAT|VEHICULE|MACHIN|INSTRUMENT|APPAREIL|DIVERS|AUTRES? (DEPENSES|FRAIS)/;
-const PERSONNE=/VIREMENT ENVOYE|VIREMENT INTERAC|VIREMENT A |E-?TRANSFER|INTERAC E|TRANSFERT A /;
+/* « Dépense importante » : pas signalée quand une règle du client classe déjà ce fournisseur dans un compte qui ne peut pas être une immobilisation (ex. Marta → sous-traitance). Sans règle, ou vers un compte d’équipement, on signale. */
+const IMMO=/^(?!.*(LOCATION|LOYER|DENEIGEMENT|GESTION|CONCIERGERIE|BUANDERIE)).*(MATERIEL|EQUIPEMENT|OUTIL|\bMOBILIER\b|AMEUBLEMENT|ORDINATEUR|INFORMATIQUE|LOGICIEL|ENTRETIEN|REPARATION|AMELIORATION|RENOVATION|FOURNITURE|MATERIAUX|ACHAT|VEHICULE|CAMION|MACHIN|INSTRUMENT|APPAREIL|IMMOBILISATION|DIVERS|AUTRES? (DEPENSES|FRAIS))/;
+const parRegle=t=>t.st==='auto'&&/^Règle du client/.test(t.why||'');
 /* Professions dont les services sont exonérés : sans réglage contraire, on suppose le client non inscrit à la TPS/TVQ. */
 const EXONERE=/\b(MEDECIN|DR|DRE|DOCTEUR|CLINIQUE MEDICALE|DENTISTE|PSYCHOLOGUE|PHYSIOTHERAPEUTE|CHIROPRATICIEN|OPTOMETRISTE|ORTHOPHONISTE|ERGOTHERAPEUTE|INFIRMIER|INFIRMIERE|SAGE-FEMME|AUDIOLOGISTE|PODIATRE|ACUPUNCTEUR|GARDERIE|CPE)\b/;
+/* Une dépense importante confirmée (✓ Vérifié) pour un fournisseur et un compte ne revient plus dans les autres mois du dossier. */
+const immoCle=t=>keyOf(t.desc)+'|'+t.acct;
+const immoDejaOk=t=>{const v=(C.immoOk||{})[immoCle(t)];return!!v&&v!==P.mois+'_'+P.src};
 const dd=(a,b)=>Math.abs((new Date(a)-new Date(b))/864e5);
 function checks(){
   if(!P||!P.tx.length)return[];const tx=P.tx,out=[],add=(lvl,title,detail,list)=>out.push({lvl,title,detail,ids:(list||[]).map(t=>t.id)});
@@ -1545,7 +1548,7 @@ function checks(){
   for(const[a,l]of grp){const u=[...new Set(l)];if(l.length>=2||(Math.abs(a)>=50000&&Math.abs(a)%10000===0))add('moyen',`Virement récurrent ou rond : ${fmt(a)}${u.length>1?` × ${u.length}`:''}`,'Souvent un loyer, un salaire ou un remboursement de prêt. Demandez au client, classez-le, puis retenez la règle.',u)}
   const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3)dups.push([a,b])}
   dups.forEach(([a,b])=>add('moyen',`Doublon possible : ${a.desc}`,`${fmt(a.amt)} le ${a.date} et le ${b.date}. Double paiement?`,[a,b]));
-  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t))&&IMMO.test(nm(t))&&!PERSONNE.test(norm(t.desc)));
+  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t))&&!(parRegle(t)&&!IMMO.test(nm(t)))&&!immoDejaOk(t));
   big.forEach(t=>add('moyen',`Dépense importante : ${t.desc} (${fmt(t.amt)})`,'Plus de 1 500 $ : obtenez la facture et vérifiez si c’est une immobilisation à amortir plutôt qu’une dépense.',[t]));
   const self=tx.filter(t=>t.acct===(t.src||P.src));if(self.length)add('haut',`Classé dans le compte du relevé lui-même : ${self.length}`,`Ces transactions vont dans ${P.src} ${accName(P.src)}, le compte de banque du relevé : l'écriture s'annule. Choisissez le bon compte.`,self);
   const hdr=tx.filter(t=>{const p=PLAN.find(q=>q[0]===t.acct);return p&&isHeader(p[0],p[1])});if(hdr.length)add('haut',`Compte de titre ou de total : ${hdr.length}`,`Sage refuse les écritures dans ${[...new Set(hdr.map(t=>t.acct+' '+accName(t.acct)))].join(', ')}. Choisissez un compte détaillé.`,hdr);
@@ -1583,7 +1586,9 @@ $('chkVA').onclick=()=>{CHKV=false;renderChecks()};$('chkVV').onclick=()=>{CHKV=
 document.getElementById('chkPanel').addEventListener('click',e=>{const m=e.target.closest('[data-mute],[data-unmute]');if(!m)return;e.preventDefault();
   if(m.dataset.mute){if(!confirm(`Ne plus signaler « ${m.dataset.mute} » pour ce dossier? (Réactivable dans l’onglet Vérifiés.)`))return;C.chkOff=[...new Set([...(C.chkOff||[]),m.dataset.mute])]}else C.chkOff=(C.chkOff||[]).filter(k=>k!==m.dataset.unmute);saveClient();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const b=e.target.closest('button[data-vok],button[data-unv]');if(!b||!P)return;const k=b.dataset.vok||b.dataset.unv,c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;
-  P.verif=P.verif||{};const cle=chkCle(c,k[0]);if(b.dataset.vok)P.verif[cle]={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};else delete P.verif[cle];savePer();renderChecks()});
+  P.verif=P.verif||{};const cle=chkCle(c,k[0]);if(b.dataset.vok)P.verif[cle]={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};else delete P.verif[cle];
+  if(/^Dépense importante/.test(c.title)){C.immoOk=C.immoOk||{};P.tx.filter(t=>c.ids.includes(t.id)).forEach(t=>{if(b.dataset.vok)C.immoOk[immoCle(t)]=P.mois+'_'+P.src;else delete C.immoOk[immoCle(t)]});saveClient()}
+  savePer();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const k=e.target.closest('button[data-c]')?.dataset.c;if(!k)return;
   const c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;idFilter={ids:new Set(c.ids),title:c.title};render();$('txTable').scrollIntoView({behavior:'smooth',block:'start'})});
 $('fbanX').onclick=()=>{idFilter=null;render()};
