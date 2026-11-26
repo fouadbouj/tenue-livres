@@ -58,5 +58,45 @@ function fichier005(p,numero,creation,echeance,tx){const org=N(p.organisme,10),f
   rec(('Z'+N(++seq,9)+org+fno+N(tot,14)+N(tx.length,8)+N(0,14)+N(0,8)+'0'.repeat(44)).padEnd(1464,' '));
   return L.join('\r\n')+'\r\n'}
 
-window.FACTURE={TPS,TVQ,r2,taxes,money,MOIS,factureHtml,accordHtml,fichier005,jul};
+
+/* ---------- facture en PDF (jsPDF) et courriel de facture ---------- */
+const charger=src=>new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>ko(new Error('chargement impossible'));document.head.appendChild(s)});
+async function libsPdf(){if(!window.jspdf)await charger('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await charger('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')}
+async function facturePdf(f,c,pay={}){await libsPdf();const{jsPDF}=window.jspdf,doc=new jsPDF({unit:'pt',format:'letter'}),W=doc.internal.pageSize.getWidth(),e=f.emetteur||{},M=54,nav=[11,22,38],or=[201,157,69];
+  const m$=v=>money(v).replace(/ | /g,' ');
+  doc.setFont('helvetica','bold');doc.setFontSize(26);doc.setTextColor(...nav);doc.text('bCPA',M,70);doc.setTextColor(...or);doc.text('.',M+doc.getTextWidth('bCPA'),70);
+  doc.setFontSize(10);doc.setTextColor(17,17,17);doc.text(e.nom||'Boujrad CPA Inc.',M,90);doc.setFont('helvetica','normal');doc.text([e.adresse||'220-672, boulevard des Laurentides',e.ville||'Laval (Québec) H7G 2V9',e.courriel||''].filter(Boolean),M,104);
+  doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(31,61,110);doc.text('FACTURE',W-M,70,{align:'right'});doc.setFontSize(10);doc.setTextColor(17,17,17);doc.setFont('helvetica','normal');
+  const info=[['Numéro',f.numero||''],['Date',dLong(f.date)],...(f.mode!=='dpa'&&f.echeance?[['Payable au plus tard le',dLong(f.echeance)]]:[])];info.forEach(([a,b],i)=>{doc.text(a,W-M-150,92+i*14,{align:'right'});doc.setFont('helvetica','bold');doc.text(b,W-M,92+i*14,{align:'right'});doc.setFont('helvetica','normal')});
+  doc.setDrawColor(...or);doc.setLineWidth(2);doc.line(M,138,W-M,138);
+  doc.setFont('helvetica','bold');doc.text('Facturé à :',M,162);doc.setFont('helvetica','normal');doc.text([c.nom||'',c.adresse||'',[c.ville,c.code_postal].filter(Boolean).join(' '),c.courriel||''].filter(Boolean),M,176);
+  doc.autoTable({startY:230,margin:{left:M,right:M},head:[['Description',{content:'Montant',styles:{halign:'right'}}]],body:(f.lignes||[]).map(l=>[l.description,m$(l.montant)]),styles:{fontSize:10,cellPadding:6},headStyles:{fillColor:[242,244,248],textColor:17},columnStyles:{1:{halign:'right',cellWidth:110}}});
+  let y=doc.lastAutoTable.finalY+8;const tot=[['Sous-total',m$(f.sous_total)],[`TPS (5 %)${e.tps?' — '+e.tps:''}`,m$(f.tps)],[`TVQ (9,975 %)${e.tvq?' — '+e.tvq:''}`,m$(f.tvq)]];
+  tot.forEach(([a,b])=>{y+=16;doc.text(a,W-M-120,y,{align:'right'});doc.text(b,W-M,y,{align:'right'})});y+=8;doc.setLineWidth(1);doc.setDrawColor(17,17,17);doc.line(W-M-260,y,W-M,y);y+=16;doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('Total',W-M-120,y,{align:'right'});doc.text(m$(f.total),W-M,y,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(10);y+=34;
+  const lignesPay=f.mode==='dpa'?[`Paiement par débit préautorisé : ${m$(f.total)} ${f.statut==='payée'?'prélevé':'sera prélevé'} conformément à votre accord.`]:f.statut==='payée'?[`Facture payée${f.paye_le?' le '+dLong(f.paye_le):''}. Merci!`]:
+    ['Modes de paiement :',...(pay.interac?[`• Virement Interac à ${pay.interac} (indiquez le numéro ${f.numero} dans le message)${pay.interacNote?' — '+pay.interacNote:''}`]:[]),...(pay.lien&&pay.carte?[`• Carte de crédit, en ligne : ${pay.lien}`]:pay.lien?[`• Votre facture en ligne : ${pay.lien}`]:[])];
+  doc.setFillColor(246,247,250);const hh=lignesPay.length*14+16;doc.roundedRect(M,y-14,W-2*M,hh,6,6,'F');doc.text(lignesPay.map(l=>doc.splitTextToSize(l,W-2*M-24)).flat(),M+12,y);y+=hh+10;
+  if(f.note){doc.setTextColor(85,85,85);doc.text(doc.splitTextToSize(f.note,W-2*M),M,y);y+=20}
+  doc.setTextColor(85,85,85);doc.setFontSize(9);doc.text('Merci de votre confiance.',M,y+10);
+  return doc.output('datauristring').split(',')[1]}
+function courrielFacture(f,c,pay={}){const qui=(c.contact||c.nom||'').trim();
+  return `Bonjour${qui?' '+qui:''},
+
+Merci d’avoir fait confiance à Boujrad CPA Inc. Vous trouverez ci-joint notre facture ${f.numero}${(f.lignes||[]).length?' ('+(f.lignes||[]).map(l=>String(l.description).replace(/\.$/,'')).map(d=>d.charAt(0).toLowerCase()+d.slice(1)).join(', ')+')':''}.
+
+Montant total : ${money(f.total).replace(/ | /g,' ')} (taxes incluses)${f.echeance?`
+Payable au plus tard le : ${dLong(f.echeance)}`:''}
+
+Modes de paiement :
+${[pay.lien&&pay.carte?`• Carte de crédit : payez en ligne en toute sécurité au ${pay.lien}`:'',pay.interac?`• Virement Interac : envoyez le montant à ${pay.interac} en indiquant le numéro de facture ${f.numero} dans le message${pay.interacNote?' ('+pay.interacNote+')':''}`:''].filter(Boolean).join('\n')||'• Communiquez avec nous pour le mode de paiement'}${pay.lien&&!pay.carte?`
+
+Votre facture en ligne : ${pay.lien}`:''}
+
+N’hésitez pas à nous écrire si vous avez des questions.
+
+Merci de votre confiance!
+
+Boujrad CPA Inc.`}
+window.FACTURE={TPS,TVQ,r2,taxes,money,MOIS,factureHtml,accordHtml,fichier005,jul,facturePdf,courrielFacture,libsPdf};
 })();

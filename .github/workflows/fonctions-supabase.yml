@@ -26,3 +26,6 @@ jobs:
         run: npx --yes supabase@latest functions deploy cc-avis --project-ref "$PROJET" --no-verify-jwt --use-api --yes
       - name: Rappels et sommaire mensuel
         run: npx --yes supabase@latest functions deploy cc-rappels --project-ref "$PROJET" --no-verify-jwt --use-api --yes
+      # cc-paiement : page de paiement publique (payer.html) et webhook Stripe signé
+      - name: Paiement des factures
+        run: npx --yes supabase@latest functions deploy cc-paiement --project-ref "$PROJET" --no-verify-jwt --use-api --yes

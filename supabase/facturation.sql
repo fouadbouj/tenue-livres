@@ -111,3 +111,14 @@ create or replace function public.pc_mon_dpa(p_client uuid) returns table (statu
   language sql stable security definer set search_path = public as
 $$ select statut, montant, jour, debut, signe_le, institution, right(compte, 3) from public.cc_dpa_accords
    where client_id = p_client and client_id in (select public.pc_mes_entreprises()) order by created_at desc limit 1 $$;
+
+-- ---------------------------------------------------------------------
+-- Factures envoyées par courriel et payables par Interac ou par carte (page payer.html)
+-- ---------------------------------------------------------------------
+alter table public.cc_factures add column if not exists jeton text;
+update public.cc_factures set jeton = replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','') where jeton is null;
+alter table public.cc_factures alter column jeton set default replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','');
+create unique index if not exists cc_factures_jeton on public.cc_factures (jeton);
+alter table public.cc_factures add column if not exists envoye_le timestamptz;
+alter table public.cc_factures add column if not exists paye_par text;          -- carte, interac, dpa, autre
+alter table public.cc_factures add column if not exists stripe_session text;

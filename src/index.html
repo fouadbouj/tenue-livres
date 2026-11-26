@@ -975,7 +975,7 @@ const SECTEURS={
  services:{nom:'Services : entretien, esthétique, coiffure, formation',c:[['4021','Ventes de produits','8000'],['5016','Produits utilisés pour les services','8320'],['6012','Commissions de plateformes de réservation','9273']]},
  autonome:{nom:'Travailleur autonome (entreprise individuelle)',ind:1,c:[['6105','Bureau à domicile','8810']]}};
 function planType(type,{tx,emp,ind},extras=[]){const S=SECTEURS[type]||SECTEURS.general,indiv=ind||S.ind;const L=DEF_PLAN.split('\n').map(l=>{const m=l.match(/^(\S+)\s+(.*)$/);return m?[m[1],m[2]]:null}).filter(Boolean);
-  const out=L.filter(([n])=>!(!tx&&+n>=2310&&+n<=2335)&&!(!emp&&['2120','2125','2130','5100','5110','5120'].includes(n))&&!(indiv&&['1225','2160','2170','2640','3100','3200','3500','3600','9000','9010'].includes(n)));
+  const out=L.filter(([n])=>!(indiv&&['1225','2160','2170','2640','3100','3200','3500','3600','9000','9010'].includes(n)));
   const G={};out.forEach(([n])=>{if(DEF_GIFI[n])G[n]=DEF_GIFI[n]});
   if(indiv){out.push(['3110','Mise de fonds du propriétaire'],['3120','Retraits du propriétaire'],['3130','Capital du propriétaire'])}
   [...S.c,...extras].forEach(([n,nm,g])=>{if(out.some(x=>x[0]===n))return;out.push([n,nm]);if(g&&!indiv)G[n]=g});

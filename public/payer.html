@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr-CA"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payer votre facture · Boujrad CPA Inc.</title><link rel="icon" href="favicon.svg" type="image/svg+xml"><meta name="robots" content="noindex">
+<link rel="stylesheet" href="espace.css">
+<style>.wrap{max-width:720px;margin:0 auto;padding:28px 18px}.big{font-size:30px;font-weight:800;margin:4px 0}.opts{display:grid;gap:14px;margin-top:16px}
+.opt2{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff}.opt2 h3{margin:0 0 6px}table.l{width:100%;border-collapse:collapse;margin-top:10px}table.l td{padding:6px 0;border-bottom:1px solid var(--line)}table.l td.r{text-align:right;white-space:nowrap}</style></head>
+<body>
+<header class="top"><div class="in"><a class="brand" href="https://boujradcpa.com"><img class="wm" src="bcpa-blanc.svg" alt="bCPA."> <span>Paiement de facture</span></a></div></header>
+<main class="wrap"><div class="card" id="box"><p class="sub">Chargement de votre facture…</p></div></main>
+<script src="config.js"></script>
+<script src="facture.js"></script>
+<script>
+(()=>{const cfg=window.CONFIG||{},$=id=>document.getElementById(id),q=new URLSearchParams(location.search),jeton=q.get('f')||'',ok=q.get('ok')==='1';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),money=v=>new Intl.NumberFormat('fr-CA',{style:'currency',currency:'CAD'}).format(+v||0);
+const dl=x=>x?new Date(String(x).slice(0,10)+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'}):'';
+const call=async body=>{const r=await fetch(`${cfg.SUPABASE_URL}/functions/v1/${cfg.FONCTION_PAIEMENT||'cc-paiement'}`,{method:'POST',headers:{'Content-Type':'application/json',apikey:cfg.SUPABASE_ANON_KEY,Authorization:'Bearer '+cfg.SUPABASE_ANON_KEY},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok||d.error)throw new Error(d.error||'Erreur');return d};
+let F=null,essais=0;
+async function charger(){try{F=await call({action:'info',jeton})}catch(e){$('box').innerHTML=`<h1>Facture introuvable</h1><p class="sub">Ce lien n’est plus valide. Écrivez-nous pour recevoir votre facture de nouveau.</p>`;return}afficher();
+  if(ok&&F.statut!=='payée'&&essais++<10)setTimeout(charger,3000)}
+function afficher(){const f=F,paye=f.statut==='payée';
+  $('box').innerHTML=`<p class="sub" style="margin:0">Facture ${esc(f.numero)} · ${dl(f.date)}${f.client?.nom?' · '+esc(f.client.nom):''}</p><div class="big">${money(f.total)}</div><p class="sub" style="margin:0">${paye?`<span class="pill ok">Payée${f.paye_le?' le '+dl(f.paye_le):''}</span>`:f.echeance?'Payable au plus tard le '+dl(f.echeance):''}</p>
+  <table class="l">${(f.lignes||[]).map(l=>`<tr><td>${esc(l.description)}</td><td class="r">${money(l.montant)}</td></tr>`).join('')}<tr><td>TPS</td><td class="r">${money(f.tps)}</td></tr><tr><td>TVQ</td><td class="r">${money(f.tvq)}</td></tr><tr><td><strong>Total</strong></td><td class="r"><strong>${money(f.total)}</strong></td></tr></table>
+  ${ok&&!paye?'<div class="info" style="margin-top:14px">Merci! Votre paiement est en cours de confirmation…</div>':''}
+  ${paye?'<div class="info" style="margin-top:14px"><strong>Merci!</strong> Cette facture est payée.</div>':`<div class="opts">
+   ${f.carte?`<div class="opt2"><h3>Carte de crédit</h3><p class="sub" style="margin:0 0 10px">Paiement sécurisé par Stripe. Vos renseignements de carte ne passent jamais par Boujrad CPA.</p><button class="pri" id="payC">Payer ${money(f.total)} par carte</button><span class="msg err" id="payM"></span></div>`:''}
+   ${f.interac?`<div class="opt2"><h3>Virement Interac</h3><p style="margin:0">Dans votre banque en ligne, envoyez <strong>${money(f.total)}</strong> à <strong>${esc(f.interac)}</strong>.<br>Indiquez le numéro de facture <strong>${esc(f.numero)}</strong> dans le message.${f.interacNote?'<br><span class="sub">'+esc(f.interacNote)+'</span>':''}</p></div>`:''}
+   ${!f.carte&&!f.interac?'<p class="sub">Communiquez avec nous pour le mode de paiement.</p>':''}</div>`}
+  <p style="margin-top:16px"><button class="sm" id="voir">Voir ou imprimer la facture</button></p>`;
+  $('payC')&&($('payC').onclick=async()=>{const b=$('payC');b.disabled=true;$('payM').textContent='';try{const{url}=await call({action:'carte',jeton});location.href=url}catch(e){$('payM').textContent=e.message;b.disabled=false}});
+  $('voir').onclick=()=>{const w=window.open('','_blank');if(!w)return;w.document.write(window.FACTURE.factureHtml({...F,mode:'autre',emetteur:F.emetteur},F.client||{}));w.document.close()}}
+charger()})();
+</script></body></html>
