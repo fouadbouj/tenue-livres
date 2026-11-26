@@ -665,12 +665,12 @@ async function addTx(list){
 }
 
 async function handle(files){
-  if(!P){msg('Choisissez d’abord le mois et le compte du relevé.',true);return}
-  for(const f of files.filter(f=>/\.pdf$/i.test(f.name))){try{await readStatementPdf(f)}catch(e){msg('Lecture impossible de '+f.name+'.',true)}}
+  if(!P){const src=$('pSrc').value;if(!src){msg('Choisissez d’abord le compte du relevé (banque ou carte).',true);return}P={mois:$('pMois').value||new Date().toISOString().slice(0,7),src,tx:[],statut:'en cours'}}
+  for(const f of files.filter(f=>/\.pdf$/i.test(f.name))){try{await readStatementPdf(f)}catch(e){console.error(e);msg(`Lecture impossible de ${f.name} : ${e.message||e}. Réessayez, ou exportez le relevé en CSV depuis le site de la banque.`,true)}}
   queue=[];
   for(const f of files.filter(f=>!/\.pdf$/i.test(f.name))){
     try{const rows=await rowsOf(f);if(rows.length<2){msg(f.name+' : fichier vide ou illisible.',true);continue}queue.push({name:f.name,g:guess(rows)})}
-    catch(e){msg('Lecture impossible de '+f.name+'.',true)}}
+    catch(e){msg(`Lecture impossible de ${f.name} : ${e.message||e}.`,true)}}
   if(queue.length)showMap(queue[0].g,queue.length>1?`${queue[0].name} et ${queue.length-1} autre(s) fichier(s), mêmes colonnes`:queue[0].name);
 }
 let queue=[];
@@ -683,8 +683,8 @@ async function readStatementPdf(f){
 }
 async function pdfTx(f,say){
   say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];
-  for(let i=0;i<pages.length;i+=3){say(`L'IA lit les pages ${i+1} à ${Math.min(i+3,pages.length)} sur ${pages.length}…`);
-    const r=await sampleFn.json(`Voici le texte d'un relevé bancaire ou de carte de crédit canadien. Page 1 pour contexte (période, année) :\n${pages[0].slice(0,1500)}\n\n--- PAGES À EXTRAIRE ---\n${pages.slice(i,i+3).join('\n\n')}\n\nExtrais CHAQUE transaction de ces pages seulement. Ignore soldes, totaux, sommaires et reports. Réponds uniquement avec un tableau JSON : [{"date":"AAAA-MM-JJ","description":"texte tel quel","montant":-12.34}]. montant négatif = sortie d'argent (retrait, achat, frais), positif = entrée (dépôt, remboursement, paiement reçu sur la carte). Déduis l'année de la période du relevé. [] s'il n'y a aucune transaction.`,{modelTier:'default'});
+  for(let i=0;i<pages.length;i++){if(!pages[i].trim())continue;say(`L'IA lit la page ${i+1} sur ${pages.length}…`);
+    let r;try{r=await sampleFn.json(`Voici le texte d'un relevé bancaire ou de carte de crédit canadien. Page 1 pour contexte (période, année) :\n${pages[0].slice(0,1500)}\n\n--- PAGE À EXTRAIRE ---\n${pages[i]}\n\nExtrais CHAQUE transaction de ces pages seulement. Ignore soldes, totaux, sommaires et reports. Réponds uniquement avec un tableau JSON : [{"date":"AAAA-MM-JJ","description":"texte tel quel","montant":-12.34}]. montant négatif = sortie d'argent (retrait, achat, frais), positif = entrée (dépôt, remboursement, paiement reçu sur la carte). Déduis l'année de la période du relevé. [] s'il n'y a aucune transaction.`,{modelTier:'default'})}catch(e){throw new Error(`page ${i+1} illisible par l’IA (${e.message||e})`)}
     (Array.isArray(r)?r:[]).forEach(x=>{const d=toISO(String(x.date||''));const c=Math.round(Number(x.montant)*100);if(d&&c)out.push({date:d,desc:String(x.description||'').slice(0,120),amt:c})})}
   try{const s=await sampleFn.json(`Texte de la première et de la dernière page d'un relevé bancaire ou de carte de crédit canadien :\n${pages[0].slice(0,2500)}\n...\n${pages[pages.length-1].slice(-2500)}\n\nDonne la période et les soldes. Réponds uniquement en JSON : {"du":"AAAA-MM-JJ","au":"AAAA-MM-JJ","solde_debut":1234.56,"solde_fin":1234.56,"carte":false}. Pour une carte de crédit, carte=true et les soldes sont les montants dus (positifs). null si introuvable.`,{modelTier:'default'});
     const du=toISO(String(s?.du||'')),au=toISO(String(s?.au||''));if(du&&au&&s.solde_debut!=null&&s.solde_fin!=null){const sg=s.carte?-1:1;out._st={src:P?.src||'',du,au,sd:sg*Math.round(Number(s.solde_debut)*100),sf:sg*Math.round(Number(s.solde_fin)*100),nom:f.name,via:'IA'}}}catch(e){}
