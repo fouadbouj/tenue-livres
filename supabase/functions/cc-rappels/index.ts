@@ -203,6 +203,9 @@ async function sommaire(admin: any) {
   const nomMois = new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("fr-CA", { month: "long", year: "numeric", timeZone: "UTC" });
   const parType = [...new Set(mois.map((o) => o.type))].map((t) => `${t} : ${mois.filter((o) => o.type === t).length}`).join(" · ");
   const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+  const { data: sv } = await admin.from("cc_parametres").select("valeur").eq("cle", "sauvegarde").maybeSingle();
+  const svJ = sv?.valeur?.date ? Math.floor((Date.now() - new Date(sv.valeur.date).getTime()) / 864e5) : null;
+  const svTxt = svJ == null ? "SAUVEGARDE : aucune sauvegarde complète n'a encore été faite. Gestion du cabinet > Sauvegarde." : `SAUVEGARDE : la dernière sauvegarde complète date de ${svJ} jour(s). Faites celle du mois (Gestion du cabinet > Sauvegarde) et rangez-la sur le disque externe.`;
   const texte = `Échéances de ${nomMois}
 
 ${mois.length} échéance(s) ce mois-ci${parType ? " (" + parType + ")" : ""}.
@@ -211,6 +214,8 @@ CE MOIS-CI
 ${mois.map(ligne).join("\n") || "Aucune échéance."}
 ${fins.length ? `\nFINS D'EXERCICE CE MOIS-CI (prévoir les documents de fin d'année)\n${fins.map((c: { nom: string; fin_exercice: string }) => `- ${c.nom} (${c.fin_exercice})`).join("\n")}\n` : ""}
 Rappel : solde d'impôt à 2 mois au Québec; au fédéral, 3 mois pour une SPCC qui a droit à la DPE, sinon 2 mois; T2 et CO-17 à 6 mois. Une échéance qui tombe un jour non ouvrable est reportée au jour ouvrable suivant.
+
+${svTxt}
 
 Échéancier complet et suivi : ${site}/centre.html`;
   await envoyerCourriel({ to: [notif], subject: `Échéances de ${nomMois} — ${mois.length} à traiter${retard.length ? `, ${retard.length} en retard` : ""}`, text: texte });
