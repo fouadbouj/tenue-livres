@@ -1429,15 +1429,53 @@ async function handle(files){
   if(queue.length)showMap(queue[0].g,queue.length>1?`${queue[0].name} et ${queue.length-1} autre(s) fichier(s), mêmes colonnes`:queue[0].name);
 }
 let queue=[];
+/* Lecture directe d'un relevé PDF en tableau (colonnes débits / crédits / solde), sans IA.
+   Le résultat n'est retenu que si solde d'ouverture + transactions = solde de clôture, au cent près. */
+const moisN=w=>{w=norm(w);return MOIS[w.slice(0,4)]||MOIS[w.slice(0,3)]||0};
+async function pdfTable(f){const doc=PDFDOC.get(f);if(!doc)return null;
+  const AMT=/^\(?-?\$?\s?\d{1,3}(?:[  ,.]\d{3})*[.,]\d{2}\s?\$?\)?(?:\s?CR)?$/i;
+  const cents=t=>{const neg=/^\(|-|CR$/i.test(t.trim());const d=t.replace(/[^\d.,]/g,'');const m=d.match(/^(.*)[.,](\d{2})$/);if(!m)return null;return(neg?-1:1)*(+(m[1].replace(/[.,]/g,'')+m[2]))};
+  const pages=[];for(let p=1;p<=doc.numPages;p++){const tc=await(await doc.getPage(p)).getTextContent();const rows=new Map();
+    tc.items.filter(it=>it.str.trim()).forEach(it=>{const y=Math.round(it.transform[5]/3);(rows.get(y)||rows.set(y,[]).get(y)).push({s:it.str.trim(),x:it.transform[4],r:it.transform[4]+it.width})});
+    pages.push([...rows].sort((a,b)=>b[0]-a[0]).map(([,it])=>it.sort((a,b)=>a.x-b.x)))}
+  const all=pages.flat().map(r=>r.map(i=>i.s).join(' ')).join('\n');
+  const pm=norm(all).match(/(?:DU|FROM)\s+(\d{1,2})\s+([A-Z]+)\.?,?\s+(\d{4})\s+(?:AU|TO)\s+(\d{1,2})\s+([A-Z]+)\.?,?\s+(\d{4})/);if(!pm)return null;
+  const iso=(y,m,d)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const du=iso(pm[3],moisN(pm[2]),pm[1]),au=iso(pm[6],moisN(pm[5]),pm[4]);if(!moisN(pm[2])||!moisN(pm[5]))return null;
+  const solde=re=>{for(const r of pages.flat()){const t=norm(r.map(i=>i.s).join(' '));if(re.test(t)){const a=r.filter(i=>AMT.test(i.s));if(a.length)return cents(a[a.length-1].s)}}return null};
+  const sd=solde(/SOLDE D.?OUVERTURE|SOLDE PRECEDENT|SOLDE ANTERIEUR|OPENING BALANCE|PREVIOUS BALANCE/),sf=solde(/SOLDE DE CLOTURE|SOLDE DE FERMETURE|NOUVEAU SOLDE|SOLDE FINAL|CLOSING BALANCE|NEW BALANCE/);
+  if(sd==null||sf==null)return null;
+  const out=[];let cols=null,date=null,pend='';
+  const annee=(m,d)=>{for(const y of[+du.slice(0,4),+au.slice(0,4)]){const x=iso(y,m,d);const t=Date.parse(x),a=Date.parse(du)-864e6,b=Date.parse(au)+864e6;if(t>=a&&t<=b)return x}return null};
+  for(const rows of pages){cols=null;
+    for(const r of rows){const t=norm(r.map(i=>i.s).join(' '));
+      if(!cols){const h=k=>r.find(i=>k.test(norm(i.s)));const de=h(/DEBIT|RETRAIT|WITHDRAW/),cr=h(/CREDIT|DEPOT|DEPOSIT/),so=h(/^SOLDE|BALANCE/);
+        if(de&&cr&&de!==cr){cols={de:de.r,cr:cr.r,so:so?.r};pend=''}continue}
+      if(/SOLDE D.?OUVERTURE|OPENING BALANCE|SOLDE PRECEDENT/.test(t))continue;
+      if(/SOLDE DE CLOTURE|CLOSING BALANCE|SOLDE DE FERMETURE|NOUVEAU SOLDE/.test(t)){cols=null;continue}
+      const dm=t.match(/^(\d{1,2})\s+([A-Z]{3,9})\.?(?=\s|$)/);let skip=0;
+      if(dm&&moisN(dm[2])){const x=annee(moisN(dm[2]),+dm[1]);if(!x)return null;date=x;skip=dm[0].length}
+      const amts=r.filter(i=>AMT.test(i.s)&&i.x>(cols.de-200));
+      let desc=r.filter(i=>!amts.includes(i)).map(i=>i.s).join(' ');if(skip){desc=desc.replace(/^\s*\d{1,2}\s+\S+\.?\s*/,'').replace(new RegExp('^'+dm[1]+'\\s+\\S+\\.?\\s*'),'')}
+      desc=desc.trim();
+      const tx=amts.filter(i=>{const d=[['de',Math.abs(i.r-cols.de)],['cr',Math.abs(i.r-cols.cr)],['so',cols.so?Math.abs(i.r-cols.so):1e9]].sort((a,b)=>a[1]-b[1])[0];i.k=d[0];return d[0]!=='so'&&d[1]<60});
+      if(!tx.length){if(desc&&date&&!amts.length)pend=(pend+' '+desc).trim().slice(0,200);continue}
+      if(!date||tx.length>1)return null;
+      const c=Math.abs(cents(tx[0].s));out.push({date,desc:((pend?pend+' ':'')+desc).replace(/\s+/g,' ').trim().slice(0,120)||'Transaction',amt:tx[0].k==='de'?-c:c});pend=''}}
+  if(!out.length)return null;
+  const tot=out.reduce((a,x)=>a+x.amt,0);if(tot!==sf-sd)return null;
+  out._st={src:P?.src||'',du,au,sd,sf,nom:f.name,via:'lecture directe'};out._direct=true;return out}
 async function readStatementPdf(f){
-  if(!sampleFn){msg('La lecture de PDF demande l’IA, qui n’est pas disponible ici. Exportez le relevé en CSV depuis le site de la banque.',true);return}
   const out=await pdfTx(f,msg);
   if(!out.length){msg('Aucune transaction trouvée dans ce PDF. Essayez le CSV.',true);return}
-  await importAny(out);msg($('msg').textContent+' Lu par l’IA dans le PDF : comparez le total avec le relevé.'+(out._err?.length?` Attention, pages non lues : ${out._err.join(' · ')}.`:''));
+  const tot=out.reduce((a,x)=>a+x.amt,0),ok=out._st&&tot===out._st.sf-out._st.sd;
+  await importAny(out);msg($('msg').textContent+(out._direct?' Relevé lu directement (sans IA) : solde d’ouverture + transactions = solde de clôture, au cent près.':ok?' Lu par l’IA : le total concorde avec les soldes du relevé.':out._st?` Lu par l’IA : ATTENTION, écart de ${fmt(out._st.sf-out._st.sd-tot)} avec les soldes du relevé — une transaction manque ou est mal lue.`:' Lu par l’IA dans le PDF : comparez le total avec le relevé.')+(out._err?.length?` Attention, pages non lues : ${out._err.join(' · ')}.`:''));
   if(out._st){addStmt(out._st);saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
 }
 async function pdfTx(f,say){
   say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];const errs=[];
+  try{const d=await pdfTable(f);if(d)return d}catch(e){console.warn('lecture directe',e)}
+  if(!sampleFn)throw new Error('ce relevé demande l’IA, qui n’est pas disponible ici');
   const INSTR=`Extrais CHAQUE transaction de ces pages seulement. Ignore soldes, totaux, sommaires et reports. Réponds uniquement avec un tableau JSON : [{"date":"AAAA-MM-JJ","description":"texte tel quel","montant":-12.34}]. montant négatif = sortie d'argent (retrait, achat, frais), positif = entrée (dépôt, remboursement, paiement reçu sur la carte). Déduis l'année de la période du relevé. [] s'il n'y a aucune transaction.`;
   const add=r=>{let n=0;(Array.isArray(r)?r:[]).forEach(x=>{const d=toISO(String(x.date||''));const c=Math.round(Number(x.montant)*100);if(d&&c){out.push({date:d,desc:String(x.description||'').slice(0,120),amt:c});n++}});return n};
   const parImage=async n=>{say(`L'IA regarde l'image de la page ${n} sur ${pages.length}…`);
@@ -1484,6 +1522,11 @@ $('ask').onclick=()=>askAI(false);
 const EXEMPT=/ASSURANCE|FRAIS BANC|FRAIS DE BANQUE|INTERET|SALAIRE|IMMATRICUL|PERMIS|TAXES MUNICIPALES|TAXES FONCIERES|DONS|AMENDE|PENALITE|RETRAIT|ACTIONNAIRE|EMPRUNT|PRET/;
 const TAXABLE=new RegExp([CAT.carb,CAT.elec,CAT.tel,CAT.log,CAT.four,CAT.pub,CAT.veh].map(r=>r.source).join('|'));
 const BIGSKIP=/LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC|SOUS.?TRAIT|HONORAIRE|AVANCE|DIVIDENDE|INTERET|ASSURANCE|FRAIS BANCAIRE|COTISATION|TAXES|PERMIS|ABONNEMENT|TELECOM|ELECTRICITE|CARBURANT|PUBLICITE|REPAS|DEPLACEMENT|FORMATION|DONS?\b|SERVICES PROFESSIONNELS|CONSULTANT/;
+/* Seuls les comptes où un achat peut être une immobilisation déclenchent « Dépense importante » ; un virement à une personne n'en est jamais une. */
+const IMMO=/MATERIEL|EQUIPEMENT|OUTIL|MOBILIER|AMEUBLEMENT|ORDINATEUR|INFORMATIQUE|LOGICIEL|ENTRETIEN|REPARATION|AMELIORATION|RENOVATION|FOURNITURE|MATERIAUX|ACHAT|VEHICULE|MACHIN|INSTRUMENT|APPAREIL|DIVERS|AUTRES? (DEPENSES|FRAIS)/;
+const PERSONNE=/VIREMENT ENVOYE|VIREMENT INTERAC|VIREMENT A |E-?TRANSFER|INTERAC E|TRANSFERT A /;
+/* Professions dont les services sont exonérés : sans réglage contraire, on suppose le client non inscrit à la TPS/TVQ. */
+const EXONERE=/\b(MEDECIN|DR|DRE|DOCTEUR|CLINIQUE MEDICALE|DENTISTE|PSYCHOLOGUE|PHYSIOTHERAPEUTE|CHIROPRATICIEN|OPTOMETRISTE|ORTHOPHONISTE|ERGOTHERAPEUTE|INFIRMIER|INFIRMIERE|SAGE-FEMME|AUDIOLOGISTE|PODIATRE|ACUPUNCTEUR|GARDERIE|CPE)\b/;
 const dd=(a,b)=>Math.abs((new Date(a)-new Date(b))/864e5);
 function checks(){
   if(!P||!P.tx.length)return[];const tx=P.tx,out=[],add=(lvl,title,detail,list)=>out.push({lvl,title,detail,ids:(list||[]).map(t=>t.id)});
@@ -1502,11 +1545,11 @@ function checks(){
   for(const[a,l]of grp){const u=[...new Set(l)];if(l.length>=2||(Math.abs(a)>=50000&&Math.abs(a)%10000===0))add('moyen',`Virement récurrent ou rond : ${fmt(a)}${u.length>1?` × ${u.length}`:''}`,'Souvent un loyer, un salaire ou un remboursement de prêt. Demandez au client, classez-le, puis retenez la règle.',u)}
   const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3)dups.push([a,b])}
   dups.forEach(([a,b])=>add('moyen',`Doublon possible : ${a.desc}`,`${fmt(a.amt)} le ${a.date} et le ${b.date}. Double paiement?`,[a,b]));
-  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t)));
+  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t))&&IMMO.test(nm(t))&&!PERSONNE.test(norm(t.desc)));
   big.forEach(t=>add('moyen',`Dépense importante : ${t.desc} (${fmt(t.amt)})`,'Plus de 1 500 $ : obtenez la facture et vérifiez si c’est une immobilisation à amortir plutôt qu’une dépense.',[t]));
   const self=tx.filter(t=>t.acct===(t.src||P.src));if(self.length)add('haut',`Classé dans le compte du relevé lui-même : ${self.length}`,`Ces transactions vont dans ${P.src} ${accName(P.src)}, le compte de banque du relevé : l'écriture s'annule. Choisissez le bon compte.`,self);
   const hdr=tx.filter(t=>{const p=PLAN.find(q=>q[0]===t.acct);return p&&isHeader(p[0],p[1])});if(hdr.length)add('haut',`Compte de titre ou de total : ${hdr.length}`,`Sage refuse les écritures dans ${[...new Set(hdr.map(t=>t.acct+' '+accName(t.acct)))].join(', ')}. Choisissez un compte détaillé.`,hdr);
-  const nonInscrit=(C.profil?.tx??FICHE?.tps_tvq)===false;
+  const nonInscrit=(C.profil?.tx??FICHE?.tps_tvq??(EXONERE.test(norm((C.desc||'')+' '+(FICHE?.description||'')+' '+C.nom))?false:undefined))===false;
   if(nonInscrit){const tt=tx.filter(t=>t.tax);if(tt.length)add('haut',`Taxes ventilées alors que le client n’est pas inscrit à la TPS/TVQ : ${tt.length}`,'Ce client ne réclame ni CTI ni RTI : décochez « Taxes incl. » (le montant complet va dans la dépense).',tt)}
   const exTax=nonInscrit?[]:tx.filter(t=>t.tax&&EXEMPT.test(nm(t)));
   if(exTax.length)add('haut',`Taxes ventilées sur des comptes exemptés : ${exTax.length}`,'Assurances, frais bancaires, intérêts, permis : pas de CTI ni de RTI. Décochez « Taxes incl. ».',exTax);
