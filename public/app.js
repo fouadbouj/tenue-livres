@@ -10,6 +10,8 @@ const moisLbl=m=>{const[y,mm]=String(m||'').split('-');return mm?`${MOISN[+mm-1]
 
 /* Catégories : retrouvent le bon compte dans n'importe quel plan */
 const isTr=t=>t.st==='transit'||(!!C&&!!C.tr&&t.acct===C.tr);
+/* À classer « maintenant » : recalculé avec les règles actuelles (le chiffre enregistré avec la période peut dater d’avant une règle). */
+const todoNow=p=>{if(!Array.isArray(p.tx))return +p.todo||0;return p.todo=p.tx.map(t=>{const c={...t};try{classify(c)}catch(e){}return c}).filter(isTr).length};
 const CAT={carb:/CARBURANT|ESSENCE|\bGAZ\b|FUEL|COMBUSTIBLE|VEHICULE/,elec:/ELECTRICITE|HYDRO|ENERGIE|CHAUFFAGE|SERVICES PUBLICS/,tel:/TELECOM|TELEPHON|INTERNET|CELLULAIRE|COMMUNICATION/,fb:/FRAIS BANC|FRAIS DE BANQUE|FRAIS DE SERVICE|BANK/,int:/INTERET|FRAIS FINANCIERS/,rep:/REPAS|REPRESENTATION|DIVERTISSEMENT/,log:/LOGICIEL|ABONNEMENT|INFORMATIQUE/,four:/FOURNITURE|PAPETERIE|FRAIS DE BUREAU/,ass:/ASSURANCE/,imm:/IMMATRICUL|PERMIS|LICENCE/,veh:/ENTRETIEN.*VEHICULE|VEHICULE|DEPENSES? (DE |D')?(VEHICULE|AUTOMOBILE)|FRAIS DE VEHICULE|AUTOMOBILE/,pub:/PUBLICITE|MARKETING|PROMOTION/};
 const BASE=[["PETRO-CANADA","carb",1],["PETRO CANADA","carb",1],["ESSO","carb",1],["SHELL","carb",1],["ULTRAMAR","carb",1],["COUCHE-TARD","carb",1],["CREVIER","carb",1],["IRVING","carb",1],["HYDRO-QUEBEC","elec",1],["HYDRO QUEBEC","elec",1],["ENERGIR","elec",1],["VIDEOTRON","tel",1],["BELL CANADA","tel",1],["BELL MOBILITE","tel",1],["ROGERS","tel",1],["FIDO","tel",1],["TELUS","tel",1],["KOODO","tel",1],["FRAIS MENSUELS","fb",0],["FRAIS DE SERVICE","fb",0],["FRAIS BANCAIRES","fb",0],["FRAIS D'UTILISATION","fb",0],["INTERETS","int",0],["TIM HORTONS","rep",1],["MCDONALD","rep",1],["STARBUCKS","rep",1],["UBER EATS","rep",1],["ADOBE","log",1],["MICROSOFT","log",1],["GOOGLE","log",1],["INTUIT","log",1],["ZOOM","log",1],["BUREAU EN GROS","four",1],["STAPLES","four",1],["INTACT","ass",0],["DESJARDINS ASSURANCES","ass",0],["LA CAPITALE","ass",0],["BELAIR","ass",0],["SAAQ","imm",0],["CANADIAN TIRE","veh",1],["FACEBK","pub",1],["META ADS","pub",1]].map(([p,c,t])=>({p:norm(p),c,t:!!t}));
 const DEF_PLAN=`1000 ACTIF
@@ -323,7 +325,8 @@ ${sol.map(([a,c])=>`${a} ${accName(a)} : ${iaMt(c)}`).join('\n')||'aucun'}
 
 Transactions au compte transitoire (${T.length}) — ref | date | description | montant | compte actuel | sens :
 ${T.slice(0,120).map(iaLigne).join('\n')}${T.length>120?`\n… et ${T.length-120} autres (utilisez l'outil chercher)`:''}
-Règles de classement du dossier : ${(C.rules||[]).length}.`}
+Règles de classement du dossier : ${(C.rules||[]).length}.
+${(C.links||[]).length?`Comptes liés (relevés d'autres comptes versés pour apparier les virements entre comptes) :\n${C.links.map(l=>`- ${l.nom} → compte ${l.acct} ${accName(l.acct)} ; ${(l.tx||[]).length} transaction(s)${(l.tx||[]).length?' : '+(l.tx||[]).slice(-60).map(([d,a,ds])=>`${d} ${iaMt(a)}${ds?' '+String(ds).slice(0,30):''}`).join(' · '):''}`).join('\n')}`:'Aucun compte lié.'}`}
 async function iaChercher(o){const n=o.texte?norm(o.texte):'',L=(await iaTx()).filter(x=>(!o.compte||x.a===String(o.compte))&&(!n||norm(x.desc).includes(n))&&(!o.du||x.date>=o.du)&&(!o.au||x.date<=o.au)&&(!o.transitoire||x.tr)&&(o.montant==null||Math.abs(Math.abs(x.m)-Math.round(Math.abs(+o.montant)*100))<=1));
   return `Recherche ${JSON.stringify(o)} : ${L.length} résultat(s)${L.length>150?' (150 premiers)':''}\n`+L.slice(0,150).map(iaLigne).join('\n')}
 async function iaReclasser(a){const refs=[...new Set(a.refs||[])];if(!refs.length)throw new Error('aucune transaction');if(!iaCompteOk(a.compte))throw new Error('compte '+a.compte+' absent du plan');
@@ -340,7 +343,7 @@ async function iaReclasser(a){const refs=[...new Set(a.refs||[])];if(!refs.lengt
   return `${n} transaction(s) reclassée(s) dans ${a.compte} ${accName(String(a.compte))}${ferme?` · ${ferme} ignorée(s) : exercice fermé`:''}`}
 function iaInit(){if(!window.ASSISTANT||!sampleFn||iaInit.ok)return;iaInit.ok=1;
   window.ASSISTANT.init({id:'compta',nom:'Comptabilité',ask:p=>sampleFn.json(p,{modelTier:'default'}),contexte:iaContexte,
-    accueil:'Bonjour! Je peux passer des écritures, reclasser des transactions (compte transitoire ou n’importe quel compte), créer des règles de classement, ajouter des comptes, répondre sur les soldes et ouvrir des rapports. Je vous montre toujours la modification avant de l’appliquer.',
+    accueil:'Bonjour! Je peux passer des écritures, reclasser des transactions (déjà classées ou non, avec ou sans taxes), apparier des virements avec vos comptes liés, créer des règles de classement, ajouter des comptes, répondre sur les soldes et ouvrir des rapports. Je vous montre toujours la modification avant de l’appliquer.',
     exemples:['Passe une écriture : 10 000 $ dans l’encaisse, en contrepartie des comptes fournisseurs, au 31 décembre','Mets tous les dépôts directs du transitoire dans les ventes','Montre-moi les transactions de plus de 1 000 $ dans les frais de véhicule','Quel est le solde de la banque?'],
     guide:`Tu travailles dans le logiciel de tenue de livres, sur le dossier ouvert (ou la liste des dossiers si aucun n'est ouvert).
 OUTILS (lecture, exécutés seuls) :
@@ -352,6 +355,8 @@ ACTIONS (après confirmation) :
 - {"type":"compte","numero":"8525","nom":"PUBLICITÉ EN LIGNE"} — ajoute un compte au plan.
 - {"type":"rapport","rapport":"bs|is|tb|gl|jr|tx|gifi","du":"AAAA-MM-JJ","au":"AAAA-MM-JJ"} — ouvre un rapport (exécuté sans confirmation).
 - {"type":"ouvrir_dossier","id":"..."} — ouvre un dossier client (exécuté sans confirmation).
+Reclasser fonctionne aussi sur des transactions DÉJÀ classées, dans n'importe quel mois (sauf un exercice fermé) : par exemple, pour enlever la TPS/TVQ (montant taxes comprises dans la dépense), cherche les transactions puis reclasser vers le même compte avec "taxable":false. Ne dis jamais que tu n'as pas accès aux transactions classées : cherche-les.
+APPARIER un virement entre deux comptes du client (compte personnel du propriétaire, autre compte de banque, carte de crédit — voir « Comptes liés ») : trouve la transaction (outil chercher avec le montant), repère dans les comptes liés le montant opposé à quelques jours près, puis reclasser vers le compte de ce compte lié avec la raison « Apparié : <nom du compte lié>, <date> ». S'il n'y a pas de correspondance, dis-le et propose le compte le plus probable (avance de l'actionnaire, etc.).
 Pour reclasser « toutes les transactions X », cherche d'abord (ou prends celles du contexte), puis propose une seule action reclasser avec toutes les refs. Si c'est récurrent, propose aussi une règle. Les montants des écritures sont en dollars. N'utilise jamais un compte de titre ou de total (numéros ronds comme 4000 ou lignes TOTAL) : seulement les comptes de détail listés.`,
     outils:{chercher:iaChercher},
     actions:{
@@ -468,7 +473,7 @@ $('yMark').onclick=async()=>{const L=await yearSel();if(!L.length)return;const d
 async function loadPeriods(){
   $('plist').innerHTML='<tr><td colspan="6" class="empty">Chargement…</td></tr>';let L=[];
   try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);
-    else{const s=await db.collection('clients').doc(C.id).collection('periodes').get();L=s.docs.map(d=>d.data())}PERS=L;
+    else{const s=await db.collection('clients').doc(C.id).collection('periodes').get();L=s.docs.map(d=>d.data())}PERS=L;L.forEach(todoNow);
     const srcs=[...new Set(L.map(p=>p.src))];const keep=$('ySrc').value;$('ySrc').innerHTML=srcs.map(x=>`<option value="${esc(x)}">${esc(x+' '+accName(x))}</option>`).join('');if(srcs.includes(keep))$('ySrc').value=keep;
     const ms=L.map(p=>p.mois).sort();if(!$('yFrom').value&&ms.length){$('yFrom').value=ms[0];$('yTo').value=ms[ms.length-1]}$('yDl').hidden=!downloads;}
   catch(e){$('plist').innerHTML='<tr><td colspan="6" class="empty">Lecture impossible pour le moment.</td></tr>';return}
@@ -1300,7 +1305,7 @@ function diag(){const L=C.links||[],ds=P.tx.map(t=>t.date).sort(),from=ds[0],to=
 let PROP=null;
 function renderChat(){const L=C.chat||[];
   $('chatLog').innerHTML=(L.length?L:[{who:'ai',text:'Dites-moi qui est le propriétaire, les employés, le locateur, les clients réguliers… Je créerai les règles pour ce dossier.'}]).map(m=>`<div class="bub ${m.who==='me'?'me':'ai'}">${esc(m.text)}</div>`).join('')+(PROP?propHtml():'');
-  $('chatLog').scrollTop=1e6;$('chatPanel').hidden=false;$('chatGo').disabled=!sampleFn;if(!sampleFn)$('chatMsg').textContent='L’IA n’est pas disponible dans cette vue.'}
+  $('chatLog').scrollTop=1e6;$('chatPanel').hidden=!!window.ASSISTANT&&!!sampleFn;$('chatGo').disabled=!sampleFn;if(!sampleFn)$('chatMsg').textContent='L’IA n’est pas disponible dans cette vue.'}
 function propHtml(){const p=PROP;let h='<div class="bub ai"><strong>Proposition</strong><div class="prop">';
   p.nc.forEach((a,i)=>h+=`<label><input type="checkbox" data-nc="${i}" checked> Nouveau compte ${esc(a.numero)} ${esc(a.nom)} (à créer aussi dans Sage)</label>`);
   p.rg.forEach((x,i)=>h+=`<label><input type="checkbox" data-rg="${i}" checked> « ${esc(x.p)} »${x.s!=='les deux'?` (${x.s==='sortie'?'sorties':'entrées'})`:''} → ${esc(x.a)} ${esc(PLAN.find(q=>q[0]===x.a)?.[1]||p.nc.find(n=>n.numero===x.a)?.nom||'')}${x.t?', taxable':''}${x.d?` à partir du ${esc(x.d)}`:''} <span class="why">· ${x.n} transaction(s) ce mois-ci</span></label>`);
@@ -1315,6 +1320,7 @@ $('chatLog').addEventListener('click',e=>{if(e.target.id==='propNo'){PROP=null;r
   C.chat=[...(C.chat||[]),{who:'ai',text:`Appliqué : ${nr} règle(s)${nm?`, ${nm} transaction(s) reclassée(s) ce mois-ci`:''}.`}].slice(-20);
   saveClient();renderRules();renderSettings();renderChat();render();if(P&&P.tx.length)savePer()});
 $('chatForm').onsubmit=async e=>{e.preventDefault();const text=$('chatIn').value.trim();if(!text||!sampleFn)return;
+  if(window.ASSISTANT){$('chatIn').value='';window.ASSISTANT.demander(text);return}
   C.chat=[...(C.chat||[]),{who:'me',text}].slice(-20);$('chatIn').value='';PROP=null;renderChat();$('chatGo').disabled=true;$('chatMsg').textContent='L’IA réfléchit…';
   const descs=[...new Map((P?P.tx:[]).map(t=>[t.desc,t])).values()].slice(0,120).map(t=>`${t.desc} | ${(t.amt/100).toFixed(2)}`).join('\n');
   try{const r=await sampleFn.json(`Tu es l'assistant de tenue de livres d'un cabinet comptable québécois pour le client « ${C.nom} ».
@@ -2255,7 +2261,7 @@ $('ansAi').onclick=ansAi;$('ansApply').onclick=ansApply;
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
   let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(cid+'/')).map(([,v])=>v);else{const s=await db.collection('clients').doc(cid).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){}
-  if(C?.id!==cid)return;PERS=L;
+  if(C?.id!==cid)return;PERS=L;L.forEach(todoNow);
   const ms=[];for(let m=x.deb.slice(0,7);m<=x.fin.slice(0,7);){ms.push(m);const[y,mm]=m.split('-').map(Number);m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,'0')}`}
   const now=new Date().toISOString().slice(0,7),by=m=>L.filter(p=>p.mois===m),todo=ms.reduce((s,m)=>s+by(m).reduce((t,p)=>t+(+p.todo||0),0),0);
   $('navTodo').hidden=!todo;$('navTodo').textContent=todo;$('navTodo').title=`${todo} transaction(s) à classer dans l’exercice (tous les mois) : voyez les mois en rouge dans l’Accueil.`;
@@ -2263,7 +2269,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
     const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
-  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Dernière demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} (${d.n} transaction${d.n>1?'s':''})`:'Envoie la liste des transactions à préciser par courriel'})()}</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
+  if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`${[...new Set(ms.flatMap(m=>by(m).filter(p=>+p.todo).map(p=>`${moisLbl(m)} (${p.src} ${accName(p.src)}) : ${p.todo}`)))].slice(0,6).join(' · ')}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Dernière demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} (${d.n} transaction${d.n>1?'s':''})`:'Envoie la liste des transactions à préciser par courriel'})()}</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
   const SA=new Set(C.sansAct||[]),miss=ms.filter(m=>m<now&&!by(m).length&&!SA.has(m));if(miss.length)T.push(`<li><i class="g"></i><div>${miss.length} mois sans relevé<small>${miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':'')}</small></div><div class="row" style="gap:6px;justify-content:flex-end"><button class="sm" data-sansact="${miss[0]}" title="Aucun relevé à déposer pour ce mois">Aucune activité en ${esc(moisLbl(miss[0]))}</button><button class="sm" data-go="mo:${miss[0]}:">Déposer</button></div></li>`);
   /* mise en place du dossier : ce qui manque encore */
   const SET=[];const setItem=(t,s,btns)=>SET.push(`<li><i class="g"></i><div>${t}${s?`<small>${s}</small>`:''}</div><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">${btns}</div></li>`);
