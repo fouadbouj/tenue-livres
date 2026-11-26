@@ -341,7 +341,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     </details>
     <details class="panel fold" id="chkPanel" open>
       <summary><span><strong>Points à vérifier <span class="pill" id="chkN">0</span></strong><small>Vérifications automatiques à chaque import</small></span></summary>
-      <div class="row" style="justify-content:flex-end">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row" style="gap:6px"><button class="sm" id="chkVA" aria-pressed="true">À vérifier <span class="pill" id="chkNA">0</span></button><button class="sm" id="chkVV" aria-pressed="false">Vérifiés <span class="pill" id="chkNV">0</span></button></div>
         <button id="aiRev" class="sm" hidden>Revue complète par l'IA</button>
       </div>
       <ul class="chk" id="chk"></ul>
@@ -938,7 +939,7 @@ function flushMulti(p=P){p.parts.forEach(part=>{const tx=p.tx.filter(t=>t._m===p
   pWriting.then(()=>setSave(local?'Enregistré (session seulement)':'Enregistré'))}
 function savePer(){if(!P)return;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
   pTimer=null;enforceLock(P);if(P.multi){flushMulti();return}
-  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:P.tx.length,todo:P.tx.filter(isTr).length,updated:new Date().toISOString()};
+  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},verif:P.verif||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:P.tx.length,todo:P.tx.filter(isTr).length,updated:new Date().toISOString()};
   const pid=P.mois+'_'+P.src;
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;setSave('Enregistré (session seulement)');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}return}
   pWriting=pWriting.then(()=>db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(snap)).then(()=>{setSave('Enregistré');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}}).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true));
@@ -1149,7 +1150,7 @@ async function openPeriod(){
     else{const s=await db.collection('clients').doc(C.id).collection('periodes').doc(mois+'_'+src).get();d=s.exists?s.data():null}}
   catch(e){msg('Impossible de lire cette période pour le moment.',true)}
   if(P.mois!==mois||P.src!==src)return;
-  if(d){P.statut=d.statut;P.exported=d.exported;P.chk=d.chk||{};P.tx=(d.tx||[]).map(t=>({...t,id:++seq}));snapLock();reclass();if(autoMatch())savePer()}
+  if(d){P.statut=d.statut;P.exported=d.exported;P.chk=d.chk||{};P.verif=d.verif||{};P.tx=(d.tx||[]).map(t=>({...t,id:++seq}));snapLock();reclass();if(autoMatch())savePer()}
   if(!d)snapLock();
   idFilter=null;AIITEMS=[];PREV=[];
   try{const[y,m]=mois.split('-').map(Number);const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;let pd=null;
@@ -1500,12 +1501,22 @@ function checks(){
   if(!out.length)out.push({lvl:'ok',title:'Rien à signaler',detail:'Tout est classé et aucune anomalie n’a été détectée.',ids:[]});
   return out;
 }
-let CHK=[];
-function itemHtml(c,i,pre){return `<li class="${c.lvl}"><div><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span></div>${c.ids.length?`<button class="sm" data-c="${pre}${i}">Voir</button>`:''}</li>`}
-function renderChecks(){CHK=checks();const n=CHK.filter(c=>c.lvl!=='ok').length+AIITEMS.length;$('chkN').textContent=n;
-  $('chk').innerHTML=P&&P.tx.length?CHK.map((c,i)=>itemHtml(c,i,'c')).join(''):'<li><div><span>Déposez un relevé pour voir les vérifications.</span></div></li>';
-  $('aiBox').hidden=!AIITEMS.length;$('aiChk').innerHTML=AIITEMS.map((c,i)=>itemHtml(c,i,'a')).join('');
+let CHK=[],CHKV=false;
+const chkCle=(c,pre)=>(pre==='a'?'ia:':'')+c.title;
+const chkFait=k=>!!(P&&P.verif&&P.verif[k]);
+function itemHtml(c,i,pre){const k=chkCle(c,pre),v=chkFait(k),info=v?P.verif[k]:null;
+  return `<li class="${v?'ok':c.lvl}"><div><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span>${v?`<small class="note" style="display:block;margin-top:2px">Vérifié le ${new Date(info.le).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}${info.par?' par '+esc(info.par):''}</small>`:''}</div><div class="row" style="gap:6px;flex-wrap:nowrap">${c.ids.length?`<button class="sm" data-c="${pre}${i}">Voir</button>`:''}${c.lvl==='ok'?'':v?`<button class="sm" data-unv="${pre}${i}" title="Remettre dans les points à vérifier">↺ Remettre</button>`:`<button class="sm pri" data-vok="${pre}${i}" title="Point vérifié : le retirer de la liste">✓ Vérifié</button>`}</div></li>`}
+function renderChecks(){CHK=checks();const all=[...CHK.map((c,i)=>[c,i,'c']),...AIITEMS.map((c,i)=>[c,i,'a'])].filter(([c])=>c.lvl!=='ok');
+  const vus=all.filter(([c,,p])=>chkFait(chkCle(c,p))),ouv=all.filter(([c,,p])=>!chkFait(chkCle(c,p)));
+  $('chkN').textContent=ouv.length;$('chkNA').textContent=ouv.length;$('chkNV').textContent=vus.length;$('chkVA').setAttribute('aria-pressed',!CHKV);$('chkVV').setAttribute('aria-pressed',CHKV);
+  if(!P||!P.tx.length){$('chk').innerHTML='<li><div><span>Déposez un relevé pour voir les vérifications.</span></div></li>';$('aiBox').hidden=true}
+  else if(CHKV){$('chk').innerHTML=vus.length?vus.map(([c,i,p])=>itemHtml(c,i,p)).join(''):'<li><div><span>Aucun point vérifié pour cette période. Cliquez sur « ✓ Vérifié » dans un point pour l’y déplacer.</span></div></li>';$('aiBox').hidden=true}
+  else{const oc=ouv.filter(([,,p])=>p==='c'),oa=ouv.filter(([,,p])=>p==='a');$('chk').innerHTML=oc.length?oc.map(([c,i,p])=>itemHtml(c,i,p)).join(''):itemHtml({lvl:'ok',title:'Rien à signaler',detail:vus.length?`Tous les points sont vérifiés (${vus.length}).`:'Tout est classé et aucune anomalie n’a été détectée.',ids:[]},0,'c');
+    $('aiBox').hidden=!oa.length;$('aiChk').innerHTML=oa.map(([c,i,p])=>itemHtml(c,i,p)).join('')}
   $('aiRev').hidden=!sampleFn||!P||!P.tx.length}
+$('chkVA').onclick=()=>{CHKV=false;renderChecks()};$('chkVV').onclick=()=>{CHKV=true;renderChecks()};
+document.getElementById('chkPanel').addEventListener('click',e=>{const b=e.target.closest('button[data-vok],button[data-unv]');if(!b||!P)return;const k=b.dataset.vok||b.dataset.unv,c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;
+  P.verif=P.verif||{};const cle=chkCle(c,k[0]);if(b.dataset.vok)P.verif[cle]={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};else delete P.verif[cle];savePer();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const k=e.target.closest('button[data-c]')?.dataset.c;if(!k)return;
   const c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;idFilter={ids:new Set(c.ids),title:c.title};render();$('txTable').scrollIntoView({behavior:'smooth',block:'start'})});
 $('fbanX').onclick=()=>{idFilter=null;render()};

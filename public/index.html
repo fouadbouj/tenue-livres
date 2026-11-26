@@ -342,7 +342,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     </details>
     <details class="panel fold" id="chkPanel" open>
       <summary><span><strong>Points à vérifier <span class="pill" id="chkN">0</span></strong><small>Vérifications automatiques à chaque import</small></span></summary>
-      <div class="row" style="justify-content:flex-end">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row" style="gap:6px"><button class="sm" id="chkVA" aria-pressed="true">À vérifier <span class="pill" id="chkNA">0</span></button><button class="sm" id="chkVV" aria-pressed="false">Vérifiés <span class="pill" id="chkNV">0</span></button></div>
         <button id="aiRev" class="sm" hidden>Revue complète par l'IA</button>
       </div>
       <ul class="chk" id="chk"></ul>
