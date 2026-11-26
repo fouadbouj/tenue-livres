@@ -865,9 +865,9 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   if(REP==='gifi'){const[exD]=exRange();const B=balances(E,null,t),I=balances(E,f||exD,t);const G=C.gifi||{};
     const acc=[...new Map([...[...B].filter(([a,c])=>c&&+String(a)[0]<4),...[...I].filter(([a,c])=>c&&+String(a)[0]>=4)])].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true}));
     const sum=new Map();acc.forEach(([a,c])=>{const k=G[a]||'?';const v=['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c;sum.set(k,(sum.get(k)||0)+v)});
-    h=`<h2>Codes IGRF (annexes 100 et 125 de la T2) au ${esc(t)}</h2><div class="row" style="margin:6px 0 10px"><button class="sm" id="gifiAi" ${sampleFn?'':'disabled'}>Suggérer les codes avec l'IA</button><span class="note" id="gifiMsg">Corrigez un code directement dans la colonne IGRF.</span></div>
+    h=`<h2>Codes IGRF (annexes 100 et 125 de la T2) au ${esc(t)}</h2><div class="row" style="margin:6px 0 10px"><label class="sm" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:6px 12px">Importer les IGRF de la T2 de l’an dernier<input type="file" id="gifiFile" accept=".csv,.xlsx,.xls,.txt,.pdf" hidden></label><button class="sm" id="gifiAi" ${sampleFn?'':'disabled'}>Suggérer les codes avec l'IA</button><button class="sm" id="gifiExp">Exporter pour la T2 (CSV)</button><span class="note" id="gifiMsg">Corrigez un code directement dans la colonne IGRF.</span></div>
       <table class="rep"><tr class="sec"><td>Compte</td><td>IGRF</td><td class="num">Montant</td></tr>${acc.map(([a,c])=>`<tr><td>${link(a)}</td><td><input data-gifi="${esc(a)}" value="${esc(G[a]||'')}" style="width:80px;min-height:32px;padding:2px 6px" inputmode="numeric"></td><td class="num">${fmtN(['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c)}</td></tr>`).join('')}</table>
-      <h2 style="margin-top:16px">Sommaire par code</h2><table class="rep"><tr class="sec"><td>Code IGRF</td><td class="num">Montant</td></tr>${[...sum].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`<tr><td>${k==='?'?'<span class="bad-b">Sans code</span>':esc(k)}</td><td class="num">${fmtN(v)}</td></tr>`).join('')}</table>`}
+      <h2 style="margin-top:16px">Sommaire par code</h2><table class="rep"><tr class="sec"><td>Code IGRF</td><td class="num">Montant</td></tr>${[...sum].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`<tr><td>${k==='?'?'<span class="bad-b">Sans code</span>':esc(k)}</td><td class="num">${fmtN(v)}</td></tr>`).join('')}</table>`+gifiCtl(E)}
   if(REP==='jr'){let x='';E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).forEach(e=>{x+=`<tr class="grp"><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td colspan="2">${esc(e.desc)}</td></tr>`;e.lines.forEach(([a,c])=>x+=`<tr><td></td><td class="ind" colspan="1">${esc(a)} ${esc(accName(a))}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`)});
     h=`<h2>Journal général du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td>Date</td><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${x||'<tr><td colspan="4" class="empty">Aucune écriture.</td></tr>'}</table>`}
   $('repOut').innerHTML=warn+h;$('repMsg').textContent=`${E.length} écritures dans le dossier · ${C.nom}`}
@@ -903,6 +903,54 @@ $('repOut').addEventListener('click',async e=>{if(e.target.id!=='gifiAi')return;
   try{const r=await sampleFn.json(`Associe chaque compte de ce plan comptable d'une société québécoise (Sage 50) au code IGRF/GIFI de l'ARC le plus approprié pour les annexes 100 (bilan) et 125 (résultats) de la T2. Ignore les comptes de titre et de total.\n${PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p.join(' ')).join('\n')}\n\nRéponds uniquement en JSON : {"1060":"1002","4200":"8000"}`,{modelTier:'complex'});
     let n=0;C.gifi=C.gifi||{};Object.entries(r||{}).forEach(([a,c])=>{if(PLAN.some(p=>p[0]===a)&&/^\d{4}$/.test(String(c))&&!C.gifi[a]){C.gifi[a]=String(c);n++}});saveClient();runRep();$('repMsg').textContent=`${n} code(s) IGRF suggéré(s). Vérifiez-les.`}
   catch(err){$('gifiMsg').textContent='Suggestion impossible pour le moment.';e.target.disabled=false}});
+
+/* --- IGRF : import de la T2 de l'an dernier, association des comptes, contrôle et export --- */
+const gifiSg=(a,c)=>['1'].includes(String(a)[0])||+String(a)[0]>=5?c:-c;
+function gifiPrior(E){const[exD]=exRange();if(!exD)return null;const P=colBal(E,shiftY(exD,1),veille(exD));if(!P)return null;
+  const m=new Map();[...(P.B||new Map())].forEach(([a,c])=>{if(+String(a)[0]<4&&c)m.set(a,c)});[...(P.I||new Map())].forEach(([a,c])=>{if(+String(a)[0]>=4&&c)m.set(a,c)});return m}
+function gifiCtl(E){const T=C.gifiT2;if(!T||!T.l?.length)return'';const P=gifiPrior(E),G=C.gifi||{},got=new Map();
+  if(P)[...P].forEach(([a,c])=>{const k=G[a];if(k)got.set(k,(got.get(k)||0)+gifiSg(a,c))});
+  const rows=T.l.map(x=>{const v=got.get(x.code),d=v==null?null:v-x.c;return `<tr><td>${esc(x.code)}</td><td>${esc(x.lib||'')}</td><td class="num">${fmtN(x.c)}</td><td class="num">${v==null?'—':fmtN(v)}</td><td class="num">${d==null?'<span class="bad-b">aucun compte</span>':Math.abs(d)<100?'<span class="ok-b">OK</span>':`<span class="bad-b">${fmtN(d)}</span>`}</td></tr>`}).join('');
+  const ok=T.l.filter(x=>{const v=got.get(x.code);return v!=null&&Math.abs(v-x.c)<100}).length;
+  return `<h2 style="margin-top:16px">Contrôle avec la T2 de l’an dernier</h2><p class="note">${esc(T.nom||'')} · ${T.l.length} codes importés le ${esc(T.le||'')} · ${ok} concordent à 1 $ près avec les soldes de l’an dernier de ce dossier${P?'':' (soldes de l’an dernier introuvables : ajoutez les soldes d’ouverture)'}.</p>
+    <table class="rep"><tr class="sec"><td>Code</td><td>Description (T2)</td><td class="num">T2 an dernier</td><td class="num">Comptes associés</td><td class="num">Écart</td></tr>${rows}</table>`}
+function gifiParse(rows){const out=new Map();rows.forEach(r=>{const cells=r.map(x=>String(x??'').trim()).filter(Boolean);const i=cells.findIndex(x=>/^\d{4}$/.test(x)&&+x>=1000&&+x<=9999);if(i<0)return;
+    const nums=cells.slice(i+1).map(x=>toCents(x.replace(/\s/g,'').replace(/\$/g,''))).filter(x=>x!=null);if(!nums.length)return;
+    const lib=cells.slice(i+1).filter(x=>toCents(x.replace(/\s/g,'').replace(/\$/g,''))==null).join(' ').slice(0,80);const code=cells[i];
+    if(!out.has(code))out.set(code,{code,lib,c:nums[0]})});return[...out.values()].filter(x=>x.c)}
+async function gifiImport(f){const say=t=>{const m=$('gifiMsg');if(m)m.textContent=t};say('Lecture du fichier…');
+  try{let rows;if(/\.pdf$/i.test(f.name)){const pages=await pdfPages(f);rows=pages.join('\n').split('\n').map(l=>l.split(/\s{2,}|\t/))}
+    else if(/\.txt$/i.test(f.name))rows=(await f.text()).split(/\r?\n/).map(l=>l.split(/[;,\t]|\s{2,}/));else rows=await rowsOf(f);
+    const L=gifiParse(rows);if(!L.length){say('Aucun code IGRF trouvé : le fichier doit contenir des codes à 4 chiffres et leurs montants.');return}
+    C.gifiT2={nom:f.name,le:new Date().toLocaleDateString('fr-CA'),l:L};if(!LED)LED=await loadLedger();
+    const P=gifiPrior(LED),G=C.gifi=C.gifi||{},accts=PLAN.filter(([n,t])=>!isHeader(n,t)).map(([n])=>n);let nExact=0,nAi=0;
+    // 1) montant identique et unique
+    if(P){const libres=new Map(L.map(x=>[x.code,x.c]));[...P].forEach(([a,c])=>{if(G[a])return;const v=gifiSg(a,c);const m=L.filter(x=>Math.abs(x.c-v)<100);if(m.length===1){G[a]=m[0].code;nExact++}})}
+    // 2) l'IA pour le reste, en privilégiant les codes de la T2
+    const rest=accts.filter(a=>!G[a]);
+    if(rest.length&&sampleFn){say(`${nExact} compte(s) associé(s) par le montant. L’IA associe les autres…`);
+      const r=await sampleFn.json(`Tu es CPA au Québec. Associe chaque compte du plan comptable d'une société au code IGRF (GIFI) de l'ARC pour les annexes 100 et 125 de la T2.
+Utilise de préférence les codes de la T2 de l'an dernier ci-dessous, mais tu peux utiliser un autre code IGRF valide si aucun ne convient. Les montants de l'an dernier t'aident à reconnaître les comptes.
+Codes de la T2 de l'an dernier (code ; description ; montant) :
+${L.map(x=>`${x.code} ; ${x.lib} ; ${(x.c/100).toFixed(2)}`).join('\n')}
+
+Comptes à associer (numéro ; nom ; solde de l'an dernier) :
+${rest.map(a=>`${a} ; ${accName(a)} ; ${P&&P.get(a)?(gifiSg(a,P.get(a))/100).toFixed(2):'—'}`).join('\n')}
+
+Réponds uniquement en JSON : {"1060":"1002","4200":"8000"}`,{modelTier:'complex'});
+      Object.entries(r||{}).forEach(([a,c])=>{if(rest.includes(a)&&/^\d{4}$/.test(String(c))&&!G[a]){G[a]=String(c);nAi++}})}
+    saveClient();runRep();setTimeout(()=>{const m=$('gifiMsg');if(m)m.textContent=`${L.length} codes importés de la T2. ${nExact} compte(s) associé(s) par le montant, ${nAi} par l’IA. Vérifiez le contrôle en bas, puis corrigez au besoin dans la colonne IGRF.`},50)}
+  catch(err){console.error(err);say('Lecture impossible de ce fichier.')}}
+async function gifiExport(){if(!LED)LED=await loadLedger();const t=$('repTo').value,[exD]=exRange(),f=$('repFrom').value||exD,E=LED,G=C.gifi||{};
+  const B=balances(E,null,t),I=balances(E,f,t),sum=new Map(),sans=[];
+  [...new Map([...[...B].filter(([a,c])=>c&&+String(a)[0]<4),...[...I].filter(([a,c])=>c&&+String(a)[0]>=4)])].forEach(([a,c])=>{const k=G[a];if(!k){sans.push(a);return}sum.set(k,(sum.get(k)||0)+gifiSg(a,c))});
+  if(sans.length&&!confirm(`${sans.length} compte(s) sans code IGRF (${sans.slice(0,6).join(', ')}${sans.length>6?'…':''}) seront exclus. Exporter quand même?`))return;
+  const csv=[...sum].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`${k},${(v/100).toFixed(2)}`).join('\r\n')+'\r\n';
+  const name=`${C.nom.replace(/[^\w-]+/g,'_')}_IGRF_${t}.csv`;
+  if(!downloads){try{await navigator.clipboard.writeText(csv);$('repMsg').textContent='Téléchargement indisponible ici : copié à la place.'}catch(e){}return}
+  try{await downloads.save({filename:name,data:csv});$('repMsg').textContent='Fichier IGRF enregistré (code, montant) : importez-le dans votre logiciel de T2.'}catch(e){$('repMsg').textContent='Téléchargement annulé.'}}
+$('repOut').addEventListener('change',e=>{if(e.target.id==='gifiFile'){const f=e.target.files[0];e.target.value='';if(f)gifiImport(f)}});
+$('repOut').addEventListener('click',e=>{if(e.target.id==='gifiExp')gifiExport()});
 /* fermeture d'exercice : voir module Exercices */
 
 /* ---------- soldes d'ouverture ---------- */
