@@ -640,10 +640,13 @@ $('mGo').onclick=()=>{const Q=queue.length?queue:[{name:'',g:parsed}];const per=
 $('mCancel').onclick=()=>{$('mapBox').hidden=true};
 const msg=(t,err)=>{$('msg').textContent=t;$('msg').className='msg'+(err?' err':'')};
 
+/* Anti-doublons : dans un même compte, une transaction = une date + un montant. On compte les occurrences (date, montant) déjà dans la période :
+   reverser le même relevé, ou le même relevé dans un autre format (PDF, CSV, Excel, description écrite autrement), n'ajoute rien;
+   trois frais de 1,50 $ le même jour restent trois frais; une transaction manquante est ajoutée. */
 function mergeInto(p,list){
-  const have=new Map();p.tx.forEach(t=>{const k=t.date+'|'+t.desc+'|'+t.amt;have.set(k,(have.get(k)||0)+1)});
+  const have=new Map();p.tx.forEach(t=>{const k=t.date+'|'+t.amt;have.set(k,(have.get(k)||0)+1)});
   let added=0,dup=0;const seen=new Map();
-  for(const x of list){const k=x.date+'|'+x.desc+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);if(s<=(have.get(k)||0)){dup++;continue}
+  for(const x of list){const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);if(s<=(have.get(k)||0)){dup++;continue}
     const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
   p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   if(added&&p.statut==='importée')p.statut='en cours';
@@ -660,8 +663,8 @@ function relAttente(src,mois){const b=exBornes();if(!b||!C)return[];const[xd,xf]
   if(pris.length||st.length)saveClient();return pris.map(({date,desc,amt})=>({date,desc,amt}))}
 async function importAny(list){const b=exBornes();let hors=[];
   if(b){const[xd,xf]=b;hors=list.filter(x=>x.date<xd||x.date>xf);
-    if(hors.length){list=list.filter(x=>x.date>=xd&&x.date<=xf);const k=x=>x.src+'|'+x.date+'|'+x.desc+'|'+x.amt;const have=new Set((C.attente||[]).map(k));
-      C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src})).filter(x=>!have.has(k(x)))];saveClient()}}
+    if(hors.length){list=list.filter(x=>x.date>=xd&&x.date<=xf);const k=x=>x.src+'|'+x.date+'|'+x.amt;const have=new Map();(C.attente||[]).forEach(x=>have.set(k(x),(have.get(k(x))||0)+1));const seen=new Map();
+      C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src})).filter(x=>{const n=(seen.get(k(x))||0)+1;seen.set(k(x),n);return n>(have.get(k(x))||0)})];saveClient()}}
   list=list.concat(relAttente(P.src));
   if(list.length)await importAny0(list);else msg('');
   if(hors.length){const[xd,xf]=b,ap=hors.filter(x=>x.date>xf).length,av=hors.length-ap;
