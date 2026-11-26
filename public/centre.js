@@ -284,8 +284,8 @@ document.addEventListener('change',e=>{if(!EDIT?.id)return;if(e.target.id==='pTy
 
 /* ---------- suivi des paiements ---------- */
 const money=v=>v==null?'—':Number(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD'});
-function badge(){const ns=SVC.filter(x=>x.statut==='reçue'&&!x.vu).length,bd=document.querySelector('#tabs [data-t=dt]');if(bd)bd.innerHTML='Demandes de service'+(ns?` <span class="pill ok" style="margin-left:4px">${ns} reçu${ns>1?'s':''}</span>`:'');
-  const n=PUB.filter(p=>p.paye_le&&!p.paye_vu).length,bt=document.querySelector('#tabs [data-t=pay]');if(bt)bt.innerHTML='Paiements des clients'+(n?` <span class="pill ok" style="margin-left:4px">${n} nouveau${n>1?'x':''}</span>`:'');
+function badge(){const ns=SVC.filter(x=>x.statut==='reçue'&&!x.vu).length,bd=document.querySelector('#tabs [data-t=dt]');if(bd)bd.innerHTML='Demandes'+(ns?` <span class="pill ok" style="margin-left:4px">${ns} reçu${ns>1?'s':''}</span>`:'');
+  const n=PUB.filter(p=>p.paye_le&&!p.paye_vu).length,bt=document.querySelector('#tabs [data-t=pay]');if(bt)bt.innerHTML='Paiements'+(n?` <span class="pill ok" style="margin-left:4px">${n} nouveau${n>1?'x':''}</span>`:'');
   const t=$('toast');if(t){t.hidden=!n||TAB==='pay';t.innerHTML=n?`<strong>${n} client${n>1?'s ont':' a'} confirmé ${n>1?'leurs paiements':'son paiement'}.</strong> <button class="sm" data-t="pay">Voir les paiements</button>`:''}}
 function rPay(){const P=PUB.filter(p=>p.montant>0&&p.organisme!=='Aucun paiement');
   const cles=[...new Set(P.map(p=>p.periode_fin||(p.echeance||'').slice(0,7)||'—'))].sort().reverse();if(!PAYF||!cles.includes(PAYF))PAYF=cles[0]||'';

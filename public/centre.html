@@ -13,7 +13,7 @@
 </head>
 <body>
 <header class="top"><div class="in">
-  <a class="brand" href="centre.html"><img src="favicon.svg" alt=""> Intranet Boujrad CPA Inc. <span>Gestion du cabinet</span></a>
+  <a class="brand" href="centre.html"><img class="wm" src="bcpa-blanc.svg" alt="bCPA."> <span>Gestion du cabinet</span></a>
   <div class="who" id="who" hidden><a href="index.html" style="color:#fff">Comptabilité →</a><span id="whoE"></span><button id="out">Déconnexion</button></div>
 </div></header>
 <div id="auth" hidden><div class="card"><h1>Intranet</h1><p class="sub">Réservé à l’équipe de Boujrad CPA Inc.</p>
@@ -22,7 +22,7 @@
   <h1>Gestion du cabinet</h1>
   <p class="sub">Clients, contrats, échéances, facturation par débits préautorisés et tâches.</p>
   <div class="info" id="toast" hidden style="background:#e6f5ec;margin:0 0 12px;display:flex;gap:12px;align-items:center;justify-content:space-between"></div>
-  <nav class="tabs" id="tabs"><span class="tgrp">Clients</span><button data-t="cli" aria-pressed="false">Clients</button><button data-t="dem" aria-pressed="false">Documents à recevoir</button><button data-t="pc" aria-pressed="false">Impôts personnels</button><button data-t="dt" aria-pressed="false">Demandes de service</button><span class="tgrp">Cabinet</span><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="fact" aria-pressed="false">Facturation</button><button data-t="pay" aria-pressed="false">Paiements des clients</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="sauv" aria-pressed="false">Sauvegarde</button></nav>
+  <nav class="tabs" id="tabs"><button data-t="cli" aria-pressed="false">Clients</button><button data-t="dem" aria-pressed="false">Documents</button><button data-t="pc" aria-pressed="false">Impôts perso</button><button data-t="dt" aria-pressed="false">Demandes</button><i class="tsep" aria-hidden="true"></i><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="fact" aria-pressed="false">Facturation</button><button data-t="pay" aria-pressed="false">Paiements</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="sauv" aria-pressed="false">Sauvegarde</button></nav>
   <section id="tboard"></section><section id="tdem" hidden></section><section id="tcli" hidden></section><section id="ttache" hidden></section><section id="tfact" hidden></section><section id="tsauv" hidden></section><section id="tdt" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
