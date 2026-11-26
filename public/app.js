@@ -776,6 +776,7 @@ async function pdfTx(f,say){
     const du=toISO(String(s?.du||'')),au=toISO(String(s?.au||''));if(du&&au&&s.solde_debut!=null&&s.solde_fin!=null){const sg=s.carte?-1:1;out._st={src:P?.src||'',du,au,sd:sg*Math.round(Number(s.solde_debut)*100),sf:sg*Math.round(Number(s.solde_fin)*100),nom:f.name,via:'IA'}}}catch(e){}
   return out;
 }
+$('goLinks').onclick=e=>{e.preventDefault();setTab('links')};
 $('file').onchange=e=>{handle([...e.target.files]);e.target.value=''};
 function dropzone(el,fn){['dragenter','dragover'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.add('over')}));
   ['dragleave','drop'].forEach(ev=>el.addEventListener(ev,e=>{e.preventDefault();el.classList.remove('over')}));el.addEventListener('drop',e=>fn([...e.dataTransfer.files]))}
@@ -1298,8 +1299,8 @@ function autoMap(g){const res=[];for(const r of g.body){const date=toISO(r[g.dat
   if(!c)continue;res.push({date,desc:[r[g.desc]].filter(Boolean).join(' '),amt:c})}return res}
 $('lnkFile').onchange=async e=>{const files=[...e.target.files];e.target.value='';const l=(C.links||[]).find(x=>x.id===lnkTarget);if(!l)return;
   const say=t=>$('lnkMsg').textContent=t;let all=[];
-  for(const f of files){try{if(/\.pdf$/i.test(f.name)){if(!sampleFn){say('La lecture de PDF demande l’IA, indisponible ici. Utilisez le CSV.');continue}all=all.concat(await pdfTx(f,say))}
-      else{const rows=await rowsOf(f);if(rows.length>1)all=all.concat(autoMap(guess(rows)))}}catch(err){say('Lecture impossible de '+f.name+'.')}}
+  for(const f of files){try{if(/\.pdf$/i.test(f.name)){all=all.concat(await pdfTx(f,say))}
+      else{const rows=await rowsOf(f);if(rows.length>1)all=all.concat(autoMap(guess(rows)))}}catch(err){console.error(err);say(`Lecture impossible de ${f.name} : ${err.message||err}.`)}}
   if(!all.length){say('Aucune transaction reconnue dans ces relevés.');return}
   const have=new Set((l.tx||[]).map(x=>x.join('|')));let n=0;
   all.forEach(x=>{const row=[x.date,x.amt,norm(x.desc).slice(0,40)];if(!have.has(row.join('|'))){l.tx=[...(l.tx||[]),row];have.add(row.join('|'));n++}});
