@@ -198,7 +198,7 @@ const setSave=(t,err)=>{$('saveState').textContent=t;$('saveState').style.color=
 /* ---------- liste des clients ---------- */
 function renderList(){
   if(local)CLIENTS=Object.entries(LOCAL.clients).map(([id,d])=>({id,...d}));
-  try{if(PENDING&&!C&&CLIENTS.some(x=>x.id===PENDING.c)){const p=PENDING;PENDING=null;setTimeout(async()=>{NAVQ=true;try{await openClient(p.c);setTab(p.t)}finally{NAVQ=false}try{history.replaceState(null,'',hashOf())}catch(e){}},0)}}catch(e){}
+  try{if(PENDING&&!C&&CLIENTS.some(x=>x.id===PENDING.c)){const p=PENDING;PENDING=null;setTimeout(async()=>{NAVQ=true;try{await openClient(p.c);setTab(p.t);await navRest(p)}finally{NAVQ=false}try{history.replaceState(null,'',hashOf())}catch(e){}},0)}}catch(e){}
   const q=norm($('cq').value);const L=CLIENTS.filter(c=>!c.deleted&&(!q||norm(c.nom).includes(q))).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
   $('clist').innerHTML=L.length?L.map(c=>`<tr class="click" data-id="${esc(c.id)}"><td><strong>${esc(c.nom)}</strong></td><td>${parsePlanText(c.plan).length} comptes</td><td>${(c.rules||[]).length}</td><td>${esc(moisLbl(c.last))}</td><td><button class="sm">Ouvrir</button></td></tr>`).join('')
     :`<tr><td colspan="5" class="empty">${CLIENTS.length?'Aucun client ne correspond.':'Aucun dossier pour l’instant. Créez le premier client ci-dessus.'}</td></tr>`;
@@ -377,14 +377,18 @@ Pour reclasser « toutes les transactions X », cherche d'abord (ou prends celle
       ouvrir_dossier:{auto:true,titre:()=>'',apercu:()=>'',executer:async a=>{if(!CLIENTS.some(c=>c.id===a.id))throw new Error('dossier introuvable');await openClient(a.id);navPush();return'Dossier ouvert : '+C.nom}}}})}
 /* ---------- historique du navigateur : le bouton Précédent reste dans la plateforme ---------- */
 let NAVQ=false,PENDING=null;
-const hashOf=()=>C?`#c=${encodeURIComponent(C.id)}&t=${tab}`:'#';
+const hashOf=()=>C?`#c=${encodeURIComponent(C.id)}&t=${tab}`+(tab==='rep'?`&r=${REP}`+($('repFrom').value?`&du=${$('repFrom').value}`:'')+($('repTo').value?`&au=${$('repTo').value}`:'')+(REP==='gl'&&$('repAcc').value?`&acc=${encodeURIComponent($('repAcc').value)}`:''):tab==='rev'&&mode==='m'&&$('pMois').value?`&m=${$('pMois').value}&s=${encodeURIComponent($('pSrc').value)}`:tab==='mis'&&MIS?`&ms=${mStep}`:''):'#';
 function navPush(){if(NAVQ)return;const h=hashOf();if(location.hash===h||(h==='#'&&!location.hash))return;try{history.pushState(null,'',h)}catch(e){}}
-function parseHash(){const q=new URLSearchParams(location.hash.slice(1));return{c:q.get('c'),t:q.get('t')||'home'}}
-window.addEventListener('popstate',async()=>{const{c,t}=parseHash();NAVQ=true;
-  try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t)}}else setTab(t)}finally{NAVQ=false}});
+function parseHash(){const q=new URLSearchParams(location.hash.slice(1));return{c:q.get('c'),t:q.get('t')||'home',r:q.get('r'),du:q.get('du')||'',au:q.get('au')||'',acc:q.get('acc')||'',m:q.get('m'),s:q.get('s'),ms:q.get('ms')}}
+async function navRest(h){if(h.t==='rev'&&h.m&&(!P||P.mois!==h.m||P.src!==h.s)){if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}$('pMois').value=h.m;if([...$('pSrc').options].some(o=>o.value===h.s))$('pSrc').value=h.s;await openPeriod();return}
+  if(h.t==='mis'&&h.ms&&h.ms!==mStep){mStep=h.ms;await renderMis();return}
+  navRep(h)}
+function navRep(h){if(h.t!=='rep'||!h.r)return;REP=h.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===REP));$('repFrom').value=h.du;$('repTo').value=h.au;$('repAccL').hidden=REP!=='gl';if(REP==='gl')$('repAcc').value=h.acc;repUI();runRep()}
+window.addEventListener('popstate',async()=>{const h=parseHash(),{c,t}=h;NAVQ=true;
+  try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t);await navRest(h)}}else{if(tab!==t)setTab(t);await navRest(h)}}finally{NAVQ=false}});
 {const h=parseHash();if(h.c)PENDING=h}
 function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;enforceLock(P);P.multi?flushMulti():savePerFlush(P)}}
-function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(isTr).length,updated:new Date().toISOString()};
+function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},verif:p.verif||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(isTr).length,updated:new Date().toISOString()};
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
 function fillSelects(){
   $('pSrc').innerHTML=srcAccounts().map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
@@ -407,7 +411,7 @@ async function openPeriod(){
     if(pd&&P.mois===mois)PREV=(pd.tx||[]).filter(t=>t.amt<0&&t.st!=='transit').map(t=>({k:keyOf(t.desc),desc:t.desc,amt:t.amt}))}catch(e){}
   if(C.src!==src){C.src=src;saveClient()}
   msg(d?'':`Période vide. Déposez le relevé de ${moisLbl(mois)} pour le compte ${src}.`);
-  render();
+  render();if(tab==='rev')navPush();
 }
 let mode='m';
 const openCur=()=>mode==='r'?openRange():openPeriod();
@@ -968,8 +972,8 @@ function repUI(){$('repCmpL').hidden=!['bs','is'].includes(REP);$('repFromL').hi
 function initRep(){const[d,f]=exRange();['repFrom','repTo'].forEach(id=>{const el=$(id);el.min=d||'';el.max=f||'';if(el.value&&d&&f&&(el.value<d||el.value>f))el.value=''});repUI();
   $('repHint').textContent=d?`Exercice du ${d} au ${f}. Inscrivez les dates à afficher, puis cliquez sur Afficher.`:'';
   $('repAcc').innerHTML='<option value="">Tous les comptes</option>'+OPTS;if(!d)$('repMsg').textContent='Indiquez le début et la fin de l’exercice dans Paramètres (ou les soldes d’ouverture dans Écritures).';runRep()}
-document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';repUI();runRep()});
-$('repGo').onclick=()=>runRep(true);$('repCmp').onchange=()=>runRep();
+document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';repUI();runRep();navPush()});
+$('repGo').onclick=()=>{runRep(true);navPush()};$('repCmp').onchange=()=>runRep();
 $('repEx').onclick=()=>{const[d,f]=exRange();$('repFrom').value=d;$('repTo').value=f;runRep()};
 /* comparatifs : mêmes dates, 1 à 3 ans plus tôt, calculés dans le contexte de l'exercice concerné */
 const shiftY=(d,k)=>{if(!d)return d;const[y,m,j]=d.split('-').map(Number);const last=new Date(Date.UTC(y-k,m,0)).getUTCDate();return `${y-k}-${String(m).padStart(2,'0')}-${String(Math.min(j,last)).padStart(2,'0')}`};
@@ -1033,7 +1037,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   if(REP==='jr'){let x='';E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).forEach(e=>{x+=`<tr class="grp"><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td colspan="2">${esc(e.desc)}</td></tr>`;e.lines.forEach(([a,c])=>x+=`<tr><td></td><td class="ind" colspan="1">${esc(a)} ${esc(accName(a))}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`)});
     h=`<h2>Journal général du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td>Date</td><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${x||'<tr><td colspan="4" class="empty">Aucune écriture.</td></tr>'}</table>`}
   $('repOut').innerHTML=warn+h;$('repMsg').textContent=`${E.length} écritures dans le dossier · ${C.nom}`}
-$('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');if(g){REP='gl';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r==='gl'));$('repAccL').hidden=false;$('repAcc').value=g.dataset.gl;if(!$('repFrom').value)$('repFrom').value=exRange()[0];repUI();runRep();return}
+$('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');if(g){e.preventDefault();REP='gl';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r==='gl'));$('repAccL').hidden=false;$('repAcc').value=g.dataset.gl;if(!$('repFrom').value)$('repFrom').value=exRange()[0];repUI();runRep();navPush();return}
   const o=e.target.closest('[data-open]');if(o){const[m,src,desc]=o.dataset.open.split('|');setTab('rev');if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
     $('pMois').value=m;if(![...$('pSrc').options].some(x=>x.value===src))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(src)}">${esc(src)}</option>`);$('pSrc').value=src;
     filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()}});
@@ -1851,7 +1855,7 @@ $('tMis').addEventListener('change',async e=>{const t=e.target;if(!MIS)return;
 $('tMis').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
   if(b.id==='misNew'){b.disabled=true;$('misMsg').textContent='Création du dossier…';const x=curEx();MIS=newMis(x);if(C.notes)MIS.ent.activites=C.notes;MIS.ef.dateRapport='';mStep='acc';
     try{await misCalc()}catch(err){}saveMis();await renderMis();$('misMsg').textContent='Dossier créé : toutes les étapes sont prêtes.'+(sampleFn?' Analyse de la balance par l’IA…':'');if(sampleFn)iaMis();return}
-  if(b.dataset.ms){mStep=b.dataset.ms;await renderMis();return}
+  if(b.dataset.ms){mStep=b.dataset.ms;await renderMis();navPush();return}
   if(b.dataset.sec){mSec=b.dataset.sec;renderStep();return}
   if(b.dataset.add==='dpa'){MIS.fisc.dpa.push({cl:'',desc:'',fnacc:'',acq:'',disp:'',taux:'',f:'1'});saveMis();renderStep();return}
   if(b.dataset.add==='autres'){MIS.fisc.autres.push({l:'',m:''});saveMis();renderStep();return}

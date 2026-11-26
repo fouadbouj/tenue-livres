@@ -674,6 +674,17 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
 
 /* ---------- connexion (membres du cabinet seulement) ---------- */
 
+
+/* ---------- historique du navigateur : le bouton Précédent suit les onglets, les fiches et les sous-onglets ---------- */
+let NAVC=false;const hashC=()=>`#t=${TAB}`+(TAB==='cli'&&EDIT?.id?`&c=${EDIT.id}&f=${FT}`:'')+(TAB==='fact'?`&v=${FV}`:'')+(TAB==='dt'&&DTV?`&sv=${DTV}`:'');
+function navC(){if(NAVC||!CLI.length&&TAB==='board'&&!location.hash)return;const h=hashC();if(location.hash===h)return;try{history[location.hash&&/^#t=/.test(location.hash)?'pushState':'replaceState'](null,'',h)}catch(e){}}
+function lireHash(){const q=new URLSearchParams(location.hash.slice(1));if(!q.get('t'))return false;TAB=q.get('t');const c=q.get('c');EDIT=c?CLI.find(x=>x.id===c)||null:null;if(EDIT)FT=q.get('f')||'fiche';else if(TAB==='cli')EDIT=null;if(q.get('v'))FV=q.get('v');DTV=q.get('sv')||null;return true}
+window.addEventListener('popstate',()=>{if(!lireHash())return;NAVC=true;try{render();window.scrollTo(0,0)}finally{NAVC=false}});
+render=(o=>function(){const r=o.apply(this,arguments);navC();return r})(render);
+rFact=(o=>function(){const r=o.apply(this,arguments);navC();return r})(rFact);
+rFiche=(o=>function(){const r=o.apply(this,arguments);navC();return r})(rFiche);
+rCli=(o=>function(){const r=o.apply(this,arguments);navC();return r})(rCli);
+rDt=(o=>async function(){const r=await o.apply(this,arguments);navC();return r})(rDt);
 /* ---------- Assistant IA (bouton flottant) : gestion du cabinet ---------- */
 const IA_CHAMPS={nom:'Nom',description:'Description de l’entreprise',courriel:'Courriel',telephone:'Téléphone',adresse:'Adresse',ville:'Ville',code_postal:'Code postal',contact:'Personne-ressource',statut:'Statut',forme:'Forme juridique',fin_exercice:'Fin d’exercice (MM-JJ)',frequence:'Fréquence TPS/TVQ',responsable:'Responsable',groupe:'Groupe',neq:'NEQ',no_entreprise:'No d’entreprise',no_tps:'No TPS',no_tvq:'No TVQ',langue:'Langue',employeur:'Employeur',tps_tvq:'Inscrit TPS/TVQ'};
 const iaCli=id=>CLI.find(c=>c.id===id);
@@ -752,7 +763,7 @@ Les dates relatives (« vendredi », « dans deux semaines ») sont calculées �
       ouvrir_client:{auto:true,titre:()=>'',apercu:()=>'',executer:async a=>{const c=iaCli(a.client_id);if(!c)throw new Error('client introuvable');EDIT=c;FT='fiche';CED=null;TAB='cli';render();window.scrollTo(0,0);return'Fiche ouverte : '+c.nom}}}})}
 async function start(s){const{data:m}=await sb.from('tl_membres').select('role').eq('user_id',s.user.id).maybeSingle();
   if(!m){$('auth').hidden=false;$('aM').textContent='Ce compte n’est pas autorisé dans l’intranet. Les clients utilisent le Portail client.';$('aM').className='msg err';await sb.auth.signOut();return}
-  $('auth').hidden=true;$('app').hidden=false;$('who').hidden=false;$('whoE').textContent=s.user.email;load().then(()=>iaInitC())}
+  $('auth').hidden=true;$('app').hidden=false;$('who').hidden=false;$('whoE').textContent=s.user.email;load().then(()=>{if(lireHash()){NAVC=true;try{render()}finally{NAVC=false}}iaInitC()})}
 $('aF').onsubmit=async e=>{e.preventDefault();$('aM').textContent='Connexion…';const{data,error}=await sb.auth.signInWithPassword({email:$('aE').value.trim(),password:$('aP').value});if(error){$('aM').textContent='Courriel ou mot de passe invalide.';$('aM').className='msg err';return}start(data.session)};
 $('out').onclick=()=>sb.auth.signOut().then(()=>location.reload());
 (async()=>{const{data:{session}}=await sb.auth.getSession();session?start(session):$('auth').hidden=false})();
