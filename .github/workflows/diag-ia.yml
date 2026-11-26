@@ -11,15 +11,8 @@ jobs:
       - name: Fonctions déployées
         run: |
           curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/functions | jq -r '.[] | "\(.slug) \(.status) v\(.version) jwt=\(.verify_jwt) maj=\(.updated_at)"'
-      - name: Préflight CORS et appel sans connexion
+      - name: Secrets et super-processor
         run: |
-          for f in ai tl-ai; do
-            echo "== $f OPTIONS"; curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS https://$PROJET.supabase.co/functions/v1/$f -H "Origin: https://app.boujradcpa.com" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,apikey,content-type,x-client-info"
-            echo "== $f POST"; curl -s -m 60 -w "\nHTTP %{http_code} en %{time_total}s\n" -X POST https://$PROJET.supabase.co/functions/v1/$f -H "Content-Type: application/json" -d '{"prompt":"test"}' | head -c 400; echo
-          done
-      - name: Journaux récents des fonctions
-        run: |
-          Q=$(python3 -c "import urllib.parse;print(urllib.parse.quote(\"select timestamp, event_message, response.status_code, request.url, m.execution_time_ms from function_edge_logs cross join unnest(metadata) as md cross join unnest(md.response) as response cross join unnest(md.request) as request left join unnest(md.execution_time_ms) as m on true order by timestamp desc limit 40\"))")
-          curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJET/analytics/endpoints/logs.all?sql=$Q" | head -c 6000; echo
-          Q2=$(python3 -c "import urllib.parse;print(urllib.parse.quote(\"select timestamp, event_message, metadata.level from function_logs cross join unnest(metadata) as metadata order by timestamp desc limit 40\"))")
-          curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJET/analytics/endpoints/logs.all?sql=$Q2" | head -c 6000; echo
+          curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/secrets | jq -r '.[].name'
+          echo "== super-processor"; curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/functions/super-processor | jq 'del(.ezbr_sha256)'
+          curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/functions/super-processor/body -o body.bin; file body.bin; strings body.bin | grep -iE "anthropic|tl_membres|Deno.serve|modelTier|tier|max_tokens|claude-" | head -20
