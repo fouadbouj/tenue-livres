@@ -55,6 +55,7 @@ document.addEventListener('input',e=>{const t=e.target;if(!CUR||!t.closest('#svc
   if(t.dataset.q&&t.type!=='checkbox'&&t.type!=='radio'&&t.tagName!=='SELECT'){R[t.dataset.q]=t.value;plusTard()}
   if(t.dataset.qr&&t.type!=='radio'&&t.tagName!=='SELECT'){R[t.dataset.qr][+t.dataset.i][t.dataset.qk]=t.value;plusTard()}});
 document.addEventListener('change',e=>{const t=e.target;if(!CUR||!t.closest('#svc'))return;
+  if(t.dataset.qs){const st=new Set(R[t.dataset.qs]||[]);t.checked?st.add(t.value):st.delete(t.value);R[t.dataset.qs]=[...st];plusTard();return}
   if(t.dataset.qfile){deposer(t.dataset.qfile,[...t.files]);t.value='';return}
   if(t.dataset.q){R[t.dataset.q]=t.type==='checkbox'?t.checked:t.value;if(t.type==='checkbox'||t.type==='radio'||t.tagName==='SELECT')dessine();plusTard()}
   if(t.dataset.qr){R[t.dataset.qr][+t.dataset.i][t.dataset.qk]=t.value;plusTard()}});

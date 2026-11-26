@@ -100,6 +100,72 @@ const Q={
    S('Pièces à déposer',[doc('d_vente','Acte de vente ou confirmation de la transaction',{req:1}),doc('d_achat','Acte d’achat ou relevé du coût d’origine'),doc('d_reno','Factures des rénovations',{show:R=>/Immeuble|Résidence|Chalet/.test(R.type||'')}),
      doc('d_feuillets','Feuillets T5008, relevés 18 et relevés de courtage',{show:R=>/Actions|Crypto/.test(R.type||'')})])]},
 
+ allocations:{nom:'Allocations pour enfants (Allocation famille du Québec et allocation canadienne pour enfants)',intro:'Pour demander les allocations pour vos enfants auprès de Retraite Québec (Allocation famille) et de l’Agence du revenu du Canada (allocation canadienne pour enfants), nous avons besoin de quelques renseignements et des pièces justificatives.',
+  s:[S('Votre situation',[f('situation','Pourquoi faites-vous la demande?','radio',{opts:['Naissance au Québec','Naissance ailleurs au Canada','Naissance à l’extérieur du Canada','Arrivée au Canada ou au Québec (nouvel arrivant)','Retour au Canada après une absence','Adoption','Un enfant vient vivre avec moi ou la garde change'],req:1}),
+     f('date_evt','Date de l’événement (naissance, arrivée, début de la garde)','date',{req:1}),
+     f('auto','À la naissance, avez-vous coché le partage des renseignements avec l’ARC dans la déclaration de naissance?','radio',{opts:['Oui','Non','Je ne sais pas'],show:R=>R.situation==='Naissance au Québec'})],
+     {note:'Pour une naissance au Québec, l’Allocation famille est habituellement versée sans demande, et l’allocation canadienne aussi si vous avez consenti au partage lors de la déclaration de naissance. Nous vérifions pour vous.'}),
+   S('Vous (parent qui fait la demande)',[f('nom','Nom complet','text',{req:1}),f('ddn','Date de naissance','date',{req:1}),f('nas','NAS','nas',{req:1}),f('adresse','Adresse actuelle','text',{req:1}),
+     f('statut','Statut au Canada','select',{opts:['Citoyen(ne) canadien(ne)','Résident(e) permanent(e)','Résident(e) temporaire (permis de travail ou d’études)','Personne protégée','Indien(ne) inscrit(e)'],req:1}),
+     f('arrivee','Date d’arrivée au Canada','date',{show:R=>/arrivant|Retour|extérieur/.test(R.situation||'')}),f('arrivee_qc','Date d’arrivée au Québec','date',{show:R=>/arrivant|Retour|ailleurs/.test(R.situation||'')}),
+     f('etat','État civil','select',{opts:['Célibataire','Marié(e)','Conjoint(e) de fait','Séparé(e)','Divorcé(e)','Veuf ou veuve'],req:1}),f('etat_date','Depuis quand?','date'),
+     f('principal','Qui est principalement responsable des soins et de l’éducation des enfants?','radio',{opts:['Moi','Mon ou ma conjoint(e)','Garde partagée avec l’autre parent'],req:1})]),
+   S('Votre conjoint(e)',[f('cj_nom','Nom complet','text',{req:1}),f('cj_ddn','Date de naissance','date',{req:1}),f('cj_nas','NAS (s’il en a un)','nas'),
+     f('cj_statut','Statut au Canada','select',{opts:['Citoyen(ne) canadien(ne)','Résident(e) permanent(e)','Résident(e) temporaire (permis de travail ou d’études)','Personne protégée','Indien(ne) inscrit(e)','Non-résident(e)']})],{show:R=>['Marié(e)','Conjoint(e) de fait'].includes(R.etat)}),
+   S('Les enfants',[f('enfants','','rep',{min:1,add:'Ajouter un enfant',sub:[f('prenom','Prénom','text',{req:1}),f('nom','Nom','text',{req:1}),f('ddn','Date de naissance','date',{req:1}),f('lieu','Lieu de naissance (ville, pays)','text',{req:1}),
+      f('depuis','Vit avec vous depuis le','date'),f('garde','Garde','select',{opts:['Exclusive (vit avec moi)','Partagée (40 % à 60 % du temps)']})]})]),
+   S('Revenus et déclarations',[f('declarations','Avez-vous produit vos déclarations de revenus des dernières années (vous et votre conjoint)?','radio',{opts:['Oui','Non','Nous sommes nouveaux au Canada'],req:1}),
+     f('revenus_monde','Revenus mondiaux de la famille pour les années précédant votre arrivée (montant, devise, pays)','textarea',{show:R=>/arrivant|Retour/.test(R.situation||'')||R.declarations==='Nous sommes nouveaux au Canada'})],
+     {note:'Les allocations sont calculées à partir du revenu familial : les deux conjoints doivent produire leurs déclarations chaque année, même sans revenu.'}),
+   S('Pièces à déposer',[doc('naissance','Preuve de naissance de chaque enfant (certificat de naissance, passeport ou document d’immigration au nom de l’enfant)',{req:1,show:R=>R.situation!=='Naissance au Québec'}),
+     doc('statut_doc','Preuve de votre statut et de celui de votre conjoint (carte de résident permanent, confirmation de résidence permanente, permis de travail ou d’études, etc.)',{req:1,show:R=>/Résident|protégée/.test((R.statut||'')+(R.cj_statut||''))||/arrivant|extérieur/.test(R.situation||'')}),
+     doc('residence','Deux preuves de résidence au Québec à votre nom (bail, facture d’électricité ou d’Internet, permis de conduire)',{req:1,show:R=>/arrivant|Retour|ailleurs|extérieur/.test(R.situation||'')}),
+     doc('presence','Preuve de la présence de l’enfant au Québec (bulletin scolaire, attestation de la garderie, carnet de vaccination)',{show:R=>/Retour|ailleurs|extérieur/.test(R.situation||'')}),
+     doc('garde_doc','Jugement, ordonnance ou entente de garde signée',{req:1,show:R=>/garde/.test(R.situation||'')||R.principal==='Garde partagée avec l’autre parent'}),
+     doc('adoption_doc','Jugement d’adoption ou certificat d’enregistrement de la Cour du Québec',{req:1,show:R=>R.situation==='Adoption'}),
+     doc('avis','Dernier avis de cotisation de chaque conjoint (fédéral et Québec)'),doc('specimen','Spécimen de chèque pour le dépôt direct')])],
+  fin:'Nous préparerons les formulaires (RC66 et RC66SCH pour l’ARC, LPF-800 pour Retraite Québec, selon votre situation) et vous les ferons signer.'},
+
+ succession:{nom:'Succession — déclarations de revenus d’une personne décédée',intro:'Toutes nos condoléances. Pour préparer les déclarations de revenus finales de la personne décédée et vous aider à obtenir les certificats de décharge, nous avons besoin de quelques renseignements et documents.',
+  s:[S('La personne décédée',[f('nom','Nom complet','text',{req:1}),f('ddn','Date de naissance','date',{req:1}),f('deces','Date du décès','date',{req:1}),f('nas','NAS','nas',{req:1}),f('adresse','Dernière adresse','text',{req:1}),
+     f('etat','État civil au décès','select',{opts:['Célibataire','Marié(e)','Conjoint(e) de fait','Séparé(e)','Divorcé(e)','Veuf ou veuve'],req:1}),f('cj','Nom du conjoint survivant','text',{show:R=>['Marié(e)','Conjoint(e) de fait'].includes(R.etat)})]),
+   S('Le liquidateur (exécuteur testamentaire)',[f('liq','','rep',{min:1,add:'Ajouter un liquidateur',sub:[f('nom','Nom complet','text',{req:1}),f('adresse','Adresse','text',{req:1}),f('tel','Téléphone','tel',{req:1}),f('courriel','Courriel','email')]})]),
+   S('Les biens',[f('testament','Y a-t-il un testament?','radio',{opts:['Oui, notarié','Oui, olographe ou devant témoins','Non'],req:1}),
+     f('immeubles','La personne possédait-elle des immeubles (maison, chalet, immeuble locatif)?','radio',{opts:OUI,req:1}),
+     f('placements','Avait-elle des placements non enregistrés, des actions ou une société?','radio',{opts:OUI,req:1}),
+     f('reer','Avait-elle un REER, un FERR ou un CELI?','radio',{opts:OUI,req:1}),f('beneficiaires','Bénéficiaires désignés et héritiers (noms et liens)','textarea')]),
+   S('Pièces à déposer',[doc('certificat','Certificat ou acte de décès',{req:1}),doc('d_testament','Testament et recherche testamentaire',{show:R=>/Oui/.test(R.testament||'')}),
+     doc('feuillets','Feuillets et relevés de l’année du décès (pensions, RRQ, Sécurité de la vieillesse, placements)'),doc('releves','Relevés bancaires et de placements à la date du décès'),
+     doc('d_immeubles','Actes d’achat et évaluations municipales des immeubles',{show:oui('immeubles')}),doc('d_reer','Relevés REER, FERR et CELI à la date du décès',{show:oui('reer')}),
+     doc('avis','Dernier avis de cotisation (fédéral et Québec)')])],
+  fin:'Nous vous expliquerons les étapes suivantes : déclarations finales, déclarations de la succession (T3 et TP-646) et certificats de décharge avant de distribuer les biens.'},
+
+ handicap:{nom:'Crédit d’impôt pour personnes handicapées (fédéral et Québec)',intro:'Pour demander le crédit d’impôt pour personnes handicapées et, s’il y a lieu, rajuster les déclarations des années passées, nous avons besoin de quelques renseignements et du formulaire rempli par le professionnel de la santé.',
+  s:[S('La personne visée',[f('qui','Pour qui est la demande?','radio',{opts:['Moi','Mon ou ma conjoint(e)','Mon enfant','Un autre membre de la famille à charge'],req:1}),f('nom','Nom complet','text',{req:1}),f('ddn','Date de naissance','date',{req:1}),f('nas','NAS','nas',{req:1}),
+     f('nature','Nature de la déficience (en vos mots)','textarea',{req:1}),f('depuis','Depuis quelle année?','number',{req:1}),
+     f('professionnel','Professionnel de la santé qui remplira l’attestation (nom et spécialité)','text'),f('frais','Payez-vous des frais de préposé aux soins ou d’établissement?','radio',{opts:OUI})]),
+   S('Pièces à déposer',[doc('t2201','Formulaire T2201 (fédéral) rempli et signé par le professionnel de la santé, si vous l’avez déjà'),doc('tp752','Formulaire TP-752.0.14 (Québec) rempli par le professionnel de la santé, si vous l’avez déjà'),
+     doc('rapports','Rapports médicaux utiles (facultatif)'),doc('d_frais','Reçus des frais de soins',{show:oui('frais')}),doc('avis','Avis de cotisation des années visées')])],
+  fin:'Si vous n’avez pas encore les formulaires, nous vous les transmettrons pré-remplis pour que le professionnel de la santé n’ait que sa partie à remplir.'},
+
+ retraite:{nom:'Demandes de pensions de retraite (Régime de rentes du Québec, Sécurité de la vieillesse et SRG)',intro:'Pour demander vos prestations de retraite auprès de Retraite Québec (rente de retraite) et de Service Canada (pension de la Sécurité de la vieillesse et Supplément de revenu garanti), nous avons besoin de quelques renseignements.',
+  s:[S('Ce que vous souhaitez demander',[f('demandes','Cochez ce qui s’applique','checks',{opts:[['rrq','Rente de retraite du Régime de rentes du Québec (dès 60 ans)'],['sv','Pension de la Sécurité de la vieillesse (dès 65 ans)'],['srg','Supplément de revenu garanti (revenu modeste)'],['rpc','Pension du Régime de pensions du Canada (si vous avez travaillé hors Québec)'],['division','Division de la rente de retraite avec mon ou ma conjoint(e)'],['conseil','Je ne sais pas : conseillez-moi sur le meilleur moment pour commencer']],req:1}),
+     f('debut','Date souhaitée du début des versements','date'),f('lettre_sv','Avez-vous reçu une lettre de Service Canada confirmant votre inscription automatique à la Sécurité de la vieillesse?','radio',{opts:['Oui','Non','Je ne sais pas']})],
+     {note:'La rente du Régime de rentes du Québec ne commence jamais automatiquement : il faut la demander d’un à trois mois avant la date voulue. La Sécurité de la vieillesse est souvent automatique; une lettre arrive peu après le 64e anniversaire.'}),
+   S('Vous',[f('nom','Nom complet','text',{req:1}),f('nom_naissance','Nom à la naissance, s’il est différent','text'),f('ddn','Date de naissance','date',{req:1}),f('nas','NAS','nas',{req:1}),
+     f('adresse','Adresse','text',{req:1}),f('tel','Téléphone','tel',{req:1}),f('lieu','Lieu de naissance (ville, pays)','text',{req:1}),
+     f('etat','État civil','select',{opts:['Célibataire','Marié(e)','Conjoint(e) de fait','Séparé(e)','Divorcé(e)','Veuf ou veuve'],req:1}),f('etat_date','Depuis quand?','date')]),
+   S('Votre conjoint(e)',[f('cj_nom','Nom complet','text',{req:1}),f('cj_ddn','Date de naissance','date',{req:1}),f('cj_nas','NAS','nas',{req:1}),f('cj_rente','Reçoit-il ou elle déjà une rente ou une pension?','text')],{show:R=>['Marié(e)','Conjoint(e) de fait'].includes(R.etat)}),
+   S('Travail et résidence',[f('travail','Travaillez-vous encore?','radio',{opts:['Oui, à temps plein','Oui, à temps partiel','Non'],req:1}),f('fin_travail','Date de fin d’emploi, s’il y a lieu','date'),
+     f('residence','Avez-vous toujours vécu au Canada depuis l’âge de 18 ans?','radio',{opts:OUI,req:1}),
+     f('pays','Pays où vous avez vécu ou travaillé après 18 ans (pays et dates)','textarea',{req:1,show:R=>R.residence==='Non'}),
+     f('enfants','Enfants nés après 1958 dont vous vous êtes occupé(e) (prénom, nom, date de naissance) : ils peuvent augmenter votre rente','textarea'),
+     f('impot','Souhaitez-vous de l’impôt retenu sur vos versements?','radio',{opts:['Oui','Non','Conseillez-moi']})]),
+   S('Pièces à déposer',[doc('statut_doc','Preuve de citoyenneté ou de statut légal au Canada (si vous êtes né(e) hors du Canada)',{show:R=>R.lieu&&!/canada|québec|quebec/i.test(R.lieu)}),
+     doc('lettre','Lettre de Service Canada ou de Retraite Québec reçue',{show:R=>R.lettre_sv==='Oui'}),doc('releve','Relevé de participation au Régime de rentes du Québec ou état de compte, si vous l’avez'),
+     doc('specimen','Spécimen de chèque pour le dépôt direct',{req:1}),doc('avis','Dernier avis de cotisation (vous et votre conjoint)')])],
+  fin:'Nous vous conseillerons sur le meilleur moment pour commencer chaque prestation, puis préparerons les demandes à signer.'},
+
  req:{nom:'Mise à jour annuelle au Registraire des entreprises',intro:'Nous préparons la déclaration de mise à jour annuelle de votre entreprise au Registraire des entreprises. Confirmez ou corrigez les renseignements de l’an dernier.',
   s:[S('Vos renseignements',[f('aucun','Aucun changement depuis l’an dernier','radio',{opts:['Aucun changement','Il y a des changements'],req:1}),
      f('siege','Nouvelle adresse du siège social','text',{show:R=>R.aucun==='Il y a des changements'}),f('admins','Changements d’administrateurs ou de dirigeants (nom, adresse, fonction)','textarea',{show:R=>R.aucun==='Il y a des changements'}),
@@ -121,9 +187,10 @@ function input(x,v,attr,esc){const req=x.req?' req':'';
   if(x.t==='radio')return `<fieldset style="border:0;padding:0;margin:0;grid-column:1/-1"><legend style="font-size:14px;margin-bottom:4px"><b class="${req}">${esc(x.l)}</b></legend><div class="row" style="gap:6px 22px">${x.opts.map(o=>`<label class="opt"><input type="radio" name="r_${attr.replace(/\W/g,'')}" ${attr} value="${esc(o)}"${v===o?' checked':''}> ${esc(o)}</label>`).join('')}</div></fieldset>`;
   if(x.t==='check')return `<label class="opt" style="grid-column:1/-1"><input type="checkbox" ${attr}${v?' checked':''}> <span${x.req?' class="req"':''}>${esc(x.l)}</span></label>`;
   if(x.t==='textarea')return `<label class="f" style="grid-column:1/-1"><b class="${req}">${esc(x.l)}</b><textarea ${attr}>${esc(v??'')}</textarea></label>`;
+  if(x.t==='checks'){const set=new Set(v||[]);return `<div style="grid-column:1/-1"><b class="${req}" style="font-size:14px">${esc(x.l)}</b><div class="opts">${x.opts.map(([k,l])=>`<label class="opt"><input type="checkbox" ${attr.replace('data-q=','data-qs=')} value="${k}"${set.has(k)?' checked':''}> ${esc(l)}</label>`).join('')}</div></div>`}
   const ty=x.t==='money'||x.t==='number'?'number" step="any" inputmode="decimal':x.t==='nas'?'text" inputmode="numeric" placeholder="123 456 789':x.t;
   return `<label class="f"><b class="${req}">${esc(x.l)}${x.t==='money'?' ($)':''}</b><input type="${ty}" ${attr} value="${esc(v??'')}"></label>`}
-function formHtml(id,R,F,esc){return sections(id).map(sec=>{const c=sec.c.filter(x=>vis(x,R));if(!c.length)return'';
+function formHtml(id,R,F,esc){return sections(id).map(sec=>{if(sec.show&&!sec.show(R))return'';const c=sec.c.filter(x=>vis(x,R));if(!c.length)return'';
   return `<h3>${esc(sec.t)}</h3>${sec.note?`<p class="sub" style="margin:0 0 8px;font-size:14px">${esc(sec.note)}</p>`:''}<div class="grid">${c.map(x=>{
     if(x.t==='rep'){const L=R[x.k]||[];return `<div style="grid-column:1/-1">${L.map((it,i)=>`<div class="rep"><div class="row" style="justify-content:space-between"><strong>${i+1}.</strong>${L.length>(x.min||0)?`<button type="button" class="sm danger" data-qdel="${x.k}|${i}">Retirer</button>`:''}</div><div class="grid">${x.sub.map(s=>input(s,it[s.k],`data-qr="${x.k}" data-i="${i}" data-qk="${s.k}"`,esc)).join('')}</div></div>`).join('')}<button type="button" class="sm" data-qadd="${x.k}">+ ${esc(x.add||'Ajouter')}</button></div>`}
     if(x.t==='doc'){const L=F.filter(y=>y.doc===x.k);return `<div class="rep" style="grid-column:1/-1"><div class="row" style="justify-content:space-between;align-items:center"><b class="${x.req?'req':''}">${esc(x.l)}</b><label class="sm" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:#fff">Déposer un fichier<input type="file" multiple data-qfile="${x.k}" hidden accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.csv,.xlsx,.xls,.doc,.docx,.zip"></label></div>
@@ -131,15 +198,15 @@ function formHtml(id,R,F,esc){return sections(id).map(sec=>{const c=sec.c.filter
     return input(x,R[x.k],`data-q="${x.k}"`,esc)}).join('')}</div>`}).join('')}
 
 /* ---------- validation ---------- */
-function erreurs(id,R,F){const E=[];sections(id).forEach(sec=>sec.c.forEach(x=>{if(!vis(x,R))return;
+function erreurs(id,R,F){const E=[];sections(id).forEach(sec=>(sec.show&&!sec.show(R)?[]:sec.c).forEach(x=>{if(!vis(x,R))return;
   if(x.t==='rep'){const L=R[x.k]||[];if(L.length<(x.min||0))E.push(`${sec.t} : ajoutez au moins ${x.min===1?'une personne':x.min}.`);
     L.forEach((it,i)=>x.sub.forEach(s=>{if(s.req&&vide(it[s.k]))E.push(`${sec.t} ${i+1} : « ${s.l} » est requis.`);if(s.t==='nas'&&it[s.k]&&!nasOk(it[s.k]))E.push(`${sec.t} ${i+1} : le NAS n’est pas valide.`)}));return}
   if(x.t==='doc'){if(x.req&&!F.some(y=>y.doc===x.k))E.push(`Déposez : ${x.l}.`);return}
   if(x.req&&vide(R[x.k]))E.push(x.t==='check'?'Le consentement est requis.':`${sec.t} : « ${x.l} » est requis.`)}));return E}
 
 /* ---------- sommaire pour le cabinet ---------- */
-function val(x,v){if(vide(v))return'';if(x.t==='check')return'Oui';if(x.t==='money')return money(v);if(x.t==='date')return new Date(v+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'});return String(v)}
-function resumeHtml(id,R,F,esc){return sections(id).map(sec=>{const rows=sec.c.filter(x=>vis(x,R)).map(x=>{
+function val(x,v){if(vide(v))return'';if(x.t==='checks')return v.map(k=>(x.opts.find(o=>o[0]===k)||[k,k])[1]).join('\n');if(x.t==='check')return'Oui';if(x.t==='money')return money(v);if(x.t==='date')return new Date(v+'T12:00').toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'});return String(v)}
+function resumeHtml(id,R,F,esc){return sections(id).map(sec=>{if(sec.show&&!sec.show(R))return'';const rows=sec.c.filter(x=>vis(x,R)).map(x=>{
     if(x.t==='rep')return(R[x.k]||[]).map((it,i)=>`<tr><th style="width:38%;vertical-align:top">${i+1}.</th><td>${x.sub.map(s=>val(s,it[s.k])?`${esc(s.l)} : <strong>${esc(val(s,it[s.k]))}</strong>`:'').filter(Boolean).join('<br>')}</td></tr>`).join('');
     if(x.t==='doc'){const L=F.filter(y=>y.doc===x.k);if(!L.length&&!x.req)return'';return `<tr><th style="width:38%;vertical-align:top">${esc(x.l)}</th><td>${L.map(y=>`<button class="sm" data-file="${esc(y.path)}" style="margin:2px">${esc(y.nom)}</button>`).join('')||'<span class="pill r">Non déposé</span>'}</td></tr>`}
     const v=val(x,R[x.k]);if(!v)return'';return `<tr><th style="width:38%;vertical-align:top;font-weight:500">${esc(x.l||'')}</th><td style="white-space:pre-wrap"><strong>${esc(v)}</strong></td></tr>`}).join('');
