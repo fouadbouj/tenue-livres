@@ -9,7 +9,7 @@ app = '{\n' + main.group(1) + '\n}\n'
 html = src[:main.start()] + (
   '<script src="config.js"></script>\n'
   '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>\n'
-  '<script src="cloud.js"></script>\n') + src[main.end():]
+  '<script src="assistant.js"></script>\n<script src="cloud.js"></script>\n') + src[main.end():]
 out = pathlib.Path(__file__).parent / 'public'
 (out / 'app.js').write_text(app, encoding='utf-8')
 (out / 'index.html').write_text(html, encoding='utf-8')

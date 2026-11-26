@@ -651,9 +651,63 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
   if(b.id==='bMail'){b.disabled=true;$('bM').textContent='Envoi…';try{const r=await fn(cfg.FONCTION_RAPPELS||'cc-rappels',{sommaire:true});$('bM').textContent=typeof r.sommaire==='number'?`Sommaire envoyé (${r.sommaire} échéance(s), ${r.retard} en retard).`:'Envoi impossible : '+r.sommaire;notify($('bM').textContent,typeof r.sommaire!=='number')}catch(err){$('bM').textContent='Envoi impossible : '+err.message}b.disabled=false;return}});
 
 /* ---------- connexion (membres du cabinet seulement) ---------- */
+
+/* ---------- Assistant IA (bouton flottant) : gestion du cabinet ---------- */
+const IA_CHAMPS={nom:'Nom',courriel:'Courriel',telephone:'Téléphone',adresse:'Adresse',ville:'Ville',code_postal:'Code postal',contact:'Personne-ressource',statut:'Statut',forme:'Forme juridique',fin_exercice:'Fin d’exercice (MM-JJ)',frequence:'Fréquence TPS/TVQ',responsable:'Responsable',groupe:'Groupe',neq:'NEQ',no_entreprise:'No d’entreprise',no_tps:'No TPS',no_tvq:'No TVQ',langue:'Langue',employeur:'Employeur',tps_tvq:'Inscrit TPS/TVQ'};
+const iaCli=id=>CLI.find(c=>c.id===id);
+async function iaContexteC(){const auj=new Date().toLocaleDateString('fr-CA'),[y,m]=auj.split('-').map(Number),deb=auj.slice(0,8)+'01',fin=ymd(fMois(y,m));
+  const ALL=CLI.flatMap(c=>obligations(c,y-1,y+1)),ob=ALL.filter(o=>!etatOb(o).ok&&o.date<=fin&&o.date>=ymd(new Date(Date.UTC(y,m-4,1)))).sort((a,b)=>a.date.localeCompare(b.date));
+  const nom=id=>iaCli(id)?.nom||'—';
+  return `Onglet affiché : ${TAB}${EDIT?` · fiche ouverte : ${EDIT.nom} (${EDIT.id})`:''}.
+Clients (id | nom | statut | type/forme | fin d'exercice | TPS/TVQ | courriel | responsable | groupe) :
+${CLI.map(c=>[c.id,c.nom,c.statut||'actif',[c.type,c.forme].filter(Boolean).join('/'),c.fin_exercice,c.tps_tvq?c.frequence:'non inscrit',c.courriel||'',c.responsable||'',c.groupe||''].join(' | ')).join('\n')}
+
+Tâches ouvertes (id | titre | client | échéance | priorité | responsable) :
+${TCH.filter(t=>t.statut!=='fait').map(t=>[t.id,t.titre,t.client_id?nom(t.client_id):'cabinet',t.echeance||'',t.priorite,t.responsable||''].join(' | ')).join('\n')||'aucune'}
+
+Échéances non faites jusqu’à la fin du mois (client_id | client | clé | titre | date) :
+${ob.slice(0,250).map(o=>[o.client_id,nom(o.client_id),o.cle,o.titre,o.date].join(' | ')).join('\n')||'aucune'}
+
+Questionnaires de service reçus à traiter : ${SVC.filter(x=>x.statut==='reçue').map(x=>x.titre+' — '+(nom(x.client_id)!=='—'?nom(x.client_id):x.courriel)).join(' ; ')||'aucun'}.
+Services offerts en demande (id : nom) : ${window.MODELES?.liste.map(x=>x.id+' : '+x.nom).join(' ; ')}.`}
+function iaInitC(){if(!window.ASSISTANT||iaInitC.ok)return;iaInitC.ok=1;
+  window.ASSISTANT.init({id:'centre',nom:'Gestion du cabinet',contexte:iaContexteC,
+    ask:async p=>{const d=await fn(cfg.FONCTION_IA||'ai',{prompt:p,tier:'default'});const t=String(d?.text||'').replace(/```json|```/g,'');const i=t.indexOf('{'),j=t.lastIndexOf('}');if(i<0||j<i)throw new Error('réponse invalide');return JSON.parse(t.slice(i,j+1))},
+    accueil:'Bonjour! Je peux créer et terminer des tâches, ajouter des notes, mettre à jour une fiche client, marquer des échéances comme faites, préparer une demande de service et répondre sur vos clients et vos échéances. Je vous montre toujours la modification avant de l’appliquer.',
+    exemples:['Qu’est-ce qui est dû ce mois-ci?','Crée une tâche pour vendredi : appeler Gestion Tremblay pour ses relevés','Change le courriel de Gestion Tremblay pour info@tremblay.ca','Envoie le questionnaire d’incorporation à un nouveau client'],
+    guide:`Tu travailles dans Gestion du cabinet (clients, échéances, tâches, demandes de service, facturation).
+ACTIONS (après confirmation, sauf mention) :
+- {"type":"tache","client_id":"uuid ou null","titre":"...","echeance":"AAAA-MM-JJ","priorite":"basse|normale|haute","details":"..."}
+- {"type":"tache_faite","id":"uuid de la tâche"}
+- {"type":"note","client_id":"uuid","texte":"..."} — note au journal du dossier.
+- {"type":"modifier_client","client_id":"uuid","champs":{"courriel":"..."}} — champs permis : ${Object.keys(IA_CHAMPS).join(', ')}. statut : actif|inactif|prospect. frequence : mensuelle|trimestrielle|annuelle. fin_exercice au format MM-JJ.
+- {"type":"echeance_faite","client_id":"uuid","cle":"clé de l'échéance du contexte"}
+- {"type":"demande","client_id":"uuid ou null","service":"id du service","courriel":"..."} — ouvre le formulaire d'envoi prérempli; l'utilisateur relit et envoie lui-même (sans confirmation).
+- {"type":"ouvrir_client","client_id":"uuid"} — ouvre la fiche (sans confirmation).
+Les dates relatives (« vendredi », « dans deux semaines ») sont calculées à partir de la date du jour.`,
+    actions:{
+      tache:{titre:a=>'Nouvelle tâche',verifier:a=>!String(a.titre||'').trim()?'Titre manquant.':a.client_id&&!iaCli(a.client_id)?'Client introuvable.':a.echeance&&!/^\d{4}-\d{2}-\d{2}$/.test(a.echeance)?'Date invalide.':null,
+        apercu:a=>`<table><tr><td>Titre</td><td><strong>${esc(a.titre)}</strong></td></tr><tr><td>Client</td><td>${esc(a.client_id?iaCli(a.client_id)?.nom:'Cabinet')}</td></tr><tr><td>Échéance</td><td>${a.echeance?dl(a.echeance):'—'}</td></tr><tr><td>Priorité</td><td>${esc(a.priorite||'normale')}</td></tr>${a.details?`<tr><td>Détails</td><td>${esc(a.details)}</td></tr>`:''}</table>`,
+        executer:async a=>{const{error}=await sb.from('cc_taches').insert({client_id:a.client_id||null,titre:String(a.titre).slice(0,200),details:a.details||null,echeance:a.echeance||null,priorite:['basse','normale','haute'].includes(a.priorite)?a.priorite:'normale'});if(error)throw error;await load();return'Tâche créée'}},
+      tache_faite:{titre:a=>'Terminer la tâche',verifier:a=>!TCH.find(t=>t.id===a.id)?'Tâche introuvable.':null,apercu:a=>{const t=TCH.find(x=>x.id===a.id);return `<p style="margin:0">${esc(t?.titre)}${t?.client_id?' — '+esc(iaCli(t.client_id)?.nom):''}</p>`},
+        executer:async a=>{const{error}=await sb.from('cc_taches').update({statut:'fait',fait_le:new Date().toISOString()}).eq('id',a.id);if(error)throw error;await load();return'Tâche terminée'}},
+      note:{titre:a=>'Note au dossier de '+(iaCli(a.client_id)?.nom||'?'),verifier:a=>!iaCli(a.client_id)?'Client introuvable.':!String(a.texte||'').trim()?'Note vide.':null,apercu:a=>`<p style="margin:0;white-space:pre-wrap">${esc(a.texte)}</p>`,
+        executer:async a=>{const{error}=await sb.from('cc_notes').insert({client_id:a.client_id,type:'note',texte:String(a.texte).slice(0,4000),auteur:who()});if(error)throw error;await load();return'Note ajoutée'}},
+      modifier_client:{titre:a=>'Modifier la fiche de '+(iaCli(a.client_id)?.nom||'?'),
+        verifier:a=>{const c=iaCli(a.client_id);if(!c)return'Client introuvable.';const k=Object.keys(a.champs||{});if(!k.length)return'Aucun changement.';const bad=k.filter(x=>!IA_CHAMPS[x]);if(bad.length)return'Champ non permis : '+bad.join(', ');
+          const v=a.champs;if(v.statut&&!['actif','inactif','prospect'].includes(v.statut))return'Statut invalide.';if(v.frequence&&!['mensuelle','trimestrielle','annuelle'].includes(v.frequence))return'Fréquence invalide.';if(v.fin_exercice&&!/^\d{2}-\d{2}$/.test(v.fin_exercice))return'Fin d’exercice : format MM-JJ.';if(v.courriel&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.courriel))return'Courriel invalide.'},
+        capture:a=>{const c=iaCli(a.client_id)||{};return Object.fromEntries(Object.keys(a.champs||{}).map(k=>[k,c[k]??null]))},
+        apercu:a=>{const c=a._avant||iaCli(a.client_id)||{};return `<table><tr><th>Champ</th><th>Avant</th><th>Après</th></tr>${Object.entries(a.champs||{}).map(([k,v])=>`<tr><td>${esc(IA_CHAMPS[k]||k)}</td><td>${esc(c[k]??'—')}</td><td><strong>${esc(v)}</strong></td></tr>`).join('')}</table>`},
+        executer:async a=>{const ch={...a.champs,updated_at:new Date().toISOString()};['employeur','tps_tvq'].forEach(k=>{if(k in ch)ch[k]=ch[k]===true||ch[k]==='true'||ch[k]==='oui'});
+          const{error}=await sb.from('cc_clients').update(ch).eq('id',a.client_id);if(error)throw error;await sb.from('cc_notes').insert({client_id:a.client_id,type:'note',texte:'Fiche modifiée par l’assistant : '+Object.keys(a.champs).map(k=>IA_CHAMPS[k]).join(', '),auteur:who()});await load();return'Fiche mise à jour'}},
+      echeance_faite:{titre:a=>'Marquer l’échéance comme faite',verifier:a=>!iaCli(a.client_id)?'Client introuvable.':!a.cle?'Échéance manquante.':null,apercu:a=>`<p style="margin:0">${esc(iaCli(a.client_id)?.nom)} — ${esc(a.cle)}</p>`,
+        executer:async a=>{const{error}=await sb.from('cc_echeances').insert({client_id:a.client_id,cle:a.cle,par:who()});if(error)throw error;await load();return'Échéance marquée comme faite'}},
+      demande:{auto:true,titre:()=>'',apercu:()=>'',executer:async a=>{if(!window.MODELES?.liste.some(x=>x.id===a.service))throw new Error('service inconnu');DTM=a.service;DTC=a.client_id&&iaCli(a.client_id)?a.client_id:'';DTE=false;DTV=null;DTQ=true;TAB='dt';render();
+        setTimeout(()=>{if(a.courriel&&$('dtE'))$('dtE').value=a.courriel;$('dtGo')?.scrollIntoView({block:'center'})},400);return'Formulaire de demande ouvert : relisez puis cliquez sur Envoyer'}},
+      ouvrir_client:{auto:true,titre:()=>'',apercu:()=>'',executer:async a=>{const c=iaCli(a.client_id);if(!c)throw new Error('client introuvable');EDIT=c;FT='fiche';CED=null;TAB='cli';render();window.scrollTo(0,0);return'Fiche ouverte : '+c.nom}}}})}
 async function start(s){const{data:m}=await sb.from('tl_membres').select('role').eq('user_id',s.user.id).maybeSingle();
   if(!m){$('auth').hidden=false;$('aM').textContent='Ce compte n’est pas autorisé dans l’intranet. Les clients utilisent le Portail client.';$('aM').className='msg err';await sb.auth.signOut();return}
-  $('auth').hidden=true;$('app').hidden=false;$('who').hidden=false;$('whoE').textContent=s.user.email;load()}
+  $('auth').hidden=true;$('app').hidden=false;$('who').hidden=false;$('whoE').textContent=s.user.email;load().then(()=>iaInitC())}
 $('aF').onsubmit=async e=>{e.preventDefault();$('aM').textContent='Connexion…';const{data,error}=await sb.auth.signInWithPassword({email:$('aE').value.trim(),password:$('aP').value});if(error){$('aM').textContent='Courriel ou mot de passe invalide.';$('aM').className='msg err';return}start(data.session)};
 $('out').onclick=()=>sb.auth.signOut().then(()=>location.reload());
 (async()=>{const{data:{session}}=await sb.auth.getSession();session?start(session):$('auth').hidden=false})();
