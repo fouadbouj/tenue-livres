@@ -1504,7 +1504,7 @@ async function readStatementPdf(f){
   if(!out.length){msg('Aucune transaction trouvée dans ce PDF. Essayez le CSV.',true);return}
   const tot=out.reduce((a,x)=>a+x.amt,0),ok=out._st&&tot===out._st.sf-out._st.sd;
   await importAny(out);msg($('msg').textContent+(out._direct?' Relevé lu directement (sans IA) : solde d’ouverture + transactions = solde de clôture, au cent près.':ok?' Lu par l’IA : le total concorde avec les soldes du relevé.':out._st?` Lu par l’IA : ATTENTION, écart de ${fmt(out._st.sf-out._st.sd-tot)} avec les soldes du relevé — une transaction manque ou est mal lue.`:' Lu par l’IA dans le PDF : comparez le total avec le relevé.')+(out._err?.length?` Attention, pages non lues : ${out._err.join(' · ')}.`:''));
-  if(out._st){addStmt(stmtExercice(out._st,out));saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
+  if(out._st){const o=out._st;C.stmts=(C.stmts||[]).filter(x=>!(x.src===o.src&&x.du===o.du&&x.au===o.au));addStmt(stmtExercice(o,out));saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
 }
 async function pdfTx(f,say){
   say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];const errs=[];
