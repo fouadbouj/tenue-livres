@@ -672,6 +672,20 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   </main>
 </div>
+<dialog id="ansDlg" aria-labelledby="ansT" style="border:1px solid var(--line);border-radius:14px;padding:0;width:min(1100px,96vw);background:var(--panel);color:var(--ink)">
+  <div class="mailbox">
+    <h2 id="ansT">Importer les réponses du client</h2>
+    <p class="note">Déposez le fichier Excel que le client a rempli (celui envoyé avec la demande de précisions). Les transactions sont retrouvées au compte transitoire ${'{'}C.tr{'}'}, un compte est proposé pour chacune à partir de l’explication du client, et vous validez avant d’appliquer.</p>
+    <label class="f" style="margin-top:8px">Fichier du client (.xlsx ou .csv)<input type="file" id="ansFile" accept=".xlsx,.xls,.csv,.txt"></label>
+    <div class="msg" id="ansMsg"></div>
+    <div id="ansOut" style="margin-top:10px;max-height:58vh;overflow:auto"></div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="pri" id="ansApply" hidden>Appliquer</button>
+      <button type="button" id="ansAi" hidden>Proposer les comptes avec l’IA</button>
+      <button type="button" id="ansClose" class="sm">Fermer</button>
+    </div>
+  </div>
+</dialog>
 <dialog id="mailDlg" aria-labelledby="mailT">
   <form method="dialog" class="mailbox">
     <h2 id="mailT">Demander les détails au client</h2>
@@ -1523,7 +1537,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   const todo=E.filter(e=>e.todo&&(!f||e.date>=f)&&(!t||e.date<=t)).length;
   const tr=t=>`<tr${t[2]?` class="${t[2]}"`:''}>${t[0]}</tr>`;
   const link=a=>`<a data-gl="${esc(a)}">${esc(a)} ${esc(accName(a))}</a>`;
-  let h='',warn=todo?`<p class="msg err">${todo} transaction(s) encore au compte transitoire ${esc(C.tr)} dans cette période.</p><div class="row" style="margin:-4px 0 10px"><button class="sm pri" data-askcli>Demander les détails au client</button></div>`:'';
+  let h='',warn=todo?`<p class="msg err">${todo} transaction(s) encore au compte transitoire ${esc(C.tr)} dans cette période.</p><div class="row" style="margin:-4px 0 10px"><button class="sm pri" data-askcli>Demander les détails au client</button><button class="sm" data-ansimp>Importer les réponses du client</button></div>`:'';
   if(REP==='bs'){const B=balances(E,null,t);const[exD]=exRange();const ni=[...balances(E,f||exD,t)].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
     const sect=(title,first,sign)=>{const set=new Set([...B].filter(([a,c])=>c&&first.includes(String(a)[0])).map(([a])=>a));let tot=0;let x=`<tr class="sec"><td colspan="2">${title}</td></tr>`;
       groups(set,first).forEach(g=>{let st=0;if(g.title)x+=`<tr class="grp"><td colspan="2">${esc(g.title)}</td></tr>`;g.items.forEach(a=>{const v=sign*B.get(a);st+=v;x+=`<tr><td class="ind">${link(a)}</td><td class="num">${fmtN(v)}</td></tr>`});if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td><td class="num">${fmtN(st)}</td></tr>`;tot+=st});
@@ -2573,6 +2587,56 @@ $('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend
     const dl=$('mailDlg');dl.close?dl.close():dl.removeAttribute('open');notify(`Courriel envoyé à ${dest} avec le PDF et l’Excel joints`);if(document.querySelector('#side [data-t=home][aria-current]')||!$('tHome')?.hidden)renderHome().catch(()=>{})}
   catch(e){notify('Envoi impossible : le courriel n’est pas parti',1);$('mailMsg').textContent='Envoi impossible ('+(e?.message||'service de courriel non configuré')+'). Téléchargez le PDF et l’Excel, puis utilisez « Ouvrir dans ma messagerie ».'}b.disabled=false};
 
+
+/* ---------- réponses du client : import du fichier Excel rempli et reclassement ---------- */
+let ANS=[];
+const ansCents=v=>{let x=String(v??'').replace(/[\s  $]/g,'');if(!x)return null;if(/,\d{1,2}$/.test(x))x=x.replace(/\./g,'').replace(',','.');else x=x.replace(/,/g,'');const n=parseFloat(x);return isNaN(n)?null:Math.round(Math.abs(n)*100)};
+const ansDate=v=>{const t=String(v||'').trim();let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;m=t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`}return t};
+async function ansCandidates(){/* transactions encore au transitoire : relevés (période + rang) et écritures */
+  let L=[];if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);else{const q=await db.collection('clients').doc(C.id).collection('periodes').get();L=q.docs.map(d=>d.data())}
+  const out=[];L.forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t);if(isTr(t)&&!lk(t.date))out.push({kind:'rel',pid:p.mois+'_'+p.src,mois:p.mois,src:p.src,i,date:t.date,desc:t.desc,c:Math.abs(t.amt),sortie:t.amt<0})})});
+  (await loadJe()).forEach(j=>(j.lines||[]).forEach((l,k)=>{if(l.a===C.tr&&!lk(j.date)){const v=(l.d||0)-(l.c||0);out.push({kind:'je',id:j.id,k,date:j.date,desc:j.desc||j.ref||'',c:Math.abs(v),sortie:v>0})}}));return out}
+async function ansRead(f){const rows=/\.xlsx?$/i.test(f.name)?await readXlsx(f):parseCSV(decode(await f.arrayBuffer()));
+  const h=rows.findIndex(r=>r.some(c=>/^date$/i.test(c.trim()))&&r.some(c=>/montant/i.test(c)));if(h<0)throw new Error('En-têtes introuvables : utilisez le fichier envoyé au client.');
+  const H=rows[h].map(c=>norm(c)),col=re=>H.findIndex(c=>re.test(c));
+  const ci={date:col(/^DATE$/),type:col(/^TYPE$/),mt:col(/MONTANT/),desc:col(/DESCRIPTION/),expl:col(/S.?AGIT|PRECISION|EXPLICATION/),fac:col(/FACTURE/)};
+  return rows.slice(h+1).map(r=>({date:ansDate(r[ci.date]),type:r[ci.type]||'',c:ansCents(r[ci.mt]),desc:r[ci.desc]||'',expl:(ci.expl>=0?r[ci.expl]:'')||'',fac:ci.fac>=0?r[ci.fac]||'':''})).filter(x=>x.date&&x.c)}
+function ansRender(){const n=ANS.filter(a=>a.m&&a.expl.trim()).length,nm=ANS.filter(a=>!a.m).length;
+  $('ansOut').innerHTML=`<p class="note" style="margin:0 0 8px">${ANS.length} ligne(s) lue(s) · <strong>${n}</strong> avec une explication à classer${nm?` · ${nm} introuvable(s) au compte transitoire (déjà classée(s) ou montant différent)`:''}.</p>
+    <table class="rep" style="width:100%"><thead><tr><th>Date</th><th class="num">Montant</th><th>Description</th><th>Explication du client</th><th>Compte</th><th>Taxes</th></tr></thead><tbody>${ANS.map((a,i)=>`<tr${a.m?'':' style="opacity:.5"'}><td style="white-space:nowrap">${esc(a.date)}</td><td class="num" style="white-space:nowrap">${a.m&&a.m.sortie?'-':''}${(a.c/100).toLocaleString('fr-CA',{minimumFractionDigits:2})}</td><td>${esc(a.desc)}</td>
+      <td>${a.expl?esc(a.expl):'<span class="note">— pas de réponse —</span>'}${/^o/i.test(a.fac)?' <span class="note">· facture jointe</span>':''}</td>
+      <td>${a.m&&a.expl.trim()?`<select data-ans="${i}" style="max-width:260px"><option value="">— garder au transitoire —</option>${PLAN.filter(([n,t])=>n!==C.tr&&!isHeader(n,t)).map(([n,t])=>`<option value="${esc(n)}"${a.acct===n?' selected':''}>${esc(n+' '+t)}</option>`).join('')}</select>${a.ai?'<br><span class="note">Proposé par l’IA</span>':''}`:a.m?'':'<span class="note">Introuvable</span>'}</td>
+      <td>${a.m&&a.expl.trim()?`<input type="checkbox" data-anst="${i}"${a.tax?' checked':''} title="TPS/TVQ incluses">`:''}</td></tr>`).join('')}</tbody></table>`;
+  $('ansApply').hidden=!n;$('ansAi').hidden=!(n&&sampleFn)}
+async function ansAi(){const L=ANS.map((a,i)=>({i,a})).filter(({a})=>a.m&&a.expl.trim());if(!L.length||!sampleFn)return;$('ansMsg').textContent='L’IA propose les comptes…';$('ansAi').disabled=true;
+  try{const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nLe client a expliqué les transactions bancaires suivantes. Pour chacune, donne le compte le plus approprié dans CE plan (numéro exact, jamais le compte transitoire ${C.tr}) et indique si la TPS et la TVQ s'appliquent (achat ou vente taxable au Québec). Si l'explication est insuffisante, compte = null.\n${L.map(({i,a})=>`${i}. ${a.m.sortie?'Sortie':'Entrée'} de ${(a.c/100).toFixed(2)} $ le ${a.date} · relevé : « ${a.desc} » · explication du client : « ${a.expl} »`).join('\n')}\nRéponds en JSON seulement : [{"i":numéro,"compte":"numéro ou null","taxable":true|false}]`);
+    const ok=new Set(PLAN.map(p=>p[0]));let n=0;(Array.isArray(r)?r:[]).forEach(x=>{const a=ANS[x.i];const c=x.compte==null?null:String(x.compte);if(!a||!c||!ok.has(c)||c===C.tr)return;if(!a.acct){a.acct=c;a.tax=!!x.taxable;a.ai=true;n++}});
+    $('ansMsg').textContent=n?`L’IA a proposé ${n} compte(s). Vérifiez-les, puis cliquez sur « Appliquer ».`:'L’IA n’a pas pu proposer de compte : choisissez-les dans la liste.';ansRender()}
+  catch(e){$('ansMsg').textContent='Suggestion par l’IA impossible pour le moment : choisissez les comptes dans la liste.'}$('ansAi').disabled=false}
+async function ansApply(){const L=ANS.filter(a=>a.m&&a.acct);if(!L.length){$('ansMsg').textContent='Choisissez au moins un compte.';return}
+  const b=$('ansApply');b.disabled=true;$('ansMsg').textContent='Reclassement…';const why=a=>('Précision du client : '+a.expl.trim()).slice(0,140);
+  try{const per=new Map();L.filter(a=>a.m.kind==='rel').forEach(a=>{(per.get(a.m.pid)||per.set(a.m.pid,[]).get(a.m.pid)).push(a)});
+    for(const[pid,As]of per){if(P&&P.mois+'_'+P.src===pid){As.forEach(a=>Object.assign(P.tx[a.m.i],{acct:a.acct,tax:!!a.tax,st:'manuel',why:why(a),unk:false}));savePerNow();continue}
+      let doc;if(local)doc=LOCAL.periodes[C.id+'/'+pid];else{const q=await db.collection('clients').doc(C.id).collection('periodes').doc(pid).get();doc=q.exists?q.data():null}
+      if(!doc)continue;As.forEach(a=>Object.assign(doc.tx[a.m.i],{acct:a.acct,tax:!!a.tax,st:'manuel',why:why(a),unk:false}));doc.todo=doc.tx.filter(isTr).length;doc.updated=new Date().toISOString();
+      if(local)LOCAL.periodes[C.id+'/'+pid]=doc;else await db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(doc)}
+    const byJe=new Map();L.filter(a=>a.m.kind==='je').forEach(a=>{(byJe.get(a.m.id)||byJe.set(a.m.id,[]).get(a.m.id)).push(a)});
+    for(const[id,As]of byJe){const j=JE.find(x=>x.id===id);if(!j)continue;const{id:_,...d}=j;d.lines=d.lines.map((l,k)=>{const a=As.find(x=>x.m.k===k);return a?{...l,a:a.acct}:l});d.desc=(d.desc||'')+(d.desc?' · ':'')+'précisé par le client';d.updated=new Date().toISOString();
+      if(local){LOCAL.je[C.id+'/'+id]=d}else await(await jeCol()).doc(id).set(d)}
+    C.demandes=[...(C.demandes||[])];const last=C.demandes.at(-1);if(last)last.repondu=new Date().toISOString();saveClient();LED=null;
+    const dl=$('ansDlg');dl.close?dl.close():dl.removeAttribute('open');notify(`${L.length} transaction(s) reclassée(s) à partir des réponses du client`);
+    if(tab==='home')renderHome().catch(()=>{});else if(typeof render==='function')render()}
+  catch(e){$('ansMsg').textContent='Reclassement impossible : '+(e?.message||'réessayez.');notify('Reclassement impossible',1)}b.disabled=false}
+function openAns(){const d=$('ansDlg');ANS=[];$('ansOut').innerHTML='';$('ansMsg').textContent='';$('ansFile').value='';$('ansApply').hidden=$('ansAi').hidden=true;d.showModal?d.showModal():d.setAttribute('open','')}
+document.addEventListener('click',e=>{if(e.target.closest('[data-ansimp]')){e.preventDefault();openAns()}});
+$('ansClose').onclick=()=>{const d=$('ansDlg');d.close?d.close():d.removeAttribute('open')};
+$('ansFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('ansMsg').textContent='Lecture du fichier…';
+  try{const rows=await ansRead(f),cand=await ansCandidates();ANS=rows.map(r=>{const sortie=/retrait|sortie|debit/i.test(norm(r.type));const pool=cand.filter(c=>!c.used&&c.c===r.c&&c.date===r.date&&(!r.type||c.sortie===sortie));const m=pool.find(c=>norm(c.desc)===norm(r.desc))||pool[0]||null;if(m)m.used=true;return{...r,m,acct:'',tax:false}});
+    $('ansMsg').textContent='';ansRender();if(sampleFn&&ANS.some(a=>a.m&&a.expl.trim()))ansAi()}
+  catch(err){$('ansMsg').textContent=err?.message||'Lecture du fichier impossible.'}};
+$('ansOut').addEventListener('change',e=>{const i=e.target.dataset.ans??e.target.dataset.anst;if(i==null)return;const a=ANS[+i];if(e.target.dataset.ans!=null){a.acct=e.target.value;a.ai=false}else a.tax=e.target.checked});
+$('ansAi').onclick=ansAi;$('ansApply').onclick=ansApply;
+
 /* ---------- accueil du dossier ---------- */
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
@@ -2596,7 +2660,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   $('hTodo').innerHTML=T.join('');
   try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
     const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
-    {const n=LED.filter(e=>e.todo&&e.date>=x.deb&&e.date<=x.fin).length;if(n&&!$('hTodo').querySelector('[data-askcli]'))$('hTodo').insertAdjacentHTML('afterbegin',`<li><i class="r"></i><div>${n} transaction${n>1?'s':''} au compte transitoire<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} · en attente des réponses du client`:'Demandez les détails au client par courriel'})()}</small></div><button class="sm${(C.demandes||[]).length?'':' pri'}" data-askcli>${(C.demandes||[]).length?'Renvoyer':'Envoyer'}</button></li>`)}
+    {const n=LED.filter(e=>e.todo&&e.date>=x.deb&&e.date<=x.fin).length;if(n&&!$('hTodo').querySelector('[data-askcli]'))$('hTodo').insertAdjacentHTML('afterbegin',`<li><i class="r"></i><div>${n} transaction${n>1?'s':''} au compte transitoire<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} · en attente des réponses du client`:'Demandez les détails au client par courriel'})()}</small></div><button class="sm${(C.demandes||[]).length?'':' pri'}" data-askcli>${(C.demandes||[]).length?'Renvoyer':'Envoyer'}</button>${(C.demandes||[]).length?'<button class="sm pri" data-ansimp>Importer les réponses</button>':''}</li>`)}
     $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
 $('expChg').onclick=()=>setTab('rev');
 $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;

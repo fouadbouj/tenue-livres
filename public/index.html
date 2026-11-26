@@ -673,6 +673,20 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   </main>
 </div>
+<dialog id="ansDlg" aria-labelledby="ansT" style="border:1px solid var(--line);border-radius:14px;padding:0;width:min(1100px,96vw);background:var(--panel);color:var(--ink)">
+  <div class="mailbox">
+    <h2 id="ansT">Importer les réponses du client</h2>
+    <p class="note">Déposez le fichier Excel que le client a rempli (celui envoyé avec la demande de précisions). Les transactions sont retrouvées au compte transitoire ${'{'}C.tr{'}'}, un compte est proposé pour chacune à partir de l’explication du client, et vous validez avant d’appliquer.</p>
+    <label class="f" style="margin-top:8px">Fichier du client (.xlsx ou .csv)<input type="file" id="ansFile" accept=".xlsx,.xls,.csv,.txt"></label>
+    <div class="msg" id="ansMsg"></div>
+    <div id="ansOut" style="margin-top:10px;max-height:58vh;overflow:auto"></div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="pri" id="ansApply" hidden>Appliquer</button>
+      <button type="button" id="ansAi" hidden>Proposer les comptes avec l’IA</button>
+      <button type="button" id="ansClose" class="sm">Fermer</button>
+    </div>
+  </div>
+</dialog>
 <dialog id="mailDlg" aria-labelledby="mailT">
   <form method="dialog" class="mailbox">
     <h2 id="mailT">Demander les détails au client</h2>
