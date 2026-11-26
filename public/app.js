@@ -488,7 +488,7 @@ $('plist').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;$
 
 /* ---------- révision ---------- */
 function visible(){if(!P)return[];if(idFilter)return P.tx.filter(t=>idFilter.ids.has(t.id));const q=norm($('q').value);
-  return P.tx.filter(t=>(filter==='all'||(filter==='todo'&&t.st==='transit')||(filter==='sug'&&t.st==='suggere')||(filter==='done'&&t.st!=='transit'&&t.st!=='suggere'))&&(!q||norm(t.desc).includes(q)||String(t.acct).includes(q)))}
+  return P.tx.filter(t=>(filter==='all'||(filter==='todo'&&isTr(t))||(filter==='sug'&&t.st==='suggere')||(filter==='done'&&!isTr(t)&&t.st!=='suggere'))&&(!q||norm(t.desc).includes(q)||String(t.acct).includes(q)))}
 function render(){
   const tx=P?P.tx:[];const v=visible();
   $('tb').innerHTML=v.length?v.map(t=>`<tr class="${t.st}" data-id="${t.id}">
@@ -498,7 +498,7 @@ function render(){
     <td><select data-k="acct" aria-label="Compte"${lk(t.date)?' disabled title="Exercice fermé"':''}>${optsSel(t.acct)}</select></td>
     <td><input type="checkbox" data-k="tax" aria-label="Taxes incluses" ${t.tax?'checked':''}${lk(t.date)?' disabled':''}></td></tr>`).join('')
     :`<tr><td colspan="6" class="empty">${!tx.length?'Aucune transaction dans cette période.':filter==='todo'?'Rien au transitoire. La période est prête à exporter.':'Rien à afficher.'}</td></tr>`;
-  const tot=tx.length,todo=tx.filter(t=>t.st==='transit').length,sug=tx.filter(t=>t.st==='suggere').length;
+  const tot=tx.length,todo=tx.filter(isTr).length,sug=tx.filter(t=>t.st==='suggere'&&!isTr(t)).length;
   $('gPer').textContent=P?(P.multi&&P.to!==P.mois?`${moisLbl(P.mois)} – ${moisLbl(P.to)}`:moisLbl(P.mois)):'—';$('gTot').textContent=tot;$('gOk').textContent=tot-todo-sug;$('gTodo').textContent=todo;
   $('bOk').style.width=tot?((tot-todo-sug)/tot*100)+'%':'0';$('bSug').style.width=tot?(sug/tot*100)+'%':'0';$('bTodo').style.width=tot?(todo/tot*100)+'%':'0';
   const unk=tx.filter(t=>t.st==='transit'&&t.unk).length;
