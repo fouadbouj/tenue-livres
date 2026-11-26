@@ -927,7 +927,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -2492,7 +2492,7 @@ async function renderMis(){const x=curEx();$('misMsg').textContent='';
   if(!MIS){$('misBody').innerHTML='';$('misHead').innerHTML=`<div style="margin-top:14px"><button class="pri big" id="misNew">Créer le dossier de mission de compilation pour cet exercice</button>
     <p class="note" style="margin-top:10px">Prépare tout le dossier d’un coup à partir des livres de l’exercice : acceptation et indépendance, lettre de mission, questionnaire de fin d’exercice, balance de vérification de travail, feuilles de travail par section (A à HH, 10 à 40), écritures d’ajustement, états financiers compilés avec rapport et notes, conciliation fiscale et DPA, déclaration de la direction et liste d’achèvement.${sampleFn?' L’IA analyse ensuite la balance pour proposer les ajustements de fin d’exercice, les questions au client et les explications des variations.':''}</p></div>`;return}
   const done=stepDone();$('misHead').innerHTML=`<div class="row" style="margin-top:10px;justify-content:space-between"><div class="row"><span class="pill ${MIS.statut==='terminée'?'ok':''}">${MIS.statut==='terminée'?'Mission terminée':'En cours'}</span><strong>${Object.values(done).filter(Boolean).length} / ${STEPS.length} étapes</strong></div>
-    <div class="row"><button class="sm pri" id="misEfPdf">États financiers (PDF)</button><button class="sm" id="misWpPdf">Dossier de travail (PDF)</button>${sampleFn?'<button class="sm" id="misIa">Analyse IA</button>':''}</div></div>
+    <div class="row"><button class="sm danger" id="misCancel" title="Supprime ce dossier de mission ; les livres ne sont pas touchés">Annuler la mission</button><button class="sm pri" id="misEfPdf">États financiers (PDF)</button><button class="sm" id="misWpPdf">Dossier de travail (PDF)</button>${sampleFn?'<button class="sm" id="misIa">Analyse IA</button>':''}</div></div>
     <div class="steps">${STEPS.map(([k,l])=>`<button data-ms="${k}" aria-pressed="${k===mStep}" class="${done[k]?'done':''}"><span class="dot"></span>${l}</button>`).join('')}</div>`;
   await renderStep()}
 function stepDone(){const M=MIS;return{acc:ACC.every((_,i)=>M.acc['q'+i])&&!!M.acc.prep,let:!!M.lettre.signee,ent:!!(M.ent.activites&&M.ent.note1),q:QS.every((_,i)=>M.quest['q'+i]?.r),
@@ -2602,7 +2602,7 @@ $('tMis').addEventListener('click',async e=>{const b=e.target.closest('button');
   if(b.id==='misDone'){MIS.statut='terminée';MIS.termineLe=new Date().toISOString();saveMis();renderMis();return}
   if(b.id==='misReopen'){MIS.statut='en cours';saveMis();renderMis();return}
   if(b.id==='misToClose'){setTab('set');$('yearEnd').scrollIntoView({behavior:'smooth',block:'center'});return}
-  if(b.id==='misDel')confirm2(b,'',async()=>{try{if(local)delete(LOCAL.mis||{})[C.id+'/'+C.exCur];else await db.collection('clients').doc(C.id).collection('missions').doc(C.exCur).delete();MIS=null;renderMis()}catch(err){b.textContent='Erreur'}})});
+  if(b.id==='misDel'||b.id==='misCancel')confirm2(b,'',async()=>{try{if(local)delete(LOCAL.mis||{})[C.id+'/'+C.exCur];else await db.collection('clients').doc(C.id).collection('missions').doc(C.exCur).delete();MIS=null;renderMis()}catch(err){b.textContent='Erreur'}})});
 
 /* --- IA --- */
 async function iaMis(){if(!sampleFn||!MIS)return;const say=t=>$('misMsg').textContent=t;say('L’IA analyse la balance de l’exercice…');
@@ -2928,11 +2928,11 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   const now=new Date().toISOString().slice(0,7),by=m=>L.filter(p=>p.mois===m),todo=ms.reduce((s,m)=>s+by(m).reduce((t,p)=>t+(+p.todo||0),0),0);
   $('navTodo').hidden=!todo;$('navTodo').textContent=todo;
   $('hMonths').innerHTML=ms.map(m=>{const P_=by(m),n=P_.reduce((s,p)=>s+(+p.n||0),0),t=P_.reduce((s,p)=>s+(+p.todo||0),0),fut=m>now;
-    const cls=!P_.length?(fut?'fut':''):t?'r':'o',st=!P_.length?(fut?'À venir':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
+    const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
   if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`Premier mois concerné : ${moisLbl(m)}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Dernière demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} (${d.n} transaction${d.n>1?'s':''})`:'Envoie la liste des transactions à préciser par courriel'})()}</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
-  const miss=ms.filter(m=>m<now&&!by(m).length);if(miss.length)add('g',`${miss.length} mois sans relevé`,miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':''),'mo:'+miss[0]+':','Déposer');
+  const SA=new Set(C.sansAct||[]),miss=ms.filter(m=>m<now&&!by(m).length&&!SA.has(m));if(miss.length)T.push(`<li><i class="g"></i><div>${miss.length} mois sans relevé<small>${miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':'')}</small></div><div class="row" style="gap:6px;justify-content:flex-end"><button class="sm" data-sansact="${miss[0]}" title="Aucun relevé à déposer pour ce mois">Aucune activité en ${esc(moisLbl(miss[0]))}</button><button class="sm" data-go="mo:${miss[0]}:">Déposer</button></div></li>`);
   /* mise en place du dossier : ce qui manque encore */
   const SET=[];const setItem=(t,s,btns)=>SET.push(`<li><i class="g"></i><div>${t}${s?`<small>${s}</small>`:''}</div><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">${btns}</div></li>`);
   if(!x.ouv)setItem('Soldes d’ouverture','Nouveau client qui démarre? Les soldes sont à zéro. Client qui change de comptable? Importez la balance de vérification de la fin de l’exercice précédent.',`<button class="sm" data-ouv0>Nouveau client : soldes à zéro</button><button class="sm pri" data-go="je">Importer la BV</button>`);
@@ -2954,13 +2954,19 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   if(MIS){const dn=Object.values(stepDone()).filter(Boolean).length;add(MIS.statut==='terminée'?'o':'g',`Mission de compilation : ${dn} / ${STEPS.length} étapes`,MIS.statut==='terminée'?'Mission terminée.':'Reprenez là où vous étiez.','mis','Continuer')}
   else if(x.fin<=new Date().toISOString().slice(0,10))add('g','Mission de compilation à créer','L’exercice est terminé : préparez les états financiers.','mis','Créer');
   if(x.statut==='ferme')add('o','Exercice fermé','Les livres de cet exercice sont verrouillés.','','');
-  if(!T.length)add('o','Rien en attente','Tout est classé pour cet exercice.','','');
-  $('hTodo').innerHTML=T.join('');
+  const IGN=new Set(((C.ign||{})[x.id])||[]),cle=h=>h.replace(/<small>[\s\S]*$/,'').replace(/<[^>]+>/g,'').replace(/[\d\s]+/g,' ').trim().slice(0,80);let nIgn=0;
+  const T2=T.filter(li=>{if(/display:block/.test(li))return true;if(IGN.has(cle(li))){nIgn++;return false}return true}).map(li=>/display:block/.test(li)?li:li.replace(/<\/li>$/,`<button class="sm" data-ign="${esc(cle(li))}" title="Ne plus afficher ce point" aria-label="Ne plus afficher ce point" style="border:0;background:transparent;color:var(--mute,#667);padding:2px 6px;min-height:0">✕</button></li>`));
+  if(!T2.filter(li=>!/display:block/.test(li)).length)T2.push('<li><i class="o"></i><div>Rien en attente<small>Tout est à jour pour cet exercice.</small></div></li>');
+  if(nIgn)T2.push(`<li style="display:block;border:0;padding:6px 0 0"><small class="note">${nIgn} point(s) masqué(s) · <a href="#" data-unign>Réafficher</a></small></li>`);
+  $('hTodo').innerHTML=T2.join('');
   try{if(!LED)LED=await loadLedger();if(C?.id!==cid)return;const m=tbFor(LED,x);let rv=0,ch=0,cash=0;m.forEach((c,a)=>{const d=String(a)[0];if(d==='4')rv-=c;else if(d>='5')ch+=c;else if(secOf(a)==='A'&&a!==C.tr)cash+=c});
     const k=(l,v,c='')=>`<div class="kpi"><span>${l}</span><b class="${c}">${v?fmtP(v):'0,00'} $</b></div>`;
     {const n=LED.filter(e=>e.todo&&e.date>=x.deb&&e.date<=x.fin).length;if(n&&!$('hTodo').querySelector('[data-askcli]'))$('hTodo').insertAdjacentHTML('afterbegin',`<li><i class="r"></i><div>${n} transaction${n>1?'s':''} au compte transitoire<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} · en attente des réponses du client`:'Demandez les détails au client par courriel'})()}</small></div><button class="sm${(C.demandes||[]).length?'':' pri'}" data-askcli>${(C.demandes||[]).length?'Renvoyer':'Envoyer'}</button>${(C.demandes||[]).length?'<button class="sm pri" data-ansimp>Importer les réponses</button>':''}</li>`)}
     $('hKpi').innerHTML=k('Produits de l’exercice',rv)+k('Charges',ch)+k(rv-ch<0?'Perte':'Bénéfice',rv-ch,rv-ch<0?'neg':'')+k('Encaisse',cash)}catch(e){}}
 $('expChg').onclick=()=>setTab('rev');
+$('tHome').addEventListener('click',e=>{const z=e.target.closest('[data-ign],[data-unign],[data-sansact]');if(!z)return;e.preventDefault();const x=curEx();if(!x)return;C.ign=C.ign||{};
+  if(z.dataset.ign!=null){C.ign[x.id]=[...new Set([...(C.ign[x.id]||[]),z.dataset.ign])]}else if(z.hasAttribute('data-unign')){C.ign[x.id]=[]}else{C.sansAct=[...new Set([...(C.sansAct||[]),z.dataset.sansact])]}
+  saveClient();renderHome()});
 $('tHome').addEventListener('click',async e=>{const z=e.target.closest('[data-ouv0],[data-fixtax],[data-iaask]');if(!z)return;
   if(z.hasAttribute('data-iaask')){if(window.ASSISTANT?.demander)window.ASSISTANT.demander(z.dataset.iaask);else notify('L’assistant IA n’est pas disponible ici.');return}
   if(z.hasAttribute('data-ouv0')){if(!confirm('Confirmer que c’est un nouveau client qui démarre : tous les soldes d’ouverture sont à zéro?'))return;C.ouv={date:curEx().deb,s:{},zero:true};syncEx();saveClient();LED=null;notify('Soldes d’ouverture à zéro (nouveau client)');renderHome();return}
