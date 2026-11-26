@@ -193,7 +193,7 @@ function flushMulti(p=P){p.parts.forEach(part=>{const tx=p.tx.filter(t=>t._m===p
   pWriting.then(()=>setSave(local?'Enregistré (session seulement)':'Enregistré'))}
 function savePer(){if(!P)return;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
   pTimer=null;enforceLock(P);if(P.multi){flushMulti();return}
-  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},verif:P.verif||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:P.tx.length,todo:P.tx.filter(aCl).length,updated:new Date().toISOString()};
+  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},verif:P.verif||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{})})),n:P.tx.length,todo:P.tx.filter(aCl).length,updated:new Date().toISOString()};
   const pid=P.mois+'_'+P.src;
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;setSave('Enregistré (session seulement)');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}return}
   pWriting=pWriting.then(()=>db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(snap)).then(()=>{setSave('Enregistré');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}}).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true));
@@ -396,7 +396,7 @@ window.addEventListener('popstate',async()=>{const h=parseHash(),{c,t}=h;NAVQ=tr
   try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t);await navRest(h)}}else{if(tab!==t)setTab(t);await navRest(h)}}finally{NAVQ=false}});
 {const h=parseHash();if(h.c)PENDING=h}
 function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;enforceLock(P);P.multi?flushMulti():savePerFlush(P)}}
-function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},verif:p.verif||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||''})),n:p.tx.length,todo:p.tx.filter(aCl).length,updated:new Date().toISOString()};
+function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},verif:p.verif||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{})})),n:p.tx.length,todo:p.tx.filter(aCl).length,updated:new Date().toISOString()};
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
 function fillSelects(){
   $('pSrc').innerHTML=srcAccounts().map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
@@ -643,10 +643,13 @@ const msg=(t,err)=>{$('msg').textContent=t;$('msg').className='msg'+(err?' err':
 /* Anti-doublons : dans un même compte, une transaction = une date + un montant. On compte les occurrences (date, montant) déjà dans la période :
    reverser le même relevé, ou le même relevé dans un autre format (PDF, CSV, Excel, description écrite autrement), n'ajoute rien;
    trois frais de 1,50 $ le même jour restent trois frais; une transaction manquante est ajoutée. */
+/* Deux relevés consécutifs qui partagent seulement leur date de coupure (8 sept–8 oct, puis 8 oct–8 nov) ne contiennent jamais la même transaction :
+   ce jour-là, une transaction du relevé voisin ne compte pas comme doublon. Deux relevés qui se recouvrent vraiment (mensuel + export du 15 au 30) se dédoublonnent. */
+const voisins=(a,b)=>{if(!a||!b||a===b)return false;const[ad,aa]=a.split('_'),[bd,ba]=b.split('_');const lo=ad>bd?ad:bd,hi=aa<ba?aa:ba;return hi<=lo};
 function mergeInto(p,list){
-  const have=new Map();p.tx.forEach(t=>{const k=t.date+'|'+t.amt;have.set(k,(have.get(k)||0)+1)});
   let added=0,dup=0;const seen=new Map();
-  for(const x of list){const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);if(s<=(have.get(k)||0)){dup++;continue}
+  for(const x of list){const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);
+    const h=p.tx.filter(t=>t.date===x.date&&t.amt===x.amt&&!voisins(t.rel,x.rel)).length;if(s<=h){dup++;continue}
     const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
   p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   if(added&&p.statut==='importée')p.statut='en cours';
@@ -660,11 +663,11 @@ function relAttente(src,mois){const b=exBornes();if(!b||!C)return[];const[xd,xf]
   const st=(C.attenteSt||[]).filter(x=>x.du>=xd&&x.au<=xf);
   if(pris.length)C.attente=C.attente.filter(x=>!pris.includes(x));
   if(st.length){C.attenteSt=C.attenteSt.filter(x=>!st.includes(x));st.forEach(addStmt)}
-  if(pris.length||st.length)saveClient();return pris.map(({date,desc,amt})=>({date,desc,amt}))}
+  if(pris.length||st.length)saveClient();return pris.map(({date,desc,amt,rel})=>({date,desc,amt,...(rel?{rel}:{})}))}
 async function importAny(list){const b=exBornes();let hors=[];
   if(b){const[xd,xf]=b;hors=list.filter(x=>x.date<xd||x.date>xf);
     if(hors.length){list=list.filter(x=>x.date>=xd&&x.date<=xf);const k=x=>x.src+'|'+x.date+'|'+x.amt;const have=new Map();(C.attente||[]).forEach(x=>have.set(k(x),(have.get(k(x))||0)+1));const seen=new Map();
-      C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src})).filter(x=>{const n=(seen.get(k(x))||0)+1;seen.set(k(x),n);return n>(have.get(k(x))||0)})];saveClient()}}
+      C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src,...(x.rel?{rel:x.rel}:{})})).filter(x=>{const n=(seen.get(k(x))||0)+1;seen.set(k(x),n);return n>(have.get(k(x))||0)})];saveClient()}}
   list=list.concat(relAttente(P.src));
   if(list.length)await importAny0(list);else msg('');
   if(hors.length){const[xd,xf]=b,ap=hors.filter(x=>x.date>xf).length,av=hors.length-ap;
@@ -753,6 +756,7 @@ async function pdfTable(f){const doc=PDFDOC.get(f);if(!doc)return null;
 async function readStatementPdf(f){
   const out=await pdfTx(f,msg);
   if(!out.length){msg('Aucune transaction trouvée dans ce PDF. Essayez le CSV.',true);return}
+  if(out._st)out.forEach(x=>x.rel=out._st.du+'_'+out._st.au);
   const tot=out.reduce((a,x)=>a+x.amt,0),ok=out._st&&tot===out._st.sf-out._st.sd;
   await importAny(out);msg($('msg').textContent+(out._direct?' Relevé lu directement (sans IA) : solde d’ouverture + transactions = solde de clôture, au cent près.':ok?' Lu par l’IA : le total concorde avec les soldes du relevé.':out._st?` Lu par l’IA : ATTENTION, écart de ${fmt(out._st.sf-out._st.sd-tot)} avec les soldes du relevé — une transaction manque ou est mal lue.`:' Lu par l’IA dans le PDF : comparez le total avec le relevé.')+(out._err?.length?` Attention, pages non lues : ${out._err.join(' · ')}.`:''));
   if(out._st){const o=out._st;C.stmts=(C.stmts||[]).filter(x=>!(x.src===o.src&&x.du===o.du&&x.au===o.au));addStmt(stmtExercice(o,out));saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
