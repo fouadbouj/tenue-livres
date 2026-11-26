@@ -1,5 +1,6 @@
 // Fonction serveur « cc-avis » : avis par courriel liés aux documents publiés dans le portail client (espace Entreprise).
 // - { action: "publication", publication_id } (membre du cabinet) : avise le client qu'un document ou un paiement l'attend.
+// - { action: "service", service_id } (client connecté) : avise le cabinet qu'un questionnaire de service est rempli.
 // - { action: "paiement", publication_id } (client connecté au portail) : avise le cabinet (NOTIF_CABINET) qu'un client a payé.
 // - { action: "signature", publication_id } (client) : avise le cabinet qu'un contrat de services a été signé.
 // - { action: "rappels" } avec l'en-tête x-cron-secret : rappel 5 jours avant la date limite aux clients qui n'ont pas confirmé leur paiement.
@@ -180,6 +181,22 @@ Deno.serve(async (req) => {
     });
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return json({ error: "non connecté" }, 401);
+    // Le client a envoyé un questionnaire de service : avis au cabinet
+    if (body.action === "service") {
+      const { data: s } = await admin.from("cc_services").select("*, cc_clients(nom)").eq("id", body.service_id).maybeSingle();
+      if (!s || s.user_id !== user.id) return json({ error: "non autorisé" }, 403);
+      if (s.statut !== "reçue") return json({ ok: true });
+      const notif = Deno.env.get("NOTIF_CABINET");
+      if (notif) {
+        const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+        const qui = s.cc_clients?.nom || s.contact || user.email;
+        const n = Array.isArray(s.fichiers) ? s.fichiers.length : 0;
+        await courriel([notif], `Questionnaire reçu : ${s.titre} — ${qui}`,
+          `${qui} a rempli le questionnaire « ${s.titre} » dans le portail client.\n\nDocuments déposés : ${n}\nCompte du portail : ${user.email}\nReçu le : ${new Date(s.recu_le).toLocaleString("fr-CA", { timeZone: "America/Toronto" })}\n\nVoir les réponses : ${site}/centre.html#services`);
+      }
+      return json({ ok: true });
+    }
+
     const { data: p } = await admin.from("cc_publications").select("*, cc_clients(*)").eq("id", body.publication_id).maybeSingle();
     if (!p) return json({ error: "document introuvable" }, 404);
 

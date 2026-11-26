@@ -45,3 +45,5 @@ footer{color:var(--mute);font-size:13px;text-align:center;padding:30px 16px}
 #ntf.on{opacity:1;transform:translate(-50%,0)}#ntf.err{background:#b3261e}
 a.btn{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:7px 14px;text-decoration:none;color:var(--navy);font-weight:600;background:#fff}a.btn:hover{border-color:var(--navy)}
 #tabs{flex-wrap:wrap;row-gap:2px}#tabs>button{flex:0 0 auto;white-space:nowrap}#tabs .tgrp{flex:0 0 auto}
+
+.qres{width:100%;font-size:14.5px;border-collapse:collapse}.qres th{text-align:left;color:var(--mute);font-weight:500;padding:6px 10px 6px 0}.qres td{padding:6px 0}.qres th,.qres td{border:0;border-bottom:1px solid var(--line)}

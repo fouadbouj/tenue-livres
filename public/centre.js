@@ -3,7 +3,7 @@
 const cfg=window.CONFIG||{},sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const SITE=cfg.APP_URL||location.origin,dl=x=>x?new Date((x.length===10?x+'T12:00':x)).toLocaleDateString('fr-CA',{day:'numeric',month:'short',year:'numeric'}):'—';
-let ACC=[],PUB=[],MSG=[],CLI=[],DEM=[],PCS=[],TAB=location.hash==='#paiements'?'pay':'board',PAYF='',NEWPAY=new Set(),EDIT=null,FILT='ouvertes',PCY='';
+let SVC=[],ACC=[],PUB=[],MSG=[],CLI=[],DEM=[],PCS=[],TAB=location.hash==='#paiements'?'pay':location.hash==='#services'?'dt':'board',PAYF='',NEWPAY=new Set(),EDIT=null,FILT='ouvertes',PCY='';
 const notify=(m,err)=>{let t=document.getElementById('ntf');if(!t){t=document.createElement('div');t.id='ntf';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=(err?'':'✓ ')+m;t.className=(err?'err ':'')+'on';clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),4200)};
 window.CCsb=sb;window.CCnotify=(m,e)=>notify(m,e);
 const fn=async(name,body)=>{const{data,error}=await sb.functions.invoke(name,{body});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
@@ -15,8 +15,8 @@ function periodes(c,auj=new Date()){const M=+String(c.fin_exercice).slice(0,2)||
     out.push({periode:`${pas===1?'M':pas===3?'T':'A'}-${iso(fin)}`,debut:iso(new Date(Date.UTC(y,m-pas,1))),fin:iso(fin),echeance:iso(pas===12?finMois(y,m+3):finMois(y,m+1))})}return out}
 const STP={'à envoyer':'g','envoyée':'g','reçue':'ok','apportée au bureau':'ok','annulée':''};
 
-async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*'),sb.from('cc_dpa_accords').select('*'),sb.from('cc_factures').select('*'),sb.from('cc_lots_dpa').select('*'),sb.from('cc_parametres').select('*')]);
-  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};
+async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4,m5]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*'),sb.from('cc_dpa_accords').select('*'),sb.from('cc_factures').select('*'),sb.from('cc_lots_dpa').select('*'),sb.from('cc_parametres').select('*'),sb.from('cc_services').select('*').order('created_at',{ascending:false})]);
+  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
 function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv','dt'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,dt:rDt,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
@@ -197,6 +197,7 @@ function rBoard(){const[y,m]=EM.split('-').map(Number),deb=`${EM}-01`,fin=ymd(fM
   $('tboard').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between;align-items:center"><div class="row" style="align-items:center;gap:8px"><button class="sm" data-em="-1">←</button><h2 style="margin:0;text-transform:capitalize">${nm}</h2><button class="sm" data-em="1">→</button>${EM!==auj.slice(0,7)?'<button class="sm" data-em="0">Mois courant</button>':''}</div><div class="row" style="gap:6px"><button class="sm" id="bMail">Envoyer le sommaire du mois par courriel</button><button class="sm" id="bPrint">Imprimer</button></div></div><div class="msg" id="bM"></div>
     <div class="kpis">${[['Échéances du mois',mois.length],['Faites',mois.filter(o=>etatOb(o).ok).length],['En retard (mois précédents)',retard.length],['Tâches dues',tch.length]].map(([l,v])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('')}</div>
     ${types.length?`<p class="sub" style="font-size:14px;margin:4px 0 0">${types.map(t=>`${esc(t)} : ${mois.filter(o=>o.type===t).length}`).join(' · ')}</p>`:''}</div>
+    ${(()=>{const R=SVC.filter(x=>x.statut==='reçue');return R.length?`<div class="card" style="border:2px solid var(--green,#1d7a4f)"><h2 style="margin-top:0">Questionnaires reçus à traiter (${R.length})</h2>${R.map(x=>`<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--line)"><div>${x.vu?'':'<span class="pill r">Nouveau</span> '}<strong>${esc(CLI.find(k=>k.id===x.client_id)?.nom||x.contact||x.courriel||'')}</strong> a déposé : ${esc(x.titre)} <small class="sub">· ${dl(x.recu_le)} · ${(x.fichiers||[]).length} document(s)</small></div><button class="sm pri" data-svgo="${x.id}">Voir</button></div>`).join('')}</div>`:''})()}
     ${retard.length?`<div class="card"><h2 style="color:var(--red)">En retard</h2><div class="scroll"><table><tbody>${retard.map(row).join('')}</tbody></table></div></div>`:''}
     <div class="card"><h2>Échéances de ${nm}</h2><div class="scroll"><table><thead><tr><th>Date</th><th>Client</th><th>Obligation</th><th>Suivi</th><th></th></tr></thead><tbody>${mois.map(row).join('')||'<tr><td colspan="5" class="sub">Aucune échéance ce mois-ci.</td></tr>'}</tbody></table></div>
     <p class="sub" style="font-size:13px">Calculé à partir des fiches clients : fréquence TPS/TVQ, fin d’exercice, SPCC avec DPE, employeur et type de client. Solde d’impôt : 2 mois au Québec; 3 mois au fédéral pour une SPCC qui a droit à la DPE, sinon 2 mois. T2 et CO-17 : 6 mois. Si une date tombe un samedi, un dimanche ou un jour férié, l’échéance est reportée au jour ouvrable suivant.</p></div>
@@ -283,7 +284,8 @@ document.addEventListener('change',e=>{if(!EDIT?.id)return;if(e.target.id==='pTy
 
 /* ---------- suivi des paiements ---------- */
 const money=v=>v==null?'—':Number(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD'});
-function badge(){const n=PUB.filter(p=>p.paye_le&&!p.paye_vu).length,bt=document.querySelector('#tabs [data-t=pay]');if(bt)bt.innerHTML='Paiements des clients'+(n?` <span class="pill ok" style="margin-left:4px">${n} nouveau${n>1?'x':''}</span>`:'');
+function badge(){const ns=SVC.filter(x=>x.statut==='reçue'&&!x.vu).length,bd=document.querySelector('#tabs [data-t=dt]');if(bd)bd.innerHTML='Demandes de service'+(ns?` <span class="pill ok" style="margin-left:4px">${ns} reçu${ns>1?'s':''}</span>`:'');
+  const n=PUB.filter(p=>p.paye_le&&!p.paye_vu).length,bt=document.querySelector('#tabs [data-t=pay]');if(bt)bt.innerHTML='Paiements des clients'+(n?` <span class="pill ok" style="margin-left:4px">${n} nouveau${n>1?'x':''}</span>`:'');
   const t=$('toast');if(t){t.hidden=!n||TAB==='pay';t.innerHTML=n?`<strong>${n} client${n>1?'s ont':' a'} confirmé ${n>1?'leurs paiements':'son paiement'}.</strong> <button class="sm" data-t="pay">Voir les paiements</button>`:''}}
 function rPay(){const P=PUB.filter(p=>p.montant>0&&p.organisme!=='Aucun paiement');
   const cles=[...new Set(P.map(p=>p.periode_fin||(p.echeance||'').slice(0,7)||'—'))].sort().reverse();if(!PAYF||!cles.includes(PAYF))PAYF=cles[0]||'';
@@ -479,36 +481,98 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     const{error}=await sb.from('cc_dpa_accords').insert({client_id:EDIT.id,categorie:EDIT.type==='particulier'?'personnel':'entreprise',titulaire:g('apT'),institution:g('apI'),transit:g('apR'),compte:g('apC'),montant:m,jour:j,debut:g('apD'),renonce_preavis:$('apP').checked,signe_le:g('apS')+'T12:00:00',signe_nom:g('apT'),source:'papier',statut:'actif'});
     if(error){$('apMsg').textContent=error.message;return}await load();notify('Accord de débits préautorisés enregistré');return}});
 
-/* ---------- demandes types par service ---------- */
-let DTC='',DTM='incorporation',DTE=false,MOV={};
-function dtBody(){const m=window.MODELES.liste.find(x=>x.id===DTM),c=CLI.find(x=>x.id===DTC);const o=MOV[DTM];
-  if(o)return{sujet:o.sujet,texte:o.corps.replace('{CONTACT}',c?.contact?' '+c.contact:'')};return{sujet:m.sujet+(c?` — ${c.nom}`:''),texte:window.MODELES.texte(m,c)}}
+/* ---------- demandes de service : questionnaire en ligne (recommandé) ou courriel avec la liste ---------- */
+let DTC='',DTM='incorporation',DTE=false,MOV={},DTQ=true,DTV=null,DTF='';
+const QL=()=>window.QUEST?.liste||{},enLigne=()=>DTQ&&!!QL()[DTM],LIEN='{LIEN DU QUESTIONNAIRE}';
+const SST={'envoyée':['g','Envoyé, pas encore ouvert'],'en cours':['g','En cours de remplissage'],'reçue':['ok','Reçu — à traiter'],'traitée':['','Traité'],'annulée':['','Annulé']};
+const svcUrl=s=>`${SITE}/portail.html?service=${s.jeton}`;
+function dtBody(){const m=window.MODELES.liste.find(x=>x.id===DTM),c=CLI.find(x=>x.id===DTC);
+  if(enLigne())return{sujet:`${QL()[DTM].nom} — questionnaire à remplir${c?` — ${c.nom}`:''}`,texte:window.QUEST.courriel(DTM,c,LIEN)};
+  const o=MOV[DTM];if(o)return{sujet:o.sujet,texte:o.corps.replace('{CONTACT}',c?.contact?' '+c.contact:'')};return{sujet:m.sujet+(c?` — ${c.nom}`:''),texte:window.MODELES.texte(m,c)}}
 async function rDt(){if(!window.MODELES){$('tdt').innerHTML='<div class="card"><p class="msg err">Modèles indisponibles.</p></div>';return}
+  if(DTV){const s=SVC.find(x=>x.id===DTV);if(s)return rSvc(s);DTV=null}
   const{data}=await sb.from('cc_parametres').select('valeur').eq('cle','modeles').maybeSingle();MOV=data?.valeur||{};
-  const c=CLI.find(x=>x.id===DTC),b=dtBody();DTE=false;
-  $('tdt').innerHTML=`<div class="card"><h2>Demande type au client</h2><p class="sub" style="font-size:14px">Choisissez le service : le courriel avec la liste complète des renseignements et documents requis se prépare tout seul. Modifiez-le au besoin, puis envoyez.</p>
-    <div class="grid"><label class="f"><b>Service</b><select id="dtM">${window.MODELES.liste.map(m=>`<option value="${m.id}"${m.id===DTM?' selected':''}>${esc(m.nom)}${MOV[m.id]?' (modèle modifié)':''}</option>`).join('')}</select></label>
+  const c=CLI.find(x=>x.id===DTC),b=dtBody(),q=!!QL()[DTM];DTE=false;
+  if(!DTF)DTF=SVC.some(x=>x.statut==='reçue')?'recues':'attente';
+  const LS=SVC.filter(x=>DTF==='toutes'||(DTF==='attente'?['envoyée','en cours'].includes(x.statut):DTF==='recues'?x.statut==='reçue':x.statut==='traitée')),nom=x=>CLI.find(k=>k.id===x.client_id)?.nom||x.contact||x.courriel||'—';
+  $('tdt').innerHTML=`<div class="card" id="svList"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Questionnaires envoyés</h2><div class="row">${[['recues','Reçus à traiter',SVC.filter(x=>x.statut==='reçue').length],['attente','En attente du client',SVC.filter(x=>['envoyée','en cours'].includes(x.statut)).length],['traites','Traités'],['toutes','Tous']].map(([k,l,n])=>`<button class="sm${DTF===k?' pri':''}" data-svf="${k}">${l}${n?` (${n})`:''}</button>`).join('')}</div></div>
+    <div class="scroll"><table style="margin-top:10px"><thead><tr><th>Envoyé le</th><th>Client</th><th>Service</th><th>Statut</th><th></th></tr></thead><tbody>${LS.map(x=>`<tr${x.statut==='reçue'&&!x.vu?' style="background:#e6f5ec"':''}><td style="white-space:nowrap">${dl(x.created_at)}</td><td><strong>${esc(nom(x))}</strong><br><small class="sub">${esc(x.courriel||'')}</small></td><td>${esc(x.titre)}</td>
+      <td><span class="pill ${SST[x.statut][0]}">${SST[x.statut][1]}</span>${x.statut==='reçue'&&!x.vu?' <span class="pill r">Nouveau</span>':''}${x.recu_le?`<br><small class="sub">Reçu le ${dl(x.recu_le)}</small>`:x.relance_le?`<br><small class="sub">Relancé le ${dl(x.relance_le)}</small>`:''}</td>
+      <td style="white-space:nowrap">${['reçue','traitée'].includes(x.statut)?`<button class="sm pri" data-svv="${x.id}">Voir les réponses</button>`:['envoyée','en cours'].includes(x.statut)?`<button class="sm" data-svr="${x.id}">Relancer</button> <button class="sm" data-svl="${x.id}">Copier le lien</button> <button class="sm danger" data-svx="${x.id}">Annuler</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="sub">Aucun questionnaire.</td></tr>'}</tbody></table></div></div>
+    <div class="card"><h2>Nouvelle demande au client</h2><p class="sub" style="font-size:14px">Choisissez le service et le client. Avec le questionnaire en ligne, le client reçoit un lien sécurisé vers son portail : il répond aux questions et dépose les pièces au même endroit, et vous êtes avisé dès qu’il a terminé.</p>
+    <div class="grid"><label class="f"><b>Service</b><select id="dtM">${window.MODELES.liste.map(m=>`<option value="${m.id}"${m.id===DTM?' selected':''}>${esc(m.nom)}${QL()[m.id]?'':' (courriel seulement)'}</option>`).join('')}</select></label>
       <label class="f"><b>Client</b><select id="dtC"><option value="">— Pas encore client (courriel libre) —</option>${CLI.filter(x=>(x.statut||'actif')!=='inactif').map(x=>`<option value="${x.id}"${x.id===DTC?' selected':''}>${esc(x.nom)}</option>`).join('')}</select></label>
       <label class="f"><b class="req">Courriel</b><input id="dtE" type="email" value="${esc(c?.courriel||'')}"></label></div>
+    ${q?`<div class="row" style="margin-top:10px;gap:4px 22px"><label class="opt"><input type="radio" name="dtq" value="1"${DTQ?' checked':''}> <span><strong>Questionnaire en ligne dans le portail</strong> (recommandé)</span></label><label class="opt"><input type="radio" name="dtq" value="0"${DTQ?'':' checked'}> <span>Courriel avec la liste, à nous retourner</span></label></div>`:''}
     <label class="f" style="margin-top:10px"><b>Objet</b><input id="dtS" value="${esc(b.sujet)}"></label>
-    <label class="f" style="margin-top:10px"><b>Message</b><textarea id="dtT" style="min-height:420px;font-size:14px;line-height:1.5">${esc(b.texte)}</textarea></label>
-    <div class="row" style="margin-top:10px"><button class="pri" id="dtGo">Envoyer</button><button id="dtCp">Copier le message</button><button class="sm" id="dtSv">Enregistrer ce texte comme modèle</button>${MOV[DTM]?'<button class="sm" id="dtRs">Revenir au modèle d’origine</button>':''}<span class="msg" id="dtMsg"></span></div>
-    <p class="sub" style="font-size:13px">Le courriel part de admin@boujradcpa.com avec la signature du cabinet. Pour un client existant, l’envoi est noté dans son journal et une tâche de suivi est créée pour dans 7 jours.</p></div>`}
+    <label class="f" style="margin-top:10px"><b>Message</b><textarea id="dtT" style="min-height:${enLigne()?300:420}px;font-size:14px;line-height:1.5">${esc(b.texte)}</textarea></label>
+    ${enLigne()?`<p class="sub" style="font-size:13px;margin:6px 0 0">${esc(LIEN)} sera remplacé à l’envoi par un lien sécurisé propre à cette demande.</p>`:''}
+    <div class="row" style="margin-top:10px"><button class="pri" id="dtGo">${enLigne()?'Envoyer le questionnaire':'Envoyer'}</button>${enLigne()?'':`<button id="dtCp">Copier le message</button><button class="sm" id="dtSv">Enregistrer ce texte comme modèle</button>${MOV[DTM]?'<button class="sm" id="dtRs">Revenir au modèle d’origine</button>':''}`}<span class="msg" id="dtMsg"></span></div>
+    <p class="sub" style="font-size:13px">Le courriel part de admin@boujradcpa.com avec la signature du cabinet. Pour un client existant, l’envoi est noté dans son journal et une tâche de suivi est créée pour dans 7 jours.</p></div>`;
+  if(location.hash==='#services'){history.replaceState(null,'',location.pathname);$('svList')?.scrollIntoView()}}
+
+/* --- réponses reçues --- */
+async function rSvc(s){if(!s.vu&&s.statut==='reçue'){s.vu=true;sb.from('cc_services').update({vu:true}).eq('id',s.id).then(()=>badge())}
+  const cl=CLI.find(x=>x.id===s.client_id),n=(s.fichiers||[]).length;
+  $('tdt').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><button class="sm" data-svb>← Tous les questionnaires</button><div class="row" style="gap:6px">
+    ${cl?`<a href="#" data-cli="${cl.id}" class="sm" style="align-self:center">Fiche de ${esc(cl.nom)}</a>`:'<button class="sm pri" data-svcli>Créer la fiche client</button>'}
+    ${s.statut==='reçue'?'<button class="sm pri" data-svt>Marquer comme traité</button>':s.statut==='traitée'?'<button class="sm" data-svat>Remettre « à traiter »</button>':''}
+    <button class="sm" data-svo>Rouvrir pour le client</button><button class="sm" data-svp>Imprimer ou PDF</button></div></div>
+    <h2 style="margin-bottom:4px">${esc(s.titre)}</h2><p class="sub" style="margin-top:0">${esc(cl?.nom||s.contact||'')} ${esc(s.courriel||'')} · reçu le ${dl(s.recu_le)} · ${n} document${n>1?'s':''} · <span class="pill ${SST[s.statut][0]}">${SST[s.statut][1]}</span></p>
+    ${!cl?'<div class="info" style="margin-bottom:10px">Futur client : « Créer la fiche client » remplit sa fiche à partir des réponses et lui donne accès à son entreprise dans le portail (avec le même compte).</div>':''}
+    <div id="svR">${window.QUEST.resumeHtml(s.service,s.reponses||{},s.fichiers||[],esc)}</div><div class="msg" id="svM"></div></div>`}
+function svcPrint(s){const h=$('svR').innerHTML.replace(/<button[^>]*>([^<]*)<\/button>/g,'$1');const w=window.open('','_blank');if(!w)return;
+  w.document.write(`<!DOCTYPE html><html lang="fr-CA"><head><meta charset="utf-8"><title>${esc(s.titre)}</title><style>body{font:11pt/1.45 Arial,sans-serif;max-width:760px;margin:30px auto;color:#111}h1{font-size:16pt}h3{margin:18px 0 6px;font-size:12pt;border-bottom:1px solid #999}table{width:100%;border-collapse:collapse}th{text-align:left;font-weight:normal;color:#444;width:38%;vertical-align:top;padding:4px 8px 4px 0}td{padding:4px 0}.pill{color:#b00}</style></head><body><h1>${esc(s.titre)}</h1><p>${esc(CLI.find(x=>x.id===s.client_id)?.nom||s.contact||'')} ${esc(s.courriel||'')} · reçu le ${dl(s.recu_le)}</p>${h}<script>setTimeout(()=>print(),300)<\/script></body></html>`);w.document.close()}
+async function svcSet(s,patch,msg){const{error}=await sb.from('cc_services').update({...patch,updated_at:new Date().toISOString()}).eq('id',s.id);if(error){notify('Modification impossible : '+error.message,1);return false}Object.assign(s,patch);if(msg)notify(msg);return true}
+
 document.addEventListener('input',e=>{if(e.target.id==='dtT'||e.target.id==='dtS')DTE=true});
-document.addEventListener('change',e=>{const t=e.target;if(t.id!=='dtM'&&t.id!=='dtC')return;if(DTE&&!confirm('Remplacer le message modifié par le texte du modèle?')){if(t.id==='dtM')t.value=DTM;else t.value=DTC;return}
-  if(t.id==='dtM')DTM=t.value;else DTC=t.value;rDt()});
-document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+document.addEventListener('change',e=>{const t=e.target;if(t.id!=='dtM'&&t.id!=='dtC'&&t.name!=='dtq')return;
+  if(DTE&&!confirm('Remplacer le message modifié par le texte du modèle?')){if(t.id==='dtM')t.value=DTM;else if(t.id==='dtC')t.value=DTC;else document.querySelector(`input[name=dtq][value="${DTQ?1:0}"]`).checked=true;return}
+  if(t.id==='dtM')DTM=t.value;else if(t.id==='dtC')DTC=t.value;else DTQ=t.value==='1';rDt()});
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const S_=id=>SVC.find(x=>x.id===id),cur=()=>S_(DTV);
+  if(b.dataset.svgo){DTV=b.dataset.svgo;TAB='dt';render();window.scrollTo(0,0);return}
+  if(b.dataset.svf){DTF=b.dataset.svf;rDt();return}
+  if(b.dataset.svv){DTV=b.dataset.svv;rDt();window.scrollTo(0,0);return}
+  if(b.hasAttribute('data-svb')){DTV=null;rDt();return}
+  if(b.dataset.svl){try{await navigator.clipboard.writeText(svcUrl(S_(b.dataset.svl)));notify('Lien copié : collez-le dans un courriel ou un texto')}catch(err){prompt('Lien du questionnaire',svcUrl(S_(b.dataset.svl)))}return}
+  if(b.dataset.svx){if(!confirm('Annuler ce questionnaire? Le lien ne fonctionnera plus.'))return;if(await svcSet(S_(b.dataset.svx),{statut:'annulée'},'Questionnaire annulé'))rDt();return}
+  if(b.dataset.svr){const s=S_(b.dataset.svr),cl=CLI.find(x=>x.id===s.client_id),ct=cl?.contact||s.contact;b.disabled=true;
+    try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to:s.courriel,subject:`Rappel : ${s.titre} — questionnaire à remplir`,text:`Bonjour${ct?' '+ct:''},
+
+Petit rappel : votre questionnaire « ${s.titre} » n’est pas encore terminé. Vous pouvez le remplir et déposer les pièces demandées dans votre portail client :
+
+${svcUrl(s)}
+
+Vos réponses déjà saisies sont conservées.
+
+Cordialement,
+
+Boujrad CPA Inc.`});await svcSet(s,{relance_le:new Date().toISOString()},`Rappel envoyé à ${s.courriel}`);rDt()}catch(err){notify('Envoi impossible : '+err.message,1);b.disabled=false}return}
+  if(b.hasAttribute('data-svt')){if(await svcSet(cur(),{statut:'traitée',traite_le:new Date().toISOString()},'Questionnaire marqué comme traité'))rSvc(cur());return}
+  if(b.hasAttribute('data-svat')){if(await svcSet(cur(),{statut:'reçue',traite_le:null},'Remis à traiter'))rSvc(cur());return}
+  if(b.hasAttribute('data-svo')){if(!confirm('Rouvrir le questionnaire pour que le client le complète ou le corrige? Il pourra le renvoyer avec le même lien.'))return;if(await svcSet(cur(),{statut:'en cours'},'Questionnaire rouvert pour le client')){DTV=null;rDt()}return}
+  if(b.hasAttribute('data-svp')){svcPrint(cur());return}
+  if(b.hasAttribute('data-svcli')){const s=cur(),d=window.QUEST.fiche(s.service,s.reponses||{}),auj=new Date().toLocaleDateString('fr-CA');
+    if(!confirm(`Créer la fiche client « ${d.nom} » à partir des réponses?`))return;b.disabled=true;
+    const{data:c,error}=await sb.from('cc_clients').insert({...d,courriel:d.courriel||s.courriel,statut:'actif',actif:false,tps_tvq:false,depuis:auj,ouverture:auj}).select().single();
+    if(error){notify('Création impossible : '+error.message,1);b.disabled=false;return}
+    await sb.from('cc_services').update({client_id:c.id}).eq('id',s.id);s.client_id=c.id;
+    if(s.user_id)await sb.from('cc_acces').insert({client_id:c.id,courriel:s.courriel,user_id:s.user_id,joint_le:new Date().toISOString()});
+    await sb.from('cc_notes').insert({client_id:c.id,type:'note',texte:`Fiche créée à partir du questionnaire « ${s.titre} » reçu le ${dl(s.recu_le)}.`,auteur:who()});
+    notify(`Fiche « ${c.nom} » créée${s.user_id?' et accès au portail donné':''}. Complétez-la au besoin.`);await load();return}
   if(b.id==='dtGo'){const to=$('dtE').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)){$('dtMsg').textContent='Entrez une adresse courriel valide.';$('dtMsg').className='msg err';return}
-    b.disabled=true;const m=window.MODELES.liste.find(x=>x.id===DTM);
-    try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to,subject:$('dtS').value,text:$('dtT').value});
-      if(DTC){await sb.from('cc_notes').insert({client_id:DTC,type:'courriel',texte:`Demande type envoyée : ${m.nom} (à ${to})`,auteur:who()});
+    b.disabled=true;const m=window.MODELES.liste.find(x=>x.id===DTM),cl=CLI.find(x=>x.id===DTC),q=enLigne()?QL()[DTM]:null;let txt=$('dtT').value,svc=null;
+    try{if(q){const r=await sb.from('cc_services').insert({client_id:DTC||null,service:DTM,titre:q.nom,courriel:to,contact:cl?.contact||null}).select().single();if(r.error)throw r.error;svc=r.data;
+        txt=txt.includes(LIEN)?txt.split(LIEN).join(svcUrl(svc)):txt+'\n\n'+svcUrl(svc)}
+      try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to,subject:$('dtS').value,text:txt})}catch(err){if(svc)await sb.from('cc_services').delete().eq('id',svc.id);throw err}
+      if(DTC){await sb.from('cc_notes').insert({client_id:DTC,type:'courriel',texte:`${q?'Questionnaire en ligne envoyé':'Demande type envoyée'} : ${m.nom} (à ${to})`,auteur:who()});
         await sb.from('cc_taches').insert({client_id:DTC,titre:`Suivi : ${m.nom} — renseignements attendus`,echeance:new Date(Date.now()+7*864e5).toLocaleDateString('fr-CA'),priorite:'normale'})}
-      notify(`Demande « ${m.nom} » envoyée à ${to}`);DTE=false;await load()}catch(err){$('dtMsg').textContent='Envoi impossible : '+err.message;$('dtMsg').className='msg err';notify('Envoi impossible',1)}b.disabled=false;return}
+      notify(q?`Questionnaire « ${q.nom} » envoyé à ${to}`:`Demande « ${m.nom} » envoyée à ${to}`);DTE=false;if(q)DTF='attente';await load()}catch(err){$('dtMsg').textContent='Envoi impossible : '+err.message;$('dtMsg').className='msg err';notify('Envoi impossible',1)}b.disabled=false;return}
   if(b.id==='dtCp'){try{await navigator.clipboard.writeText($('dtT').value);notify('Message copié')}catch(err){$('dtT').select()}return}
   if(b.id==='dtSv'){const corps=$('dtT').value.replace(/^Bonjour[^,\n]*,/,'Bonjour{CONTACT},');MOV[DTM]={sujet:$('dtS').value.replace(/ — [^—]+$/,''),corps};
     const{error}=await sb.from('cc_parametres').upsert({cle:'modeles',valeur:MOV,updated_at:new Date().toISOString()});if(!error){notify('Modèle enregistré pour les prochaines demandes');DTE=false;rDt()}return}
   if(b.id==='dtRs'){if(!confirm('Revenir au texte d’origine de ce modèle?'))return;delete MOV[DTM];await sb.from('cc_parametres').upsert({cle:'modeles',valeur:MOV,updated_at:new Date().toISOString()});notify('Modèle d’origine rétabli');DTE=false;rDt();return}
-  if(b.id==='cDt'){DTC=EDIT.id;DTE=false;TAB='dt';render();window.scrollTo(0,0);return}});
+  if(b.id==='cDt'){DTC=EDIT.id;DTE=false;DTV=null;TAB='dt';render();window.scrollTo(0,0);return}});
 
 /* ---------- fin de mandat ---------- */
 const nrm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\b(inc|ltee|ltd|enr|senc)\b\.?/g,'').replace(/[^a-z0-9]+/g,' ').trim();
