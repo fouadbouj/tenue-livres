@@ -577,9 +577,13 @@ function parseCSV(text){const first=text.split(/\r?\n/).slice(0,8).join('\n');co
 async function readXlsx(f){if(!window.XLSX)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
   const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'yyyy-mm-dd',defval:''}).map(r=>r.map(x=>String(x).trim())).filter(r=>r.some(Boolean))}
+const PDFDOC=new WeakMap();
+async function pdfImage(f,n){const doc=PDFDOC.get(f);const pg=await doc.getPage(n);const vp=pg.getViewport({scale:2});const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
+  await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;const b=await new Promise(ok=>cv.toBlob(ok,'image/jpeg',0.85));return new File([b],'page'+n+'.jpg',{type:'image/jpeg'})}
 async function pdfPages(f){const V='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
   if(!window.pdfjsLib){await loadScript(V+'pdf.worker.min.js');await loadScript(V+'pdf.min.js');pdfjsLib.GlobalWorkerOptions.workerSrc=V+'pdf.worker.min.js'}
-  const doc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;const pages=[];
+  let doc;try{doc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise}catch(e){throw new Error(/password/i.test(e?.name+e?.message)?'le PDF est protégé par un mot de passe':'le fichier PDF ne s’ouvre pas ('+(e?.message||e)+')')}
+  PDFDOC.set(f,doc);const pages=[];
   for(let p=1;p<=doc.numPages;p++){const tc=await(await doc.getPage(p)).getTextContent();const rows=new Map();
     tc.items.forEach(it=>{const y=Math.round(it.transform[5]/3);(rows.get(y)||rows.set(y,[]).get(y)).push(it)});
     pages.push([...rows].sort((a,b)=>b[0]-a[0]).map(([,it])=>it.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim()).filter(Boolean).join('\n'))}
@@ -678,15 +682,26 @@ async function readStatementPdf(f){
   if(!sampleFn){msg('La lecture de PDF demande l’IA, qui n’est pas disponible ici. Exportez le relevé en CSV depuis le site de la banque.',true);return}
   const out=await pdfTx(f,msg);
   if(!out.length){msg('Aucune transaction trouvée dans ce PDF. Essayez le CSV.',true);return}
-  await importAny(out);msg($('msg').textContent+' Lu par l’IA dans le PDF : comparez le total avec le relevé.');
+  await importAny(out);msg($('msg').textContent+' Lu par l’IA dans le PDF : comparez le total avec le relevé.'+(out._err?.length?` Attention, pages non lues : ${out._err.join(' · ')}.`:''));
   if(out._st){addStmt(out._st);saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
 }
 async function pdfTx(f,say){
-  say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];
-  for(let i=0;i<pages.length;i++){if(!pages[i].trim())continue;say(`L'IA lit la page ${i+1} sur ${pages.length}…`);
-    let r;try{r=await sampleFn.json(`Voici le texte d'un relevé bancaire ou de carte de crédit canadien. Page 1 pour contexte (période, année) :\n${pages[0].slice(0,1500)}\n\n--- PAGE À EXTRAIRE ---\n${pages[i]}\n\nExtrais CHAQUE transaction de ces pages seulement. Ignore soldes, totaux, sommaires et reports. Réponds uniquement avec un tableau JSON : [{"date":"AAAA-MM-JJ","description":"texte tel quel","montant":-12.34}]. montant négatif = sortie d'argent (retrait, achat, frais), positif = entrée (dépôt, remboursement, paiement reçu sur la carte). Déduis l'année de la période du relevé. [] s'il n'y a aucune transaction.`,{modelTier:'default'})}catch(e){throw new Error(`page ${i+1} illisible par l’IA (${e.message||e})`)}
-    (Array.isArray(r)?r:[]).forEach(x=>{const d=toISO(String(x.date||''));const c=Math.round(Number(x.montant)*100);if(d&&c)out.push({date:d,desc:String(x.description||'').slice(0,120),amt:c})})}
-  try{const s=await sampleFn.json(`Texte de la première et de la dernière page d'un relevé bancaire ou de carte de crédit canadien :\n${pages[0].slice(0,2500)}\n...\n${pages[pages.length-1].slice(-2500)}\n\nDonne la période et les soldes. Réponds uniquement en JSON : {"du":"AAAA-MM-JJ","au":"AAAA-MM-JJ","solde_debut":1234.56,"solde_fin":1234.56,"carte":false}. Pour une carte de crédit, carte=true et les soldes sont les montants dus (positifs). null si introuvable.`,{modelTier:'default'});
+  say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];const errs=[];
+  const INSTR=`Extrais CHAQUE transaction de ces pages seulement. Ignore soldes, totaux, sommaires et reports. Réponds uniquement avec un tableau JSON : [{"date":"AAAA-MM-JJ","description":"texte tel quel","montant":-12.34}]. montant négatif = sortie d'argent (retrait, achat, frais), positif = entrée (dépôt, remboursement, paiement reçu sur la carte). Déduis l'année de la période du relevé. [] s'il n'y a aucune transaction.`;
+  const add=r=>{let n=0;(Array.isArray(r)?r:[]).forEach(x=>{const d=toISO(String(x.date||''));const c=Math.round(Number(x.montant)*100);if(d&&c){out.push({date:d,desc:String(x.description||'').slice(0,120),amt:c});n++}});return n};
+  const parImage=async n=>{say(`L'IA regarde l'image de la page ${n} sur ${pages.length}…`);
+    return add(await sampleFn.json(`Voici l'image d'une page d'un relevé bancaire ou de carte de crédit canadien.${pages[0].trim()?` Texte de la page 1 pour contexte (période, année) :\n${pages[0].slice(0,1500)}`:''}\n\n${INSTR}`,{modelTier:'default',images:[await pdfImage(f,n)]}))};
+  for(let i=0;i<pages.length;i++){const n=i+1;
+    try{if(pages[i].replace(/\s/g,'').length<80){await parImage(n);continue}
+      say(`L'IA lit la page ${n} sur ${pages.length}…`);
+      try{add(await sampleFn.json(`Voici le texte d'un relevé bancaire ou de carte de crédit canadien. Page 1 pour contexte (période, année) :\n${pages[0].slice(0,1500)}\n\n--- PAGE À EXTRAIRE ---\n${pages[i]}\n\n${INSTR}`,{modelTier:'default'}))}
+      catch(e){await parImage(n)}}
+    catch(e){console.error(e);errs.push(`page ${n} : ${e.message||e}`)}}
+  if(!out.length&&!errs.length&&pages.some(p=>p.trim())){for(let n=1;n<=pages.length;n++){try{await parImage(n)}catch(e){errs.push(`page ${n} : ${e.message||e}`)}}}
+  if(!out.length&&errs.length)throw new Error(errs.join(' · '));
+  out._err=errs;
+  const scan=pages[0].replace(/\s/g,'').length<80;
+  try{const s=await sampleFn.json(`${scan?'Images':'Texte'} de la première et de la dernière page d'un relevé bancaire ou de carte de crédit canadien :\n${pages[0].slice(0,2500)}\n...\n${pages[pages.length-1].slice(-2500)}\n\nDonne la période et les soldes. Réponds uniquement en JSON : {"du":"AAAA-MM-JJ","au":"AAAA-MM-JJ","solde_debut":1234.56,"solde_fin":1234.56,"carte":false}. Pour une carte de crédit, carte=true et les soldes sont les montants dus (positifs). null si introuvable.`,{modelTier:'default',...(scan?{images:[await pdfImage(f,1),...(pages.length>1?[await pdfImage(f,pages.length)]:[])]}:{})});
     const du=toISO(String(s?.du||'')),au=toISO(String(s?.au||''));if(du&&au&&s.solde_debut!=null&&s.solde_fin!=null){const sg=s.carte?-1:1;out._st={src:P?.src||'',du,au,sd:sg*Math.round(Number(s.solde_debut)*100),sf:sg*Math.round(Number(s.solde_fin)*100),nom:f.name,via:'IA'}}}catch(e){}
   return out;
 }

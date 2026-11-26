@@ -31,7 +31,7 @@ const toB64=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(St
 async function ask(input,opts={}){const prompt=typeof input==='string'?input:input.map(m=>m.content).join('\n\n');
   const images=[];for(const f of opts.images||[])images.push({media_type:f.type||'image/jpeg',data:await toB64(f)});
   const{data,error}=await sb.functions.invoke(cfg.FONCTION_IA||'tl-ai',{body:{prompt,images,tier:opts.modelTier||'default'}});
-  if(error){const s=error.context?.status;throw err(s===429?'rate_limited':s===401||s===403?'not_granted':'unavailable',error.message)}
+  if(error){const s=error.context?.status;let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw err(s===429?'rate_limited':s===401||s===403?'not_granted':'unavailable',m)}
   const text=data?.text||'';opts.onText&&opts.onText({text,delta:text});return{text,truncated:!!data?.truncated}}
 const sample=(input,opts)=>ask(input,opts);
 /* envoi de courriel par la fonction serveur « tl-email » (Resend) */
