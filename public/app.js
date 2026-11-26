@@ -177,7 +177,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -234,7 +234,7 @@ function planType(type,{tx,emp,ind},extras=[]){const S=SECTEURS[type]||SECTEURS.
 let FICHE=null,PDX=[];
 function iaProfil(){const d=C?.desc||FICHE?.description||'';const f=FICHE||{};const parts=[];if(d)parts.push('Description : '+d);
   if(C?.profil?.type&&SECTEURS[C.profil.type])parts.push('Secteur : '+SECTEURS[C.profil.type].nom);
-  const tx=f.tps_tvq??C?.profil?.tx,emp=f.employeur??C?.profil?.emp;if(tx!=null)parts.push('Inscrite TPS/TVQ : '+(tx?'oui':'non'));if(emp!=null)parts.push('Employeur (paie, DAS) : '+(emp?'oui':'non'));if(f.forme)parts.push('Forme : '+f.forme);
+  const tx=C?.profil?.tx??f.tps_tvq,emp=C?.profil?.emp??f.employeur;if(tx!=null)parts.push('Inscrite TPS/TVQ : '+(tx?'oui':'non'));if(emp!=null)parts.push('Employeur (paie, DAS) : '+(emp?'oui':'non'));if(f.forme)parts.push('Forme : '+f.forme);
   return parts.length?'Profil de l’entreprise — '+parts.join(' · '):''}
 async function chargerFiche(){FICHE=null;chargerFiche.fait=false;try{if(window.tlFiche&&C)FICHE=await window.tlFiche(C.nom)}catch(e){}chargerFiche.fait=true;if(C&&tab==='set')renderSettings();if(C&&tab==='home')renderHome().catch(()=>{})}
 function pdOuvrir(nom){$('pdNom').textContent=nom;$('pdType').innerHTML=Object.entries(SECTEURS).map(([k,v])=>`<option value="${k}">${esc(v.nom)}</option>`).join('');$('pdDesc').value='';$('pdOut').innerHTML='';$('pdMsg').textContent='';PDX=[];
@@ -549,7 +549,7 @@ function addAccount(no,nm){if(!Array.isArray(C.sage))C.sage=PLAN.map(p=>p[0]);
   const L=PLAN.concat([[no,nm]]).sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true}));C.plan=L.map(p=>p.join(' ')).join('\n');
   setPlan();fillSelects();renderSettings();renderRules();$('planTxt').value=C.plan;saveClient();render()}
 function afterManual(t,a){
-  if(!P.tx.some(x=>x.st==='transit')&&!P.tx.some(x=>x.st==='suggere')){render();savePer();const un=usedNew();showToast(`<span>Tout est classé.${un.length?` N'oubliez pas : ${un.length} compte(s) à créer dans Sage (${esc(un.map(x=>x[0]).join(', '))}).`:''}</span><button class="sm pri" data-a="f">Terminer la période</button>`,{f:openFinish});return}
+  if(!P.tx.some(x=>x.st==='transit')&&!P.tx.some(x=>x.st==='suggere')){render();savePer();const un=usedNew();showToast(`<span>Tout est classé.</span><button class="sm pri" data-a="f">Terminer la période</button>`,{f:openFinish});return}
   const p=keyOf(t.desc);const others=P.tx.filter(x=>x!==t&&x.st!=='manuel'&&has(norm(x.desc),p));
   render();savePer();if(a===C.tr||!p)return;
   showToast(`<span>Retenir pour ce client : « ${esc(p)} » → ${esc(a)} ${esc(accName(a))}${others.length?`, et l'appliquer aux ${others.length} autres semblables`:''} ?</span><button class="sm pri" data-a="y">Retenir la règle</button><button class="sm" data-a="n">Juste celle-ci</button>`,
@@ -713,7 +713,7 @@ $('ask').onclick=()=>askAI(false);
 /* ---------- points à vérifier ---------- */
 const EXEMPT=/ASSURANCE|FRAIS BANC|FRAIS DE BANQUE|INTERET|SALAIRE|IMMATRICUL|PERMIS|TAXES MUNICIPALES|TAXES FONCIERES|DONS|AMENDE|PENALITE|RETRAIT|ACTIONNAIRE|EMPRUNT|PRET/;
 const TAXABLE=new RegExp([CAT.carb,CAT.elec,CAT.tel,CAT.log,CAT.four,CAT.pub,CAT.veh].map(r=>r.source).join('|'));
-const BIGSKIP=/LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC/;
+const BIGSKIP=/LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC|SOUS.?TRAIT|HONORAIRE|AVANCE|DIVIDENDE|INTERET|ASSURANCE|FRAIS BANCAIRE|COTISATION|TAXES|PERMIS|ABONNEMENT|TELECOM|ELECTRICITE|CARBURANT|PUBLICITE|REPAS|DEPLACEMENT|FORMATION|DONS?\b|SERVICES PROFESSIONNELS|CONSULTANT/;
 const dd=(a,b)=>Math.abs((new Date(a)-new Date(b))/864e5);
 function checks(){
   if(!P||!P.tx.length)return[];const tx=P.tx,out=[],add=(lvl,title,detail,list)=>out.push({lvl,title,detail,ids:(list||[]).map(t=>t.id)});
@@ -723,7 +723,6 @@ function checks(){
   if(dep.length)add('haut',`Dépôts non identifiés : ${dep.length} (${fmt(sumA(dep))})`,'Ventes taxables? Prêt? Apport de l’actionnaire? Remboursement de taxes? À savoir avant de déclarer les ventes et la TPS/TVQ perçue.',dep);
   const out_=tr.filter(t=>t.amt<0);
   if(out_.length)add('haut',`Sorties au transitoire : ${out_.length} (${fmt(sumA(out_))})`,'Classez-les avant l’export, ou exportez-les au transitoire et régularisez dans Sage plus tard.',out_);
-  const un=usedNew();if(un.length){const set=new Set(un.map(x=>x[0]));add('haut',`Comptes à créer dans Sage avant l'import : ${un.map(x=>x[0]).join(', ')}`,un.map(x=>x.join(' ')).join(' · ')+'. Créez-les dans Sage avec le même numéro, puis confirmez dans « Exporter vers Sage 50 ».',tx.filter(t=>set.has(t.acct)))}
   const sug=tx.filter(t=>t.st==='suggere');if(sug.length)add('moyen',`Suggestions de l'IA à confirmer : ${sug.length}`,'Vérifiez le compte proposé, puis « Accepter les suggestions » pour en faire des règles.',sug);
   const gab=tx.filter(t=>/\b(RETRAIT|GAB|DAB|ATM)\b/.test(norm(t.desc))&&t.amt<0);
   if(gab.length)add('moyen',`Retraits en argent comptant : ${gab.length} (${fmt(sumA(gab))})`,'Sans pièce justificative, ça va généralement en retraits ou avances à l’actionnaire. Demandez au client.',gab);
@@ -733,15 +732,17 @@ function checks(){
   for(const[a,l]of grp){const u=[...new Set(l)];if(l.length>=2||(Math.abs(a)>=50000&&Math.abs(a)%10000===0))add('moyen',`Virement récurrent ou rond : ${fmt(a)}${u.length>1?` × ${u.length}`:''}`,'Souvent un loyer, un salaire ou un remboursement de prêt. Demandez au client, classez-le, puis retenez la règle.',u)}
   const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3)dups.push([a,b])}
   dups.forEach(([a,b])=>add('moyen',`Doublon possible : ${a.desc}`,`${fmt(a.amt)} le ${a.date} et le ${b.date}. Double paiement?`,[a,b]));
-  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&!BIGSKIP.test(nm(t)));
+  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t)));
   big.forEach(t=>add('moyen',`Dépense importante : ${t.desc} (${fmt(t.amt)})`,'Plus de 1 500 $ : obtenez la facture et vérifiez si c’est une immobilisation à amortir plutôt qu’une dépense.',[t]));
   const self=tx.filter(t=>t.acct===(t.src||P.src));if(self.length)add('haut',`Classé dans le compte du relevé lui-même : ${self.length}`,`Ces transactions vont dans ${P.src} ${accName(P.src)}, le compte de banque du relevé : l'écriture s'annule. Choisissez le bon compte.`,self);
   const hdr=tx.filter(t=>{const p=PLAN.find(q=>q[0]===t.acct);return p&&isHeader(p[0],p[1])});if(hdr.length)add('haut',`Compte de titre ou de total : ${hdr.length}`,`Sage refuse les écritures dans ${[...new Set(hdr.map(t=>t.acct+' '+accName(t.acct)))].join(', ')}. Choisissez un compte détaillé.`,hdr);
-  const exTax=tx.filter(t=>t.tax&&EXEMPT.test(nm(t)));
+  const nonInscrit=(C.profil?.tx??FICHE?.tps_tvq)===false;
+  if(nonInscrit){const tt=tx.filter(t=>t.tax);if(tt.length)add('haut',`Taxes ventilées alors que le client n’est pas inscrit à la TPS/TVQ : ${tt.length}`,'Ce client ne réclame ni CTI ni RTI : décochez « Taxes incl. » (le montant complet va dans la dépense).',tt)}
+  const exTax=nonInscrit?[]:tx.filter(t=>t.tax&&EXEMPT.test(nm(t)));
   if(exTax.length)add('haut',`Taxes ventilées sur des comptes exemptés : ${exTax.length}`,'Assurances, frais bancaires, intérêts, permis : pas de CTI ni de RTI. Décochez « Taxes incl. ».',exTax);
-  const noTax=tx.filter(t=>!t.tax&&t.amt<0&&t.st!=='transit'&&TAXABLE.test(nm(t))&&!EXEMPT.test(nm(t)));
+  const noTax=nonInscrit?[]:tx.filter(t=>!t.tax&&t.amt<0&&t.st!=='transit'&&TAXABLE.test(nm(t))&&!EXEMPT.test(nm(t)));
   if(noTax.length)add('bas',`Taxes non ventilées : ${noTax.length}`,'Ces dépenses portent normalement la TPS et la TVQ. Cochez « Taxes incl. » si le fournisseur est inscrit.',noTax);
-  const rep=tx.filter(t=>t.tax&&t.amt<0&&CAT.rep.test(nm(t)));
+  const rep=nonInscrit?[]:tx.filter(t=>t.tax&&t.amt<0&&CAT.rep.test(nm(t)));
   if(rep.length){const taxes=rep.reduce((s,t)=>{const g=Math.abs(t.amt),n0=Math.round(g/1.14975);return s+Math.round(n0*0.05)+Math.round(n0*0.09975)},0);
     add('bas','Repas : CTI et RTI limités à 50 %',`Taxes ventilées sur les repas : ${fmt(taxes)}. Environ ${fmt(Math.round(taxes/2))} doit retourner en dépense : ajustez dans Sage.`,rep)}
   if(PREV.length){const now=new Set(tx.map(t=>keyOf(t.desc)));const miss=[...new Map(PREV.filter(p=>p.k&&!AMBIG.test(norm(p.desc))&&!now.has(p.k)).map(p=>[p.k,p])).values()];
@@ -752,18 +753,22 @@ function checks(){
 }
 let CHK=[],CHKV=false;
 const chkCle=(c,pre)=>(pre==='a'?'ia:':'')+c.title;
+const chkCat=c=>c.title.split(/\s[:(]/)[0].trim();
+const chkOff=c=>(C.chkOff||[]).includes(chkCat(c));
 const chkFait=k=>!!(P&&P.verif&&P.verif[k]);
 function itemHtml(c,i,pre){const k=chkCle(c,pre),v=chkFait(k),info=v?P.verif[k]:null;
-  return `<li class="${v?'ok':c.lvl}"><div><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span>${v?`<small class="note" style="display:block;margin-top:2px">Vérifié le ${new Date(info.le).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}${info.par?' par '+esc(info.par):''}</small>`:''}</div><div class="row" style="gap:6px;flex-wrap:nowrap">${c.ids.length?`<button class="sm" data-c="${pre}${i}">Voir</button>`:''}${c.lvl==='ok'?'':v?`<button class="sm" data-unv="${pre}${i}" title="Remettre dans les points à vérifier">↺ Remettre</button>`:`<button class="sm pri" data-vok="${pre}${i}" title="Point vérifié : le retirer de la liste">✓ Vérifié</button>`}</div></li>`}
-function renderChecks(){CHK=checks();const all=[...CHK.map((c,i)=>[c,i,'c']),...AIITEMS.map((c,i)=>[c,i,'a'])].filter(([c])=>c.lvl!=='ok');
+  return `<li class="${v?'ok':c.lvl}"><div><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span>${v?`<small class="note" style="display:block;margin-top:2px">Vérifié le ${new Date(info.le).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}${info.par?' par '+esc(info.par):''}</small>`:''}</div><div class="row" style="gap:6px;flex-wrap:nowrap">${c.ids.length?`<button class="sm" data-c="${pre}${i}">Voir</button>`:''}${c.lvl==='ok'?'':v?`<button class="sm" data-unv="${pre}${i}" title="Remettre dans les points à vérifier">↺ Remettre</button>`:`<button class="sm pri" data-vok="${pre}${i}" title="Point vérifié : le retirer de la liste">✓ Vérifié</button>${pre==='c'?`<button class="sm" data-mute="${esc(chkCat(c))}" title="Ne plus signaler ce type de point pour ce dossier" aria-label="Ne plus signaler ce type de point pour ce dossier">🔕</button>`:''}`}</div></li>`}
+function renderChecks(){CHK=checks();const all=[...CHK.map((c,i)=>[c,i,'c']),...AIITEMS.map((c,i)=>[c,i,'a'])].filter(([c,,p])=>c.lvl!=='ok'&&!(p==='c'&&chkOff(c)));
   const vus=all.filter(([c,,p])=>chkFait(chkCle(c,p))),ouv=all.filter(([c,,p])=>!chkFait(chkCle(c,p)));
   $('chkN').textContent=ouv.length;$('chkNA').textContent=ouv.length;$('chkNV').textContent=vus.length;$('chkVA').setAttribute('aria-pressed',!CHKV);$('chkVV').setAttribute('aria-pressed',CHKV);
   if(!P||!P.tx.length){$('chk').innerHTML='<li><div><span>Déposez un relevé pour voir les vérifications.</span></div></li>';$('aiBox').hidden=true}
-  else if(CHKV){$('chk').innerHTML=vus.length?vus.map(([c,i,p])=>itemHtml(c,i,p)).join(''):'<li><div><span>Aucun point vérifié pour cette période. Cliquez sur « ✓ Vérifié » dans un point pour l’y déplacer.</span></div></li>';$('aiBox').hidden=true}
+  else if(CHKV){$('chk').innerHTML=(vus.length?vus.map(([c,i,p])=>itemHtml(c,i,p)).join(''):'<li><div><span>Aucun point vérifié pour cette période. Cliquez sur « ✓ Vérifié » dans un point pour l’y déplacer.</span></div></li>')+((C.chkOff||[]).length?`<li><div><strong>Types de points désactivés pour ce dossier</strong><span>${(C.chkOff||[]).map(k=>`${esc(k)} <a href="#" data-unmute="${esc(k)}">réactiver</a>`).join(' · ')}</span></div></li>`:'');$('aiBox').hidden=true}
   else{const oc=ouv.filter(([,,p])=>p==='c'),oa=ouv.filter(([,,p])=>p==='a');$('chk').innerHTML=oc.length?oc.map(([c,i,p])=>itemHtml(c,i,p)).join(''):itemHtml({lvl:'ok',title:'Rien à signaler',detail:vus.length?`Tous les points sont vérifiés (${vus.length}).`:'Tout est classé et aucune anomalie n’a été détectée.',ids:[]},0,'c');
     $('aiBox').hidden=!oa.length;$('aiChk').innerHTML=oa.map(([c,i,p])=>itemHtml(c,i,p)).join('')}
   $('aiRev').hidden=!sampleFn||!P||!P.tx.length}
 $('chkVA').onclick=()=>{CHKV=false;renderChecks()};$('chkVV').onclick=()=>{CHKV=true;renderChecks()};
+document.getElementById('chkPanel').addEventListener('click',e=>{const m=e.target.closest('[data-mute],[data-unmute]');if(!m)return;e.preventDefault();
+  if(m.dataset.mute){if(!confirm(`Ne plus signaler « ${m.dataset.mute} » pour ce dossier? (Réactivable dans l’onglet Vérifiés.)`))return;C.chkOff=[...new Set([...(C.chkOff||[]),m.dataset.mute])]}else C.chkOff=(C.chkOff||[]).filter(k=>k!==m.dataset.unmute);saveClient();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const b=e.target.closest('button[data-vok],button[data-unv]');if(!b||!P)return;const k=b.dataset.vok||b.dataset.unv,c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;
   P.verif=P.verif||{};const cle=chkCle(c,k[0]);if(b.dataset.vok)P.verif[cle]={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};else delete P.verif[cle];savePer();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const k=e.target.closest('button[data-c]')?.dataset.c;if(!k)return;
@@ -1358,8 +1363,8 @@ function renderRules(){const R=C.rules||[];$('rCount').textContent=R.length;
   $('baseRules').innerHTML=baseResolved().map(r=>`<tr><td>${esc(r.p)}</td><td>${r.a?esc(r.a+' '+accName(r.a)):'<span class="why">aucun compte correspondant</span>'}</td><td>${r.t?'Oui':'Non'}</td></tr>`).join('')}
 $('rules').onclick=e=>{const b=e.target.closest('button');const p=b?.dataset.p;if(p==null)return;const i=b.dataset.i!=null?+b.dataset.i:C.rules.findIndex(r=>r.p===p);if(i>=0)C.rules.splice(i,1);saveClient();reclass();renderRules();render();savePer()};
 $('rAdd').onclick=()=>{const p=norm($('rP').value);if(!p)return;C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a:$('rA').value,t:$('rT').checked});$('rP').value='';saveClient();reclass();renderRules();render();savePer()};
-function renderSettings(){renderExList();$('sEmail').value=C.email||'';$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDesc').value=C.desc||'';$('sDescSrc').textContent=FICHE?.description&&!C.desc?'Description reprise de la fiche du client dans Gestion du cabinet : '+FICHE.description.slice(0,160):'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
-$('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.desc=$('sDesc').value.trim();C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
+function renderSettings(){renderExList();$('sEmail').value=C.email||'';$('sExD').value=C.exDeb||'';$('sExF').value=C.exFin||'';$('sNom').value=C.nom;$('sNotes').value=C.notes||'';$('sDesc').value=C.desc||'';$('sTx').checked=(C.profil?.tx??FICHE?.tps_tvq)!==false;$('sEmp').checked=!!(C.profil?.emp??FICHE?.employeur);$('sDescSrc').textContent=FICHE?.description&&!C.desc?'Description reprise de la fiche du client dans Gestion du cabinet : '+FICHE.description.slice(0,160):'';$('sDf').value=C.dfmt||'yy';for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])$(id).value=C[k]||''}
+$('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.desc=$('sDesc').value.trim();C.profil={...(C.profil||{}),tx:$('sTx').checked,emp:$('sEmp').checked};C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
   $('cName').textContent=C.nom;reclass();saveClient();fillExSel();render();if(P&&P.tx.length)savePer();$('sMsg').textContent='Enregistré.'};
 let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
   C.deleted=true;saveClient();const i=CLIENTS.findIndex(c=>c.id===C.id);if(i>=0)CLIENTS[i].deleted=true;$('back').click()};
@@ -2202,7 +2207,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   if(!L.length)setItem('Premier relevé bancaire','Déposez les relevés de la banque et des cartes de crédit pour commencer.',`<button class="sm" data-go="mo:${x.deb.slice(0,7)}:">Déposer</button>`);
   if(SET.length)T.unshift(`<li style="display:block;border:0;padding:4px 0 0"><strong>Mise en place du dossier</strong></li>`,...SET,`<li style="display:block;border:0;padding:8px 0 0"><strong>Travail en cours</strong></li>`);
   /* contrôles selon le profil de l'entreprise (TPS/TVQ, employés) */
-  try{const prof={tx:FICHE?.tps_tvq??C.profil?.tx,emp:FICHE?.employeur??C.profil?.emp},dans=d=>d>=x.deb&&d<=x.fin&&!lk(d);
+  try{const prof={tx:C.profil?.tx??FICHE?.tps_tvq,emp:C.profil?.emp??FICHE?.employeur},dans=d=>d>=x.deb&&d<=x.fin&&!lk(d);
     if(prof.tx===false){let n=0,tot=0;L.forEach(p=>(p.tx||[]).forEach(t0=>{const t={...t0};classify(t);if(t.tax&&dans(t.date)){n++;tot+=Math.abs(t.amt)}}));
       if(!LED)LED=await loadLedger();const ta=[C.tpsA,C.tvqA,C.tpsV,C.tvqV].filter(Boolean),je=LED.filter(e=>e.kind!=='rel'&&dans(e.date)&&e.lines.some(l=>ta.includes(l[0]))).length;
       if(n||je)T.unshift(`<li><i class="r"></i><div>Taxes calculées alors que le client n’est pas inscrit à la TPS/TVQ<small>${n?`${n} transaction(s) bancaire(s) traitée(s) comme taxables (${fmtN(tot)} $)`:''}${n&&je?' · ':''}${je?`${je} écriture(s) ou facture(s) touchent les comptes de taxes`:''}. Correction proposée : traiter ces transactions sans taxes.</small></div><div class="row" style="gap:6px;justify-content:flex-end">${n?`<button class="sm pri" data-fixtax>Retirer les taxes</button>`:''}<button class="sm" data-iaask="Le client n’est pas inscrit à la TPS/TVQ, mais des transactions ou des écritures utilisent les comptes de TPS/TVQ. Cherche-les et propose les corrections.">Voir avec l’assistant</button></div></li>`)}
