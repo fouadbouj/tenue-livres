@@ -13,6 +13,7 @@ jobs:
           curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/functions | jq -r '.[] | "\(.slug) \(.status) v\(.version) jwt=\(.verify_jwt) maj=\(.updated_at)"'
       - name: Secrets et super-processor
         run: |
-          curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/secrets | jq -r '.[].name'
+          set +e
+          curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/secrets | jq -r 'if type=="array" then .[].name else . end'
           echo "== super-processor"; curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/functions/super-processor | jq 'del(.ezbr_sha256)'
           curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects/$PROJET/functions/super-processor/body -o body.bin; file body.bin; strings body.bin | grep -iE "anthropic|tl_membres|Deno.serve|modelTier|tier|max_tokens|claude-" | head -20
