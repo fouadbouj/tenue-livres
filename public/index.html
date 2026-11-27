@@ -68,6 +68,7 @@ td select{width:100%;min-height:38px;padding:4px 6px;font-size:14px}
 .pill.ok{border-color:var(--teal);color:var(--teal)}.pill.todo{border-color:var(--claret);color:var(--claret)}
 .toast{position:sticky;bottom:12px;margin-top:12px;background:var(--ink);color:var(--bg);border-radius:10px;padding:12px 14px;display:none;gap:10px;align-items:center;flex-wrap:wrap;z-index:5}
 .toast.on{display:flex}
+.nosage .sage-only{display:none!important}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--panel);border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(0,0,0,.18);z-index:60;overflow:auto;padding:20px 22px}
 .drawer h3{margin:0 30px 4px 0;font-size:17px;line-height:1.3}.drawer .x{position:absolute;top:14px;right:14px}
 .drawer .meta{color:var(--mute);font-size:13px;margin-bottom:14px}.drawer .amt{font-size:22px;font-weight:700;margin:6px 0 14px}
@@ -224,7 +225,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <button data-t="pay" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Paie</button>
       <button data-t="rec" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Conciliation</button>
       <button data-t="rep" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Rapports</button>
-      <button data-t="exp" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Export Sage 50</button>
+      <button data-t="exp" aria-pressed="false" class="sage-only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Export Sage 50</button>
       <span class="sg">Fin d'exercice</span>
       <button data-t="mis" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Mission de compilation</button>
       <span class="sg">Configuration</span>
@@ -659,7 +660,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <label class="f">TVQ perçue<select id="sTvqV"></select></label>
         <label class="f">Début de l'exercice<input type="date" id="sExD"></label>
         <label class="f">Fin de l'exercice<input type="date" id="sExF"></label>
-        <label class="f">Format de date Sage<select id="sDf"><option value="yy">mm-jj-aa (exigé par l'import Sage)</option><option value="yyyy">mm-jj-aaaa</option><option value="dmys">jj/mm/aaaa</option><option value="dmy">jj-mm-aaaa</option><option value="ymd">aaaa-mm-jj</option></select></label>
+        <label class="row" style="gap:8px;align-items:center;margin:4px 0"><input type="checkbox" id="sSage" style="width:auto;margin:0"> J’exporte encore ce dossier vers Sage 50 (affiche l’onglet Export Sage 50 et ses vérifications)</label>
+        <label class="f sage-only">Format de date Sage<select id="sDf"><option value="yy">mm-jj-aa (exigé par l'import Sage)</option><option value="yyyy">mm-jj-aaaa</option><option value="dmys">jj/mm/aaaa</option><option value="dmy">jj-mm-aaaa</option><option value="ymd">aaaa-mm-jj</option></select></label>
       </div>
       <label class="f" style="margin-top:10px">Courriel du client (demandes de précisions)<input id="sEmail" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
       <label class="f" style="margin-top:10px">Description de l'entreprise (activités, employés, véhicules… : l'IA s'en sert pour classer)<textarea id="sDesc" style="min-height:70px"></textarea></label><div class="row" style="gap:6px 20px;margin-top:6px"><label class="opt"><input type="checkbox" id="sTx"> Inscrit à la TPS/TVQ</label><label class="opt"><input type="checkbox" id="sEmp"> A des employés (paie et DAS)</label></div><p class="note" id="sDescSrc" style="margin:2px 0 0"></p>
@@ -676,6 +678,11 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="row" style="gap:8px;align-items:flex-end;margin-top:8px"><label class="f" style="max-width:260px">Aucune modification datée avant le<input type="date" id="lkAv"></label><button class="sm" id="lkSave">Enregistrer la protection</button><span class="msg" id="lkMsg"></span></div>
       <p class="note" style="margin-top:6px">Les dates protégées ne peuvent plus recevoir de transactions, d’écritures ni de reclassements, ni par le versement d’un relevé ni par l’assistant. Ce n’est jamais une porte fermée : « Rouvrir… » ou « Déverrouiller… » sur la ligne de l’exercice, avec une simple confirmation, et c’est noté dans l’historique ci-dessous. « Reverrouiller » le protège de nouveau.</p>
       <div id="lkLog" class="note"></div>
+    </div>
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Piste de vérification</h2><div class="row" style="gap:6px"><input id="audQ" placeholder="Filtrer (compte, montant, personne…)" style="min-width:220px"><button class="sm" id="audCsv">Exporter (CSV)</button></div></div>
+      <p class="note">Chaque modification du dossier, avec qui, quand, et l’avant → après : transactions classées ou reclassées, taxes, écritures ajoutées, modifiées ou supprimées, régularisations, relevés versés, périodes vidées, factures supprimées, règles, plan comptable, codes IGRF, exercices. <span id="audN"></span></p>
+      <div class="scroll" style="max-height:460px"><table class="stack"><thead><tr><th>Quand</th><th>Qui</th><th>Quoi</th><th>Détail</th></tr></thead><tbody id="audList"></tbody></table></div>
     </div>
     <div class="panel">
       <h2>Recommencer à zéro</h2>
