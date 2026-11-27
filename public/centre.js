@@ -67,12 +67,19 @@ ${soc?`Pour ${c.nom} :
 2. Choisissez « Autoriser ou gérer les représentants », puis « Autoriser un représentant ».
 3. Entrez ${lab} : ${val}
    Le nom affiché doit être « Boujrad CPA Inc. ».
-4. Choisissez le niveau 2 (voir et mettre à jour les renseignements) et la portée « numéro d’entreprise au complet » (impôt des sociétés, TPS/TVH et retenues sur la paie).
+4. Choisissez exactement ces options :
+   - Niveau d’autorisation : NIVEAU 2 (voir et mettre à jour les renseignements)
+   - Portée : « numéro d’entreprise au complet » (impôt des sociétés, TPS/TVH, retenues sur la paie et tous les autres comptes)
+   - Date de fin : AUCUNE (laissez le champ vide, sans limite)
+   - Accès en ligne : OUI (c’est ce qui nous permet de faire les modifications en ligne)
 5. Confirmez.`:`1. Connectez-vous à Mon dossier (compte de l’ARC).
 2. Dans le menu Profil, choisissez l’option pour autoriser ou gérer vos représentants, puis « Autoriser un représentant ».
 3. Entrez ${lab} : ${val}
    Le nom affiché doit être « Boujrad CPA Inc. ».
-4. Choisissez le niveau 2 (voir et mettre à jour les renseignements).
+4. Choisissez exactement ces options :
+   - Niveau d’autorisation : NIVEAU 2 (voir et mettre à jour les renseignements)
+   - Date de fin : AUCUNE (laissez le champ vide, sans limite)
+   - Accès en ligne : OUI (c’est ce qui nous permet de faire les modifications en ligne)
 5. Confirmez.`}
 
 Vous n’avez pas encore de compte de l’ARC? Voici comment le créer : https://boujradcpa.com/guides/compte-arc.html
@@ -115,7 +122,7 @@ function trTexte(c,o){const ct=(c.contact||'').split(' ')[0],L=[];let n=0;const 
   if(o.quest)L.push(`${++n}. Remplissez le questionnaire d’ouverture de dossier et déposez vos documents (environ 15 minutes) :\n   ${o.quest}\n   Vous pouvez l’enregistrer et y revenir plus tard.`);
   if(o.contrat)L.push(`${++n}. Lisez et signez votre contrat de services dans le portail (onglet « Entreprise », section « À payer et documents du cabinet »).`);
   if(o.mr69)L.push(`${++n}. Signez la procuration de Revenu Québec dans le portail (bouton « Lire et signer »). Elle nous permet d’agir pour vous auprès de Revenu Québec.`);
-  if(o.arc)L.push(`${++n}. Autorisez-nous auprès de l’ARC dans votre compte (${societe(c)?'Mon dossier d’entreprise › Autoriser ou gérer les représentants':'Mon dossier › Profil › gérer les représentants'} › Autoriser un représentant) :\n   entrez ${kk==='ne'?'notre numéro d’entreprise':'notre identifiant'} ${idv}, vérifiez que « Boujrad CPA Inc. » s’affiche, choisissez le niveau 2${societe(c)?' et le numéro d’entreprise au complet':''}, puis confirmez.\n   Guide pas à pas : https://boujradcpa.com/guides/autoriser-representant.html`);
+  if(o.arc)L.push(`${++n}. Autorisez-nous auprès de l’ARC dans votre compte (${societe(c)?'Mon dossier d’entreprise › Autoriser ou gérer les représentants':'Mon dossier › Profil › gérer les représentants'} › Autoriser un représentant) :\n   entrez ${kk==='ne'?'notre numéro d’entreprise':'notre identifiant'} ${idv}, vérifiez que « Boujrad CPA Inc. » s’affiche, choisissez le NIVEAU 2, ${societe(c)?'la portée « numéro d’entreprise au complet », ':''}AUCUNE date de fin (sans limite) et l’accès EN LIGNE, puis confirmez.\n   Guide pas à pas : https://boujradcpa.com/guides/autoriser-representant.html`);
   return`Bonjour${ct?' '+ct:''},
 
 Bienvenue chez Boujrad CPA Inc.! Merci de votre confiance.
