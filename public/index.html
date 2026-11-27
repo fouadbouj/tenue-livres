@@ -32,6 +32,12 @@ h2{font-size:20px;margin:0 0 10px;font-weight:800}
 .bar i{display:block;height:100%;background:var(--teal);transition:width .3s}
 .bar i.t{background:var(--claret)}.bar i.s{background:var(--gold)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:16px}
+.grp{border:1px solid var(--line);border-radius:10px;margin:8px 0;background:#fff}
+.grp>.gh{display:grid;grid-template-columns:minmax(0,1.5fr) 110px minmax(0,1.2fr) 74px 70px 104px;gap:10px;align-items:center;padding:10px 12px}
+.grp select{width:100%;min-width:0}.grp .opt{white-space:nowrap;font-size:13px}.grp .num{text-align:right}
+.grp .gn{font-weight:600}.grp .gs{font-size:12px;color:var(--muted,#5a6472)}.grp.ok{opacity:.55}.grp .src{font-size:11px;border-radius:999px;padding:1px 8px;background:var(--soft)}
+.grp .src.ia{background:#eef3fb;color:#1f3b63}.grp .src.none{background:#fff4e5;color:#8a4b00}.grp details{padding:0 12px 10px}.grp details summary{font-size:12px;color:var(--muted,#5a6472);cursor:pointer}
+@media(max-width:900px){.grp>.gh{grid-template-columns:1fr 1fr}}
 .drop{border:2px dashed var(--line);border-radius:10px;padding:16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .drop.over{border-color:var(--teal);background:var(--soft)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -306,6 +312,12 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
 
     <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="tabs" role="group" aria-label="Vue"><button data-gv="g" aria-pressed="true">Classement rapide par groupes</button><button data-gv="l" aria-pressed="false">Liste détaillée</button></div>
+        <span class="note" id="gvNote"></span>
+      </div>
+      <div id="grpBox"></div>
+      <div id="lstBox">
       <div class="row" style="justify-content:space-between">
         <div class="tabs" role="group" aria-label="Filtre">
           <button data-f="todo" aria-pressed="true">À classer</button>
@@ -335,6 +347,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <button class="sm pri" id="bulkGo">Classer la sélection</button>
         <button class="sm" id="bulkX">Désélectionner</button>
         <button class="sm danger" id="bulkDel">Supprimer</button>
+      </div>
       </div>
       <div class="toast" id="toast" role="status"></div>
     </div>

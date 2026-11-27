@@ -31,6 +31,12 @@ h2{font-size:20px;margin:0 0 10px;font-weight:800}
 .bar i{display:block;height:100%;background:var(--teal);transition:width .3s}
 .bar i.t{background:var(--claret)}.bar i.s{background:var(--gold)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:16px}
+.grp{border:1px solid var(--line);border-radius:10px;margin:8px 0;background:#fff}
+.grp>.gh{display:grid;grid-template-columns:minmax(0,1.5fr) 110px minmax(0,1.2fr) 74px 70px 104px;gap:10px;align-items:center;padding:10px 12px}
+.grp select{width:100%;min-width:0}.grp .opt{white-space:nowrap;font-size:13px}.grp .num{text-align:right}
+.grp .gn{font-weight:600}.grp .gs{font-size:12px;color:var(--muted,#5a6472)}.grp.ok{opacity:.55}.grp .src{font-size:11px;border-radius:999px;padding:1px 8px;background:var(--soft)}
+.grp .src.ia{background:#eef3fb;color:#1f3b63}.grp .src.none{background:#fff4e5;color:#8a4b00}.grp details{padding:0 12px 10px}.grp details summary{font-size:12px;color:var(--muted,#5a6472);cursor:pointer}
+@media(max-width:900px){.grp>.gh{grid-template-columns:1fr 1fr}}
 .drop{border:2px dashed var(--line);border-radius:10px;padding:16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .drop.over{border-color:var(--teal);background:var(--soft)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -305,6 +311,12 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
 
     <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="tabs" role="group" aria-label="Vue"><button data-gv="g" aria-pressed="true">Classement rapide par groupes</button><button data-gv="l" aria-pressed="false">Liste détaillée</button></div>
+        <span class="note" id="gvNote"></span>
+      </div>
+      <div id="grpBox"></div>
+      <div id="lstBox">
       <div class="row" style="justify-content:space-between">
         <div class="tabs" role="group" aria-label="Filtre">
           <button data-f="todo" aria-pressed="true">À classer</button>
@@ -334,6 +346,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <button class="sm pri" id="bulkGo">Classer la sélection</button>
         <button class="sm" id="bulkX">Désélectionner</button>
         <button class="sm danger" id="bulkDel">Supprimer</button>
+      </div>
       </div>
       <div class="toast" id="toast" role="status"></div>
     </div>
@@ -1417,7 +1430,7 @@ $('plist').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;$
 /* ---------- révision ---------- */
 function visible(){if(!P)return[];if(idFilter)return P.tx.filter(t=>idFilter.ids.has(t.id));const q=norm($('q').value);
   return P.tx.filter(t=>(filter==='all'||(filter==='todo'&&aCl(t))||(filter==='sug'&&t.st==='suggere')||(filter==='done'&&!aCl(t)&&t.st!=='suggere'))&&(!q||norm(t.desc).includes(q)||String(t.acct).includes(q)))}
-function render(){try{revUI()}catch(e){}
+function render(){try{revUI()}catch(e){}try{renderGroupes()}catch(e){console.warn(e)}
   const tx=P?P.tx:[];const v=visible();
   $('tb').innerHTML=v.length?v.map(t=>`<tr class="${t.st}" data-id="${t.id}">
     <td><input type="checkbox" data-k="sel" aria-label="Sélectionner" ${SEL.has(t.id)?'checked':''}${lk(t.date)?' disabled':''}></td>
@@ -1907,6 +1920,39 @@ $('bulkX').onclick=()=>{SEL.clear();render()};
 $('bulkDel').onclick=e=>confirm2(e.currentTarget,'',()=>{const n=SEL.size;P.tx.filter(t=>SEL.has(t.id)&&t.inv).forEach(t=>{const iv=INV.find(i=>i.id===t.inv);if(iv){delete iv.pay;saveInv(iv).catch(()=>{})}});
   P.tx=P.tx.filter(t=>!SEL.has(t.id));SEL.clear();LED=null;render();savePer();msg(`${n} transaction(s) supprimée(s).`);$('bulkDel').textContent='Supprimer'});
 $('bulkAcct').onchange=()=>{if($('bulkAcct').value==='__new')newAccount(null,no=>{$('bulkAcct').dataset.v='';renderBulk();$('bulkAcct').value=no||''})};
+/* ---------- classement rapide par groupes : un fournisseur (ou un type d'opération) = une ligne, classée d'un clic ---------- */
+let GV='g';const GEXCL=new Set();
+function groupes(){const L=(P?.tx||[]).filter(t=>aCl(t)&&!lk(t.date));const M=new Map();
+  L.forEach(t=>{const k=(keyOf(t.desc)||norm(t.desc).slice(0,24))+'|'+(t.amt<0?'s':'e');let g=M.get(k);if(!g){g={k,nom:keyOf(t.desc)||t.desc,sens:t.amt<0?'sortie':'entrée',tx:[]};M.set(k,g)}g.tx.push(t)});
+  return[...M.values()].map(g=>{const c={};g.tx.forEach(t=>{if(t.st==='suggere'&&t.acct&&t.acct!==C.tr)c[t.acct]=(c[t.acct]||0)+1});const best=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
+    g.prop=best?best[0]:'';g.tax=g.prop?g.tx.filter(t=>t.st==='suggere'&&t.acct===g.prop).some(t=>t.tax):false;g.tot=g.tx.reduce((a,t)=>a+t.amt,0);g.d1=g.tx.map(t=>t.date).sort()[0];g.d2=g.tx.map(t=>t.date).sort().pop();return g})
+    .sort((a,b)=>(b.prop?1:0)-(a.prop?1:0)||b.tx.length-a.tx.length||Math.abs(b.tot)-Math.abs(a.tot))}
+function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySelectorAll('[data-gv]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.gv===GV));$('lstBox').hidden=GV==='g';box.hidden=GV!=='g';
+  if(GV!=='g'){$('gvNote').textContent='';return}if(!P){box.innerHTML='<p class="note">Choisissez un compte et une période (un mois ou plusieurs) pour classer.</p>';return}
+  const G=groupes(),n=G.reduce((a,g)=>a+g.tx.length,0),avec=G.filter(g=>g.prop).length;
+  $('gvNote').textContent=n?`${n} transaction(s) à classer en ${G.length} groupe(s)`:'';
+  if(!n){box.innerHTML='<p class="msg" style="margin:6px 0">✓ Tout est classé pour cette période. Voyez la « Liste détaillée » pour revoir ou corriger.</p>';return}
+  const opt=a=>`<option value="">— Choisir le compte —</option>`+PLAN.filter(([x,t])=>!isHeader(x,t)).map(([x,t])=>`<option value="${esc(x)}"${x===a?' selected':''}>${esc(x+' '+t)}</option>`).join('');
+  box.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
+      <span class="note">Les groupes avec un compte proposé sont en haut : vérifiez le compte, puis « Classer ». Les autres : choisissez le compte. « Règle » retient le classement pour les prochains relevés.</span>
+      ${sampleFn&&G.some(g=>!g.prop)?`<button class="sm" id="gIA">Proposer un compte avec l’IA (${G.filter(g=>!g.prop).length} groupe(s) sans proposition)</button>`:''}</div>
+    ${G.map((g,i)=>`<div class="grp" data-g="${i}"><div class="gh">
+      <div style="min-width:0"><div class="gn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(g.tx[0].desc)}">${esc(g.tx.length===1?g.tx[0].desc:g.nom)}</div><div class="gs">${g.tx.length} ${g.sens}${g.tx.length>1?'s':''} · ${esc(g.d1)}${g.d2!==g.d1?' → '+esc(g.d2):''}</div></div>
+      <div class="num" style="font-weight:600;white-space:nowrap">${fmt(g.tot)}</div>
+      <div><select data-ga="${i}">${opt(g.prop)}</select><div style="margin-top:3px">${g.prop?'<span class="src ia">proposé par l’IA</span>':'<span class="src none">aucune proposition</span>'}</div></div>
+      <label class="opt" title="Taxes incluses dans le montant"><input type="checkbox" data-gt="${i}"${g.tax?' checked':''}> Taxes</label>
+      <label class="opt" title="Retenir pour les prochains relevés"><input type="checkbox" data-gr="${i}"${g.tx.length>1?' checked':''}> Règle</label>
+      <button class="sm pri" data-gc="${i}">Classer (${g.tx.length})</button></div>
+      <details><summary>Voir les ${g.tx.length} transaction(s)</summary><table class="rep" style="margin-top:6px">${g.tx.map(t=>`<tr><td style="width:28px"><input type="checkbox" data-gx="${t.id}" checked title="Décocher pour l’exclure du groupe"></td><td class="d">${esc(t.date)}</td><td>${esc(t.desc)}</td><td class="num">${fmt(t.amt)}</td></tr>`).join('')}</table></details></div>`).join('')}`;
+  box.querySelectorAll('[data-gc]').forEach(b=>b.onclick=()=>{const g=G[+b.dataset.gc],a=box.querySelector(`[data-ga="${b.dataset.gc}"]`).value;if(!a){box.querySelector(`[data-ga="${b.dataset.gc}"]`).focus();return}if(!revOk())return;
+    const tax=box.querySelector(`[data-gt="${b.dataset.gc}"]`).checked,regle=box.querySelector(`[data-gr="${b.dataset.gc}"]`).checked;
+    const T=g.tx.filter(t=>!GEXCL.has(t.id));T.forEach(t=>Object.assign(t,{acct:a,tax,st:'manuel',why:'Classé par groupe',unk:false}));
+    audit('Classement par groupe',`${T.length} transaction(s) « ${g.nom} » → ${a} ${accName(a)}${tax?', taxes incluses':''}`);
+    const p=keyOf(T[0]?.desc||'');if(regle&&p&&p.length>=3){C.rules=(C.rules||[]).filter(r=>!(r.p===p&&(r.s||'les deux')===(g.sens==='sortie'?'sortie':'entree')));C.rules.push({p,a,t:tax,s:g.sens==='sortie'?'sortie':'entree'});saveClient();renderRules()}
+    savePer();render();showToast(`<span>✓ ${T.length} transaction(s) « ${esc(g.nom)} » classée(s) dans ${esc(a)} ${esc(accName(a))}${regle?' · règle retenue':''}.</span>`)});
+  box.querySelectorAll('[data-gx]').forEach(c=>c.onchange=()=>{const id=+c.dataset.gx;if(c.checked)GEXCL.delete(id);else GEXCL.add(id)});
+  if($('gIA'))$('gIA').onclick=async()=>{$('gIA').disabled=true;$('gIA').textContent='L’IA cherche…';try{await askAI(false)}catch(e){}render()}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-gv]');if(!b)return;GV=b.dataset.gv;render()});
 $('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}if(!revOk())return;
   const sel=P.tx.filter(t=>SEL.has(t.id));audit('Classement en lot',`${sel.length} transaction(s) → ${a} ${accName(a)}${tx!==''?(tx==='1'?', taxes cochées':', taxes décochées'):''} : ${sel.slice(0,6).map(txTxt).join(' · ')}${sel.length>6?' …':''}`);sel.forEach(t=>{Object.assign(t,{acct:a,st:'manuel',why:'Classé en lot',unk:false});if(tx!=='')t.tax=tx==='1'});
   SEL.clear();render();savePer();
