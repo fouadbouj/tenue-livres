@@ -1113,7 +1113,7 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
   if(GV!=='g'){$('gvNote').textContent='';return}if(!P){box.innerHTML='<p class="note">Choisissez un compte et une période (un mois ou plusieurs) pour classer.</p>';return}
   const G=groupes(),n=G.reduce((a,g)=>a+g.tx.length,0),avec=G.filter(g=>g.prop).length;
   $('gvNote').textContent=n?`${n} transaction(s) à classer en ${G.length} groupe(s)`:'';
-  if(!n){box.innerHTML='<p class="msg" style="margin:6px 0">✓ Tout est classé pour cette période. Voyez la « Liste détaillée » pour revoir ou corriger.</p>';return}
+  if(!n){box.innerHTML=`<div style="background:#e6f4ef;border:1px solid #9fd3c0;border-radius:10px;padding:12px 16px;margin:6px 0"><strong style="color:#14664a">✓ Tout est classé</strong> pour ${P.multi?`${moisLbl(P.mois)} à ${moisLbl(P.to)}`:moisLbl(P.mois)} · ${esc(P.src+' '+accName(P.src))}. <span class="note">Voyez la « Liste détaillée » pour revoir ou corriger.</span></div>`;return}
   const opt=a=>`<option value="">— Choisir le compte —</option>`+PLAN.filter(([x,t])=>!isHeader(x,t)).map(([x,t])=>`<option value="${esc(x)}"${x===a?' selected':''}>${esc(x+' '+t)}</option>`).join('');
   box.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
       <span class="note">Les groupes avec un compte proposé sont en haut : vérifiez le compte, puis « Classer ». Les autres : choisissez le compte. « Règle » retient le classement pour les prochains relevés.</span>
