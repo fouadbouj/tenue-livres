@@ -568,12 +568,14 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
   <section id="tJe" hidden>
     <div class="panel">
       <h2>Soldes d'ouverture</h2>
-      <p class="note">Les soldes au début de l'exercice, repris du bilan ou de la balance de vérification de fin d'année précédente. Versez la balance de vérification exportée de Sage, ou écrivez un compte par ligne : numéro puis montant (positif = débit, négatif = crédit). Les comptes de revenus et de dépenses sont reportés dans les bénéfices non répartis.</p>
+      <p class="note">Les soldes au début de l'exercice, repris du bilan ou de la balance de vérification de fin d'année précédente. Versez la balance de vérification (Sage, Excel ou PDF), ou entrez les comptes un par un dans le tableau. Les comptes de revenus et de dépenses sont reportés dans les bénéfices non répartis.</p>
       <div class="row" style="align-items:flex-end">
         <label class="f">Date des soldes (début d'exercice)<input type="date" id="ouvDate"></label>
         <label class="f">Verser une balance de vérification<input type="file" id="ouvFile" accept=".csv,.txt,.xlsx,.xls,.pdf"></label>
       </div>
-      <textarea id="ouvTxt" spellcheck="false" style="min-height:160px;margin-top:10px" placeholder="1060 12 345,67&#10;2640 -10 000,00&#10;3560 -2 345,67"></textarea>
+      <textarea id="ouvTxt" hidden></textarea>
+      <div class="scroll" style="margin-top:10px"><table class="rep" id="ouvTab"><thead><tr class="grp"><td>Compte</td><td class="num" style="width:150px">Débit</td><td class="num" style="width:150px">Crédit</td><td style="width:40px"></td></tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+      <button class="sm" id="ouvAdd" style="margin-top:6px">+ Ajouter un compte</button>
       <div class="row" style="margin-top:8px"><button class="pri" id="ouvSave">Enregistrer les soldes</button><span class="msg" id="ouvMsg"></span></div>
     </div>
     <div class="panel" id="ajePanel">
