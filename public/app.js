@@ -159,6 +159,7 @@ const bnrAcc=()=>findAcc(/NON REPARTIS|NON DISTRIBUES/)||findAcc(/BENEFICES REPO
 const findAcc=(re,exp)=>{const L=PLAN.filter(([n,t])=>re.test(norm(t))&&!isHeader(n,t));return (exp?L.find(([n])=>/^[5-9]/.test(n)):L[0])?.[0]||''};
 function detectSpecial(c){const pl=parsePlanText(c.plan),f=re=>pl.find(([,t])=>re.test(norm(t)))?.[0]||'';
   return {tr:f(/TRANSITOIRE|D'ATTENTE|EN SUSPENS|SUSPENSE|A CLASSER/)||c.tr||'',tpsA:f(/\bCTI\b/)||f(/TPS.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tpsA||'',tvqA:f(/\bRTI\b/)||f(/TVQ.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tvqA||'',tpsV:f(/TPS.*(PERCUE|A PAYER|FACTUREE)/)||c.tpsV||'',tvqV:f(/TVQ.*(PERCUE|A PAYER|FACTUREE)/)||c.tvqV||''}}
+const banqueDef=()=>{const SA=srcAccounts();return(SA.find(([n,t])=>/COMPTE COURANT|COURANT|CHEQUE/.test(norm(t)))||SA.find(([n,t])=>/BANQUE|ENCAISSE/.test(norm(t)))||SA[0]||[''])[0]};
 const srcAccounts=()=>{const s=PLAN.filter(([n,t])=>/^[12]/.test(n)&&/BANQUE|ENCAISSE|COURANT|CHEQUE|CAISSE|EPARGNE|CARTE|VISA|MASTERCARD|AMEX|MARGE/.test(norm(t)));return s.length?s:(PLAN.filter(([n])=>/^[12]/.test(n)).length?PLAN.filter(([n])=>/^[12]/.test(n)):PLAN)};
 
 /* ---------- classement ---------- */
@@ -313,8 +314,8 @@ Réponds uniquement en JSON : {"secteur":"professionnel","employes":true,"tpstvq
 function pdCreer(sage){const nom=$('pdNom').textContent;const d=$('pdDlg');d.close?d.close():d.removeAttribute('open');
   const id=local?'c'+Date.now():db.collection('clients').doc().id;const prof={type:$('pdType').value,tx:$('pdTx').checked,emp:$('pdEmp').checked,ind:$('pdInd').checked};
   const r=sage?{plan:DEF_PLAN,gifi:{}}:planType(prof.type,prof,PDX.filter(x=>x.on).map(x=>[x.n,x.nm,x.g]));
-  C={id,nom,plan:r.plan,gifi:r.gifi,desc:$('pdDesc').value.trim(),profil:prof,rules:[],dfmt:'yy',notes:'',last:''};Object.assign(C,detectSpecial(C));C.src=PLAN[0]?.[0]||'1060';
-  setPlan();C.src=srcAccounts()[0]?.[0]||'';saveClient();$('newName').value='';
+  C={id,nom,plan:r.plan,gifi:r.gifi,desc:$('pdDesc').value.trim(),profil:prof,rules:[],dfmt:'yy',notes:'',last:''};Object.assign(C,detectSpecial(C));C.src=banqueDef()||'1060';
+  setPlan();C.src=banqueDef();saveClient();$('newName').value='';
   if(!local)CLIENTS.push({id,...cleanClient(C)});openClient(id,!!sage)}
 $('pdType').onchange=()=>{PDX=[];pdApercu()};['pdTx','pdEmp','pdInd'].forEach(k=>$(k).onchange=pdApercu);
 $('pdOut').addEventListener('change',e=>{const i=e.target.dataset.pdx;if(i!=null){PDX[+i].on=e.target.checked;pdApercu()}});
@@ -439,7 +440,8 @@ function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;enforceLock(P)
 function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},verif:p.verif||{},...(p.revise?{revise:p.revise}:{}),tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{}),...(t.pj?.length?{pj:t.pj}:{})})),n:p.tx.length,todo:p.tx.filter(aCl).length,updated:new Date().toISOString()};
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
 function fillSelects(){
-  $('pSrc').innerHTML=srcAccounts().map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
+  const SA=srcAccounts();$('pSrc').innerHTML=SA.map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
+  {const pref=SA.find(([n])=>n===C.src)||SA.find(([n,t])=>/COMPTE COURANT|COURANT|CHEQUE/.test(norm(t)))||SA.find(([n,t])=>/BANQUE|ENCAISSE/.test(norm(t)));if(pref)$('pSrc').value=pref[0]}
   $('rA').innerHTML=OPTS;['sTr','sTpsA','sTvqA','sTpsV','sTvqV'].forEach(id=>$(id).innerHTML='<option value="">—</option>'+OPTS);
 }
 async function openPeriod(){
@@ -1672,7 +1674,7 @@ $('planBase').onclick=()=>{const cur=parsePlanText($('planTxt').value),have=new 
   $('planTxt').value=$('planTxt').value.replace(/\s*$/,'')+'\n'+add.map(p=>p.join(' ')).join('\n');$('planMsg').textContent=`${add.length} compte(s) ajouté(s) à la liste${clash.length?` (${clash.length} sauté(s) parce que leur numéro est déjà pris)`:''}. Vérifiez, puis cliquez sur Enregistrer le plan.`};
 $('planSave').onclick=()=>{const before=PLAN.map(p=>p[0]);C.plan=$('planTxt').value;
   if(planFromFile)C.sage=parsePlanText(C.plan).map(p=>p[0]);else if(!Array.isArray(C.sage))C.sage=before;planFromFile=false;const sp=detectSpecial({...C,tr:'',tpsA:'',tvqA:'',tpsV:'',tvqV:''});
-  for(const k of Object.keys(sp))if(sp[k])C[k]=sp[k];setPlan();fillSelects();if(!srcAccounts().some(p=>p[0]===C.src))C.src=srcAccounts()[0]?.[0]||'';$('pSrc').value=C.src;
+  for(const k of Object.keys(sp))if(sp[k])C[k]=sp[k];setPlan();fillSelects();if(!srcAccounts().some(p=>p[0]===C.src)||/CAISSE/.test(norm(accName(C.src))))C.src=banqueDef();$('pSrc').value=C.src;
   reclass();saveClient();renderRules();renderSettings();render();if(P&&P.tx.length)savePer();
   const miss=['tr','tpsA','tvqA'].filter(k=>!C[k]);
   const nw=newAccts();

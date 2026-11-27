@@ -52,3 +52,6 @@ a.btn{display:inline-block;border:1px solid var(--line);border-radius:10px;paddi
 .top .in{padding:13px 24px;gap:16px;max-width:none!important}.top .brand{gap:12px;font-size:15px;font-weight:600;letter-spacing:.2px}
 .top .brand img.wm{height:24px;width:auto;display:block}.top .brand span{font-size:15px;font-weight:600;color:#fff;opacity:.85;border-left:1px solid rgba(255,255,255,.35);padding-left:12px}
 .top .who{font-size:14px;gap:16px}.top .who a{color:#fff}.top button{min-height:34px;height:auto;font-size:14px;font-weight:400;padding:6px 14px;border-radius:8px;line-height:1.3;border-color:rgba(255,255,255,.5)}
+/* mobile : onglets qui ne se chevauchent pas, barre du haut compacte */
+.tabs button{flex:0 0 auto}
+@media (max-width:640px){.top .brand span,#whoE{display:none}.top .who{gap:8px;font-size:13px}.top .who a{white-space:nowrap}.top button{padding:4px 10px}}

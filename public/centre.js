@@ -16,7 +16,7 @@ function periodes(c,auj=new Date()){const M=+String(c.fin_exercice).slice(0,2)||
 const STP={'à envoyer':'g','envoyée':'g','reçue':'ok','apportée au bureau':'ok','annulée':''};
 
 async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4,m5]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*'),sb.from('cc_dpa_accords').select('*'),sb.from('cc_factures').select('*'),sb.from('cc_lots_dpa').select('*'),sb.from('cc_parametres').select('*'),sb.from('cc_services').select('*').order('created_at',{ascending:false})]);
-  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};
+  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};REPR=(m4.data||[]).find(x=>x.cle==='representant')?.valeur||{};
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
 function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv','dt'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,dt:rDt,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
@@ -342,7 +342,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button,a[d
 
 
 /* ---------- facturation et débits préautorisés ---------- */
-let ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
+let REPR={},ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
 const F=()=>window.FACTURE;
 const fmt=v=>F().money(v);
 const acOf=id=>ACCD.filter(a=>a.client_id===id).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
@@ -441,6 +441,10 @@ function vPar(){const p=PAR,i=(k,l,ph='',hint='')=>`<label class="f"><b>${l}</b>
     <div class="grid">${i('interac','Courriel pour les virements Interac','paiement@boujradcpa.com','Adresse inscrite au dépôt automatique de votre banque')}${i('interacNote','Précision Interac (facultatif)','Dépôt automatique : aucune question de sécurité')}
     <label class="f"><b>Paiement par carte de crédit</b><select data-par="carte"><option value="non"${p.carte!=='oui'?' selected':''}>Non offert pour l’instant</option><option value="oui"${p.carte==='oui'?' selected':''}>Offert (Stripe configuré)</option></select><small class="sub">Exige un compte Stripe : voir les instructions dans la conversation.</small></label></div>
     <div class="row" style="margin-top:12px"><button class="pri" id="parSave">Enregistrer</button><span class="msg" id="parM"></span></div>
+    <h3>Représentant auprès des gouvernements</h3><p class="sub" style="font-size:14px">Ces identifiants s’affichent à vos clients <strong>connectés</strong> dans le portail (carte « Nous autoriser comme représentant »), jamais sur le site public.</p>
+    <div class="grid">${[['ne','Numéro d’entreprise du cabinet (ARC)','123456789'],['idgroupe','ID Groupe (ARC, facultatif)','G12345'],['idrep','ID Rep (ARC, facultatif)','A1B2C3D'],['rq','No de représentant professionnel (Revenu Québec, interne)','']].map(([k,l,ph])=>`<label class="f"><b>${l}</b><input data-rep="${k}" value="${esc(REPR[k]||'')}" placeholder="${ph}"></label>`).join('')}
+    <label class="f"><b>Identifiant montré aux clients</b><select data-rep="affiche">${[['ne','Numéro d’entreprise'],['idgroupe','ID Groupe'],['idrep','ID Rep']].map(([k,l])=>`<option value="${k}"${(REPR.affiche||'ne')===k?' selected':''}>${l}</option>`).join('')}</select></label></div>
+    <div class="row" style="margin-top:12px"><button class="pri" id="repSave">Enregistrer les identifiants</button><span class="msg" id="repM"></span></div>
     <p class="sub" style="font-size:13px">Avant le premier vrai fichier, Desjardins exige un fichier d’essai pour valider le format : générez un premier lot et demandez au soutien AccèsD Affaires de le traiter en mode essai.</p>`}
 
 /* -- fiche client : facturation -- */
@@ -490,6 +494,7 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     const{error}=await sb.from('cc_factures').insert({client_id:cid,lignes,...t,mode:m,statut:m==='dpa'?'à prélever':'à payer',echeance:m==='autre'?$('fnE').value||null:null,emetteur:emetteur(),note:$('fnN').value.trim()||null,date:new Date().toLocaleDateString('fr-CA')});
     if(error){$('fnMsg').textContent=error.message;b.disabled=false;return}const envoyer=$('fnSend')?.checked&&m==='autre';await load();
     if(envoyer){const f=FAC.filter(x=>x.client_id===cid).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''))[0];try{await envoyerFacture(f)}catch(err){notify('Facture créée, mais envoi impossible : '+err.message,1);return}}else notify('Facture créée');return}
+  if(b.id==='repSave'){const v={};document.querySelectorAll('[data-rep]').forEach(i=>v[i.dataset.rep]=i.value.trim());const{error}=await sb.from('cc_parametres').upsert({cle:'representant',valeur:v,updated_at:new Date().toISOString()});$('repM').textContent=error?error.message:'Enregistré : vos clients le voient dans leur portail.';if(!error)REPR=v;return}
   if(b.id==='parSave'){const v={};document.querySelectorAll('[data-par]').forEach(i=>v[i.dataset.par]=i.value.trim());
     if(v.organisme&&!/^\d{10}$/.test(v.organisme)){$('parM').textContent='Le numéro d’organisme doit avoir 10 chiffres.';return}
     const{error}=await sb.from('cc_parametres').upsert({cle:'facturation',valeur:v,updated_at:new Date().toISOString()});$('parM').textContent=error?error.message:'Enregistré.';if(!error){PAR=v;notify('Paramètres de facturation enregistrés')}return}
