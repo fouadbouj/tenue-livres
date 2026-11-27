@@ -1119,6 +1119,30 @@ function groupes(){const L=(P?.tx||[]).filter(t=>aCl(t)&&!lk(t.date));const M=ne
   return[...M.values()].map(g=>{const c={};g.tx.forEach(t=>{if(t.st==='suggere'&&t.acct&&t.acct!==C.tr)c[t.acct]=(c[t.acct]||0)+1});const best=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
     g.prop=best?best[0]:'';g.tax=g.prop?g.tx.filter(t=>t.st==='suggere'&&t.acct===g.prop).some(t=>t.tax):false;g.tot=g.tx.reduce((a,t)=>a+t.amt,0);g.d1=g.tx.map(t=>t.date).sort()[0];g.d2=g.tx.map(t=>t.date).sort().pop();return g})
     .sort((a,b)=>(b.prop?1:0)-(a.prop?1:0)||b.tx.length-a.tx.length||Math.abs(b.tot)-Math.abs(a.tot))}
+/* ---------- taxes sur les achats à l'étranger : la TPS/TVQ n'est récupérable que si le fournisseur la facture vraiment ----------
+   On liste, par fournisseur, les dépenses marquées « taxes incluses » qui viennent d'un compte en US$ ou d'un fournisseur hors Canada.
+   Les grands fournisseurs qui facturent habituellement la TPS/TVQ aux entreprises québécoises restent décochés : c'est vous qui décidez. */
+const FACTURE_TAXES=/FACEBK|FACEBOOK|\bMETA\b|GOOGLE|MICROSOFT|MSFT|ADOBE|APPLE\.COM|\bAPPLE\b|AMAZON|AMZN|SHOPIFY|NETFLIX|SPOTIFY|DROPBOX|ZOOM|LINKEDIN|UBER|AIRBNB/;
+const ETRANGER=/\b(LONDON|DUBLIN|IRELAND|IRL|GBR|UK|USA|NY|CA\b(?=$)|GA|TX|FL|WA|NJ|DE|NL|AMSTERDAM|PARIS|BERLIN|SINGAPORE|HONG KONG|SYDNEY|TEL AVIV|CRNOMELJ|SAN FRANCISCO|NEW YORK)\b|\.COM(DE|IE|UK|NL)?\b/;
+async function taxesEtrangeres(){const L=await iaPeriodes(),M=new Map();
+  L.forEach(p=>{const T=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P.tx:p.tx;(T||[]).forEach((t,i)=>{const c={...t};classify(c,p.src);if(!c.tax||c.amt>=0||lk(c.date))return;const us=devOf(p.src)==='USD',n=norm(c.desc);if(!us&&!ETRANGER.test(n))return;
+    const k=keyOf(c.desc)||n.slice(0,24);let g=M.get(k);if(!g){g={k,nom:k,tx:[],us:0,can:FACTURE_TAXES.test(n)};M.set(k,g)}g.tx.push({p,i,t,date:c.date,amt:c.amt,desc:c.desc});if(us)g.us++})});
+  return[...M.values()].sort((a,b)=>(a.can?1:0)-(b.can?1:0)||b.tx.length-a.tx.length)}
+async function taxesEtrangeresUI(){const box=$('txeBox');box.hidden=false;box.innerHTML='<p class="note">Recherche des achats à l’étranger marqués « taxes incluses »…</p>';
+  const G=await taxesEtrangeres();if(!G.length){box.innerHTML='<p class="msg" style="margin:6px 0">✓ Aucun achat à l’étranger n’est marqué « taxes incluses ».</p>';return}
+  box.innerHTML=`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:6px 0 10px;background:#fff">
+    <strong>Taxes sur les achats à l’étranger</strong> <span class="note">— ${G.reduce((a,g)=>a+g.tx.length,0)} dépense(s) marquée(s) « taxes incluses » chez des fournisseurs hors Canada ou payées en US$. Un fournisseur étranger ne facture habituellement pas la TPS/TVQ : on la retire. Ceux qui la facturent souvent aux entreprises (Meta, Google, Microsoft, Adobe…) sont décochés : vérifiez une facture avant de décider.</span>
+    <table class="rep" style="margin-top:8px"><tr class="grp"><td style="width:28px"></td><td>Fournisseur</td><td class="num">Dépenses</td><td class="num">Total</td><td></td></tr>
+    ${G.map((g,i)=>`<tr><td><input type="checkbox" data-txe="${i}"${g.can?'':' checked'} style="width:auto;margin:0"></td><td>${esc(g.nom)}<div class="why">${esc(g.tx[0].desc)}</div></td><td class="num">${g.tx.length}</td><td class="num">${fmt(g.tx.reduce((a,x)=>a+x.amt,0))}${g.us?' US$':''}</td><td>${g.can?'<span class="pill">facture souvent la TPS/TVQ</span>':''}</td></tr>`).join('')}</table>
+    <div class="row" style="margin-top:8px;gap:6px"><button class="pri sm" id="txeGo">Retirer les taxes des fournisseurs cochés</button><button class="sm" id="txeX">Fermer</button><span class="msg" id="txeMsg"></span></div></div>`;
+  $('txeX').onclick=()=>{box.hidden=true;box.innerHTML=''};
+  $('txeGo').onclick=async()=>{const sel=G.filter((g,i)=>box.querySelector(`[data-txe="${i}"]`).checked);if(!sel.length)return;$('txeGo').disabled=true;$('txeMsg').textContent='Correction…';
+    if(P&&pTimer)savePerNow();await pWriting;const docs=new Set();let n=0;
+    sel.forEach(g=>{g.tx.forEach(x=>{const t=x.t;Object.assign(t,{tax:false,st:t.st==='transit'||t.st==='suggere'?t.st:'manuel',why:(t.why?t.why+' · ':'')+'sans taxes (fournisseur étranger)'});n++;docs.add(x.p)});
+      C.rules=(C.rules||[]).map(r=>has(norm(g.tx[0].desc),r.p)?{...r,t:false}:r)});
+    for(const p of docs){if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src){savePerNow();continue}p.updated=new Date().toISOString();if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
+    saveClient();renderRules();audit('Taxes retirées (achats à l’étranger)',`${n} dépense(s) : ${sel.map(g=>g.nom).join(', ')}`);LED=null;if(P)(P.multi?await openRange():await openPeriod());
+    box.innerHTML=`<p class="msg" style="margin:6px 0">✓ Taxes retirées sur ${n} dépense(s) (${sel.length} fournisseur(s)). Les règles de ces fournisseurs sont aussi mises « sans taxes ».</p>`}}
 function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySelectorAll('[data-gv]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.gv===GV));$('lstBox').hidden=GV==='g';box.hidden=GV!=='g';
   if(GV!=='g'){$('gvNote').textContent='';return}if(!P){box.innerHTML='<p class="note">Choisissez un compte et une période (un mois ou plusieurs) pour classer.</p>';return}
   const G=groupes(),n=G.reduce((a,g)=>a+g.tx.length,0),avec=G.filter(g=>g.prop).length;
@@ -1148,6 +1172,7 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
     try{await aiSuggest(P.tx)}catch(e){console.warn(e)}prev.forEach(([t,a,x,w])=>{if(t.st==='transit')Object.assign(t,{st:'suggere',acct:a,tax:x,why:w,unk:false})});
     const nIA=P.tx.filter(t=>t.st==='ia').length;audit('Classement par l’IA',`${avant-P.tx.filter(aCl).length} transaction(s) classée(s) d’office (fournisseurs connus)`);savePer();render();
     showToast(`<span>✦ ${avant-P.tx.filter(aCl).length} transaction(s) de fournisseurs connus classée(s) d’office. Le reste a une proposition à vérifier.</span>`)}}
+$('txeBtn').onclick=()=>{if(C)taxesEtrangeresUI()};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-gv]');if(!b)return;GV=b.dataset.gv;render()});
 $('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}if(!revOk())return;
   const sel=P.tx.filter(t=>SEL.has(t.id));audit('Classement en lot',`${sel.length} transaction(s) → ${a} ${accName(a)}${tx!==''?(tx==='1'?', taxes cochées':', taxes décochées'):''} : ${sel.slice(0,6).map(txTxt).join(' · ')}${sel.length>6?' …':''}`);sel.forEach(t=>{Object.assign(t,{acct:a,st:'manuel',why:'Classé en lot',unk:false});if(tx!=='')t.tax=tx==='1'});
