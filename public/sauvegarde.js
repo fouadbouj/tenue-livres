@@ -7,7 +7,7 @@ const load=src=>new Promise((ok,ko)=>{if(window.zip)return ok();const s=document
 const TABLES=[['cc_clients','clients'],['cc_contrats','contrats'],['cc_dpa_accords','accords-dpa'],['cc_factures','factures'],['cc_lots_dpa','fichiers-dpa'],['cc_acces','acces-portail'],['cc_publications','documents-publies'],
   ['cc_messages','messages'],['cc_demandes','demandes-documents'],['cc_taches','taches'],['cc_notes','journal'],['cc_echeances','echeances-faites'],['cc_parametres','parametres'],['pc_dossiers','impots-profils'],['pc_soumissions','impots-declarations']];
 const RESTORABLE=new Set(['cc_clients','cc_contrats','cc_dpa_accords','cc_factures','cc_lots_dpa','cc_acces','cc_publications','cc_messages','cc_demandes','cc_taches','cc_notes','cc_echeances','cc_parametres']);
-const SUBS=['periodes','ecritures','factures','missions','paies'];
+const SUBS=['periodes','ecritures','factures','missions','paies','audit'];
 const sb=()=>window.CCsb,notify=(m,e)=>window.CCnotify&&window.CCnotify(m,e);
 async function all(table){const out=[];for(let f=0;;f+=1000){const{data,error}=await sb().from(table).select('*').range(f,f+999);if(error)throw new Error(`${table} : ${error.message}`);out.push(...data);if(data.length<1000)break}return out}
 
@@ -71,12 +71,16 @@ async function sauvegarder(pw){const d=new Date().toLocaleDateString('fr-CA'),fi
   G.cc_contrats.filter(k=>k.html).forEach(k=>add(`1-Gestion-du-cabinet/contrats-signes/${safe(k.numero)} - ${safe(nomC(k.client_id))}.html`,k.signe_le?k.html.replace('</body>',`<p style="border:2px solid #1d7a4f;padding:10px">Accepté électroniquement par ${esc(k.signe_nom)}${k.signe_titre?', '+esc(k.signe_titre):''} le ${new Date(k.signe_le).toLocaleString('fr-CA')}.</p></body>`):k.html));
   say('Lecture de la comptabilité…');const docs=await all('tl_docs');const cl=docs.filter(r=>r.coll==='clients');
   const tl={format:'tenue-livres-v1',date:new Date().toISOString(),clients:cl.map(r=>{const c={id:r.id,data:r.data};SUBS.forEach(s=>c[s]=docs.filter(x=>x.coll===`clients/${r.id}/${s}`).map(x=>({id:x.id,data:x.data})));return c})};
-  tl.clients.forEach(c=>{const g=grandLivre(c.data||{},c),dir=`2-Comptabilite/${safe(c.data?.nom)}`;add(`${dir}/grand-livre.csv`,g.gl);add(`${dir}/mouvements-par-compte-et-exercice.csv`,g.mvt);add(`${dir}/plan-comptable.csv`,g.plan)});
+  const pjs=[];tl.clients.forEach(c=>{const g=grandLivre(c.data||{},c),dir=`2-Comptabilite/${safe(c.data?.nom)}`;add(`${dir}/grand-livre.csv`,g.gl);add(`${dir}/mouvements-par-compte-et-exercice.csv`,g.mvt);add(`${dir}/plan-comptable.csv`,g.plan);
+    if((c.audit||[]).length)add(`${dir}/piste-de-verification.csv`,csv(c.audit.map(x=>x.data).sort((a,b)=>String(a.le).localeCompare(String(b.le))),['le','qui','quoi','detail']));
+    (c.periodes||[]).forEach(({data:p})=>(p.tx||[]).forEach(t=>(t.pj||[]).forEach(f=>pjs.push([`${dir}/pieces-jointes/${t.date} ${safe(t.desc).slice(0,40)} - ${safe(f.n)}`,f.c]))));
+    (c.ecritures||[]).forEach(({data:j})=>(j.pj||[]).forEach(f=>pjs.push([`${dir}/pieces-jointes/${j.date} ecriture ${safe(j.ref||'')} - ${safe(f.n)}`,f.c])))});
+  const bins=[];if($('svPj')?.checked!==false)for(const[k,[n,c]]of pjs.entries()){say(`Pièces jointes : ${k+1} sur ${pjs.length}…`);try{const{data}=await sb().storage.from('documents').download(c);if(data)bins.push([n,new Uint8Array(await data.arrayBuffer())])}catch(e){}}
   add('3-Restauration/comptabilite-dossiers.json',JSON.stringify(tl));
   add('3-Restauration/gestion-du-cabinet.json',JSON.stringify({format:'boujrad-gestion-v1',date:new Date().toISOString(),tables:Object.fromEntries(Object.entries(G).filter(([t])=>RESTORABLE.has(t)))}));
   add('LISEZMOI.txt',LISEZMOI(d));
   say('Compression et chiffrement…');await load(ZIPJS);zip.configure({useWebWorkers:false});
-  const w=new zip.ZipWriter(new zip.BlobWriter('application/zip'),{password:pw,encryptionStrength:3});for(const[n,t]of files)await w.add(n,new zip.TextReader(t));const blob=await w.close();
+  const w=new zip.ZipWriter(new zip.BlobWriter('application/zip'),{password:pw,encryptionStrength:3});for(const[n,t]of files)await w.add(n,new zip.TextReader(t));for(const[n,u]of bins)await w.add(n,new zip.Uint8ArrayReader(u));const blob=await w.close();
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Sauvegarde_Boujrad_CPA_${d}.zip`;document.body.appendChild(a);a.click();a.remove();
   await sb().from('cc_parametres').upsert({cle:'sauvegarde',valeur:{date:new Date().toISOString(),par:$('whoE')?.textContent||'',clients:G.cc_clients.length,dossiers:tl.clients.length,taille:blob.size},updated_at:new Date().toISOString()});
   say('');return{clients:G.cc_clients.length,dossiers:tl.clients.length,taille:blob.size}}
@@ -107,11 +111,12 @@ window.rSauv=async function(){const{data}=await sb().from('cc_parametres').selec
     <div class="${!s||jours>31?'alert':'info'}" style="margin-bottom:14px">${s?`<strong>Dernière sauvegarde : ${new Date(s.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}</strong> (${jours===0?'aujourd’hui':`il y a ${jours} jour${jours>1?'s':''}`}) · ${s.clients} client(s), ${s.dossiers} dossier(s) comptable(s)${s.par?' · par '+esc(s.par):''}.${jours>31?' Faites-en une nouvelle.':''}`:'<strong>Aucune sauvegarde encore.</strong> Faites la première maintenant.'}</div>
     <p>Un seul fichier ZIP, protégé par mot de passe, qui contient :</p>
     <ul><li><strong>Gestion du cabinet</strong> : clients et leurs coordonnées, contrats (et le texte signé), accords de débits préautorisés, factures, tâches, journal, échéances, déclarations d’impôts personnelles. En <strong>Excel (CSV)</strong>, lisible sans le logiciel.</li>
-      <li><strong>Comptabilité</strong> : pour chaque dossier, le <strong>grand livre complet</strong> par exercice, les mouvements par compte et le plan comptable, en Excel (CSV).</li>
+      <li><strong>Comptabilité</strong> : pour chaque dossier, le <strong>grand livre complet</strong> par exercice, les mouvements par compte, le plan comptable et la piste de vérification, en Excel (CSV), et les pièces jointes.</li>
       <li><strong>Restauration</strong> : les mêmes données en format exact, pour les remettre dans le logiciel ou dans tout autre système.</li></ul>
     <p class="sub" style="font-size:14px">Les documents déposés par les clients ne sont pas inclus : les clients en gardent l’original. Faites une sauvegarde chaque mois et gardez-la sur un disque externe au bureau et dans OneDrive.</p>
     <div class="grid" style="max-width:640px"><label class="f"><b class="req">Mot de passe du fichier</b><input type="password" id="svP" autocomplete="new-password"></label><label class="f"><b class="req">Confirmer le mot de passe</b><input type="password" id="svP2" autocomplete="new-password"></label></div>
     <p class="sub" style="font-size:13px;margin:6px 0 0">12 caractères ou plus. Notez-le sur papier au bureau : sans lui, le fichier ne peut pas être ouvert. Pour ouvrir le fichier sur Windows, utilisez 7-Zip (gratuit, 7-zip.org) : l’Explorateur de Windows ne lit pas les fichiers chiffrés.</p>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="svPj" checked style="width:auto;margin:0"> Inclure les pièces jointes de la comptabilité (factures et reçus joints aux transactions)</label>
     <div class="row" style="margin-top:12px"><button class="pri" id="svGo">Télécharger la sauvegarde complète</button><span class="msg" id="svM"></span></div></div>
   <div class="card"><h2>Restaurer une sauvegarde</h2><p class="sub" style="font-size:14px">Remet les données de Gestion du cabinet à partir d’un fichier de sauvegarde (par exemple dans un nouveau projet). Les lignes existantes portant le même identifiant sont remplacées; rien n’est supprimé. Pour la comptabilité, importez <em>3-Restauration/comptabilite-dossiers.json</em> dans le logiciel comptable (accueil > Sauvegarde et transfert).</p>
     <div class="grid" style="max-width:640px"><label class="f"><b>Fichier de sauvegarde (.zip)</b><input type="file" id="rsF" accept=".zip"></label><label class="f"><b>Mot de passe</b><input type="password" id="rsP" autocomplete="off"></label></div>

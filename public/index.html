@@ -225,7 +225,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <button data-t="pay" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Paie</button>
       <button data-t="rec" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Conciliation</button>
       <button data-t="rep" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Rapports</button>
-      <button data-t="exp" aria-pressed="false" class="sage-only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Export Sage 50</button>
+      <button data-t="exp" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Archive et export</button>
       <span class="sg">Fin d'exercice</span>
       <button data-t="mis" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Mission de compilation</button>
       <span class="sg">Configuration</span>
@@ -297,7 +297,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <div class="row"><button class="pri" id="mGo">Importer ces transactions</button><button id="mCancel">Annuler</button></div>
       </div>
       <div class="msg" id="msg"></div>
-      <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="pClear" class="danger sm">Vider cette période</button></div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:6px;gap:8px"><div class="row" style="gap:8px;align-items:center"><button id="pRev" class="sm">✓ Marquer ce mois révisé</button><span id="pRevI" class="note"></span></div><button id="pClear" class="danger sm">Vider cette période</button></div>
     </div>
 
 
@@ -368,8 +368,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   <!-- Export Sage 50 -->
   <section id="tExp" hidden>
-    <div class="panel"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">Mois ouvert : <span id="expPer">—</span></h2><p class="note" style="margin:4px 0 0">L’export porte sur le mois ouvert dans Transactions.</p></div><button class="sm" id="expChg">Changer de mois</button></div></div>
-    <div class="panel">
+    <div class="panel sage-only"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">Mois ouvert : <span id="expPer">—</span></h2><p class="note" style="margin:4px 0 0">L’export porte sur le mois ouvert dans Transactions.</p></div><button class="sm" id="expChg">Changer de mois</button></div></div>
+    <div class="panel sage-only">
     <div class="two">
       <div>
         <h2>Sommaire par compte</h2>
@@ -391,7 +391,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       </div>
     </div>
     </div>
-    <div class="panel">
+    <div class="panel sage-only">
       <h2>Exporter plusieurs mois d'un coup</h2>
       <p class="note">Un seul fichier avec toutes les périodes choisies, pour un seul import dans Sage. Pratique pour rattraper un exercice complet.</p>
       <div class="row" style="align-items:flex-end">
@@ -588,6 +588,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
           <label class="f">Type<select id="jeType"><option value="">Écriture courante</option><option value="aje">Ajustement de fin d’exercice (AJE)</option></select></label>
           <label class="f" style="flex:1;min-width:200px">Description<input id="jeDesc"></label>
         </div>
+        <div style="margin-top:8px"><strong style="font-size:13px">Pièces jointes</strong> <label class="sm" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:4px 10px;margin-left:6px">Joindre<input type="file" id="jePjF" multiple hidden></label><span class="note" id="jePjM" style="margin-left:6px"></span><div id="jePj"></div></div>
         <div class="scroll"><table style="margin-top:10px"><thead><tr><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th><th></th></tr></thead><tbody id="jeLines"></tbody></table></div>
         <div class="row" style="margin-top:8px;justify-content:space-between"><button class="sm" id="jeAdd">+ Ligne</button><strong id="jeBal"></strong></div>
         <div class="row" style="margin-top:10px"><button class="pri" id="jeSave">Enregistrer l'écriture</button><button id="jeCancel">Annuler</button><span class="msg err" id="jeErr"></span></div>
@@ -603,6 +604,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <div class="tabs" role="group" aria-label="Rapport">
           <button data-r="bs" aria-pressed="true">Bilan</button>
           <button data-r="is" aria-pressed="false">État des résultats</button>
+          <button data-r="mo" aria-pressed="false">Résultats par mois</button>
           <button data-r="tb" aria-pressed="false">Balance de vérification</button>
           <button data-r="gl" aria-pressed="false">Grand livre</button>
           <button data-r="jr" aria-pressed="false">Journal général</button>
@@ -678,6 +680,14 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="row" style="gap:8px;align-items:flex-end;margin-top:8px"><label class="f" style="max-width:260px">Aucune modification datée avant le<input type="date" id="lkAv"></label><button class="sm" id="lkSave">Enregistrer la protection</button><span class="msg" id="lkMsg"></span></div>
       <p class="note" style="margin-top:6px">Les dates protégées ne peuvent plus recevoir de transactions, d’écritures ni de reclassements, ni par le versement d’un relevé ni par l’assistant. Ce n’est jamais une porte fermée : « Rouvrir… » ou « Déverrouiller… » sur la ligne de l’exercice, avec une simple confirmation, et c’est noté dans l’historique ci-dessous. « Reverrouiller » le protège de nouveau.</p>
       <div id="lkLog" class="note"></div>
+    </div>
+    <div class="panel" id="usrPanel">
+      <h2>Utilisateurs du cabinet</h2>
+      <p class="note"><strong>CPA (administrateur)</strong> : tout, y compris fermer, rouvrir ou déverrouiller un exercice, la date de verrouillage, accepter les régularisations, supprimer une écriture, une facture, une période ou un dossier, et gérer les utilisateurs. <strong>Technicien</strong> : verse les relevés, classe, passe et corrige des écritures, prépare les régularisations, produit et envoie les rapports. Ces droits valent pour tous les dossiers.</p>
+      <div class="scroll"><table class="stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th></th></tr></thead><tbody id="usrList"></tbody></table></div>
+      <div class="row" style="gap:8px;align-items:flex-end;margin-top:10px" id="usrInv"><label class="f" style="flex:1;min-width:220px">Inviter (courriel)<input type="email" id="usrMail" placeholder="employe@boujradcpa.com"></label><label class="f">Rôle<select id="usrRole"><option value="membre">Technicien</option><option value="admin">CPA (administrateur)</option></select></label><button class="sm pri" id="usrGo">Inviter</button></div>
+      <p class="note" style="margin-top:6px">La personne invitée crée son compte sur app.boujradcpa.com avec ce courriel (« Créer un compte ») et reçoit automatiquement son rôle.</p>
+      <p class="msg" id="usrMsg"></p>
     </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Piste de vérification</h2><div class="row" style="gap:6px"><input id="audQ" placeholder="Filtrer (compte, montant, personne…)" style="min-width:220px"><button class="sm" id="audCsv">Exporter (CSV)</button></div></div>

@@ -224,7 +224,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <button data-t="pay" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>Paie</button>
       <button data-t="rec" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Conciliation</button>
       <button data-t="rep" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Rapports</button>
-      <button data-t="exp" aria-pressed="false" class="sage-only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Export Sage 50</button>
+      <button data-t="exp" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Archive et export</button>
       <span class="sg">Fin d'exercice</span>
       <button data-t="mis" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Mission de compilation</button>
       <span class="sg">Configuration</span>
@@ -296,7 +296,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <div class="row"><button class="pri" id="mGo">Importer ces transactions</button><button id="mCancel">Annuler</button></div>
       </div>
       <div class="msg" id="msg"></div>
-      <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="pClear" class="danger sm">Vider cette période</button></div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:6px;gap:8px"><div class="row" style="gap:8px;align-items:center"><button id="pRev" class="sm">✓ Marquer ce mois révisé</button><span id="pRevI" class="note"></span></div><button id="pClear" class="danger sm">Vider cette période</button></div>
     </div>
 
 
@@ -367,8 +367,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   <!-- Export Sage 50 -->
   <section id="tExp" hidden>
-    <div class="panel"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">Mois ouvert : <span id="expPer">—</span></h2><p class="note" style="margin:4px 0 0">L’export porte sur le mois ouvert dans Transactions.</p></div><button class="sm" id="expChg">Changer de mois</button></div></div>
-    <div class="panel">
+    <div class="panel sage-only"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">Mois ouvert : <span id="expPer">—</span></h2><p class="note" style="margin:4px 0 0">L’export porte sur le mois ouvert dans Transactions.</p></div><button class="sm" id="expChg">Changer de mois</button></div></div>
+    <div class="panel sage-only">
     <div class="two">
       <div>
         <h2>Sommaire par compte</h2>
@@ -390,7 +390,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       </div>
     </div>
     </div>
-    <div class="panel">
+    <div class="panel sage-only">
       <h2>Exporter plusieurs mois d'un coup</h2>
       <p class="note">Un seul fichier avec toutes les périodes choisies, pour un seul import dans Sage. Pratique pour rattraper un exercice complet.</p>
       <div class="row" style="align-items:flex-end">
@@ -587,6 +587,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
           <label class="f">Type<select id="jeType"><option value="">Écriture courante</option><option value="aje">Ajustement de fin d’exercice (AJE)</option></select></label>
           <label class="f" style="flex:1;min-width:200px">Description<input id="jeDesc"></label>
         </div>
+        <div style="margin-top:8px"><strong style="font-size:13px">Pièces jointes</strong> <label class="sm" style="cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:4px 10px;margin-left:6px">Joindre<input type="file" id="jePjF" multiple hidden></label><span class="note" id="jePjM" style="margin-left:6px"></span><div id="jePj"></div></div>
         <div class="scroll"><table style="margin-top:10px"><thead><tr><th>Compte</th><th class="num">Débit</th><th class="num">Crédit</th><th></th></tr></thead><tbody id="jeLines"></tbody></table></div>
         <div class="row" style="margin-top:8px;justify-content:space-between"><button class="sm" id="jeAdd">+ Ligne</button><strong id="jeBal"></strong></div>
         <div class="row" style="margin-top:10px"><button class="pri" id="jeSave">Enregistrer l'écriture</button><button id="jeCancel">Annuler</button><span class="msg err" id="jeErr"></span></div>
@@ -602,6 +603,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <div class="tabs" role="group" aria-label="Rapport">
           <button data-r="bs" aria-pressed="true">Bilan</button>
           <button data-r="is" aria-pressed="false">État des résultats</button>
+          <button data-r="mo" aria-pressed="false">Résultats par mois</button>
           <button data-r="tb" aria-pressed="false">Balance de vérification</button>
           <button data-r="gl" aria-pressed="false">Grand livre</button>
           <button data-r="jr" aria-pressed="false">Journal général</button>
@@ -677,6 +679,14 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="row" style="gap:8px;align-items:flex-end;margin-top:8px"><label class="f" style="max-width:260px">Aucune modification datée avant le<input type="date" id="lkAv"></label><button class="sm" id="lkSave">Enregistrer la protection</button><span class="msg" id="lkMsg"></span></div>
       <p class="note" style="margin-top:6px">Les dates protégées ne peuvent plus recevoir de transactions, d’écritures ni de reclassements, ni par le versement d’un relevé ni par l’assistant. Ce n’est jamais une porte fermée : « Rouvrir… » ou « Déverrouiller… » sur la ligne de l’exercice, avec une simple confirmation, et c’est noté dans l’historique ci-dessous. « Reverrouiller » le protège de nouveau.</p>
       <div id="lkLog" class="note"></div>
+    </div>
+    <div class="panel" id="usrPanel">
+      <h2>Utilisateurs du cabinet</h2>
+      <p class="note"><strong>CPA (administrateur)</strong> : tout, y compris fermer, rouvrir ou déverrouiller un exercice, la date de verrouillage, accepter les régularisations, supprimer une écriture, une facture, une période ou un dossier, et gérer les utilisateurs. <strong>Technicien</strong> : verse les relevés, classe, passe et corrige des écritures, prépare les régularisations, produit et envoie les rapports. Ces droits valent pour tous les dossiers.</p>
+      <div class="scroll"><table class="stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th></th></tr></thead><tbody id="usrList"></tbody></table></div>
+      <div class="row" style="gap:8px;align-items:flex-end;margin-top:10px" id="usrInv"><label class="f" style="flex:1;min-width:220px">Inviter (courriel)<input type="email" id="usrMail" placeholder="employe@boujradcpa.com"></label><label class="f">Rôle<select id="usrRole"><option value="membre">Technicien</option><option value="admin">CPA (administrateur)</option></select></label><button class="sm pri" id="usrGo">Inviter</button></div>
+      <p class="note" style="margin-top:6px">La personne invitée crée son compte sur app.boujradcpa.com avec ce courriel (« Créer un compte ») et reçoit automatiquement son rôle.</p>
+      <p class="msg" id="usrMsg"></p>
     </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Piste de vérification</h2><div class="row" style="gap:6px"><input id="audQ" placeholder="Filtrer (compte, montant, personne…)" style="min-width:220px"><button class="sm" id="audCsv">Exporter (CSV)</button></div></div>
@@ -995,9 +1005,31 @@ async function renderAudit(){const box=$('audList');if(!box||!C)return;box.inner
   box.innerHTML=V.length?V.slice(0,400).map(e=>`<tr><td class="d" style="white-space:nowrap">${esc(new Date(e.le).toLocaleString('fr-CA',{dateStyle:'short',timeStyle:'short'}))}</td><td>${esc(e.qui||'')}</td><td><strong>${esc(e.quoi)}</strong></td><td>${esc(e.detail||'')}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">Aucune modification enregistrée pour l’instant.</td></tr>';
   $('audN').textContent=`${V.length} modification(s)${V.length>400?' · 400 plus récentes affichées':''}`}
 let AUDL=[];
+/* ---------- droits : CPA (administrateur) et technicien (membre) ---------- */
+const estCPA=()=>!window.tlRole||window.tlRole==='admin';
+function cpaSeul(el){if(estCPA())return true;const m='Réservé au CPA (administrateur du cabinet). Demandez à un CPA de le faire.';if(el){el.textContent=m;el.className=(el.className||'').replace(/\bmsg\b.*/,'msg')+' err'}else alert(m);return false}
+/* ---------- pièces jointes (factures, reçus…) sur les transactions et les écritures ---------- */
+const pjNom=f=>String(f.name||'piece').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-100);
+async function pjEnvoyer(files,say){if(!window.tlFichiers)throw new Error('pièces jointes indisponibles dans cette vue');const out=[];
+  for(const f of files){if(f.size>20*1024*1024){say&&say(`${f.name} : plus de 20 Mo, ignoré.`);continue}say&&say(`Envoi de ${f.name}…`);
+    const c=`tl/${C.id}/${Date.now()}-${Math.random().toString(36).slice(2,6)}-${pjNom(f)}`;await window.tlFichiers.envoyer(c,f);out.push({n:f.name.slice(0,120),c,t:f.size,le:new Date().toISOString()})}return out}
+async function pjOuvrir(c){try{const u=await window.tlFichiers.lien(c);window.open(u,'_blank','noopener')}catch(e){alert('Ouverture impossible : '+e.message)}}
+const pjListe=(L,del)=>(L||[]).length?`<ul style="margin:4px 0 8px 18px;padding:0">${L.map((p,k)=>`<li><a href="#" data-pjo="${esc(p.c)}">📎 ${esc(p.n)}</a>${del?` <button type="button" class="sm" data-pjx="${k}" title="Retirer">✕</button>`:''}</li>`).join('')}</ul>`:'<p class="note" style="margin:4px 0 8px">Aucune pièce jointe.</p>';
+document.addEventListener('click',e=>{const a=e.target.closest('[data-pjo]');if(a){e.preventDefault();pjOuvrir(a.dataset.pjo)}});
+/* met à jour une transaction d'une période (ouverte ou enregistrée) */
+async function majTx(mois,src,i,fn){if(P&&!P.multi&&P.mois===mois&&P.src===src){fn(P.tx[i]);savePer();render();return}
+  let doc;if(local)doc=LOCAL.periodes[C.id+'/'+mois+'_'+src];else{const q=await db.collection('clients').doc(C.id).collection('periodes').doc(mois+'_'+src).get();doc=q.exists?q.data():null}
+  if(!doc||!doc.tx[i])throw new Error('transaction introuvable');fn(doc.tx[i]);doc.updated=new Date().toISOString();
+  if(local)LOCAL.periodes[C.id+'/'+mois+'_'+src]=doc;else await db.collection('clients').doc(C.id).collection('periodes').doc(mois+'_'+src).set(doc)}
+/* ---------- révision du mois : un mois révisé reste tel quel; le modifier demande une confirmation et retire la révision ---------- */
+const revTxt=r=>`Révisé le ${new Date(r.le).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}${r.par?' par '+r.par:''}`;
+function revUI(){const b=$('pRev');if(!b)return;const ok=P&&!P.multi&&P.tx.length;b.hidden=!ok;$('pRevI').textContent='';if(!ok)return;
+  if(P.revise){b.textContent='Retirer la révision';$('pRevI').innerHTML=`<span class="pill ok">✓ ${esc(revTxt(P.revise))}</span>`}else b.textContent='✓ Marquer ce mois révisé'}
+function revOk(){if(!P||P.multi||!P.revise)return true;if(!confirm(`${moisLbl(P.mois)} (${P.src}) : ${revTxt(P.revise)}.\n\nModifier quand même? Le mois devra être révisé de nouveau.`))return false;
+  audit('Modification d’un mois révisé',`${moisLbl(P.mois)} · ${P.src} (${revTxt(P.revise)}) : révision retirée`);P.revise=null;revUI();savePer();return true}
 function savePer(){if(!P)return;LED=null;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
   pTimer=null;enforceLock(P);if(P.multi){flushMulti();return}
-  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},verif:P.verif||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{})})),n:P.tx.length,todo:P.tx.filter(aCl).length,updated:new Date().toISOString()};
+  const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},verif:P.verif||{},...(P.revise?{revise:P.revise}:{}),tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{}),...(t.pj?.length?{pj:t.pj}:{})})),n:P.tx.length,todo:P.tx.filter(aCl).length,updated:new Date().toISOString()};
   const pid=P.mois+'_'+P.src;
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;setSave('Enregistré (session seulement)');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}return}
   pWriting=pWriting.then(()=>db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(snap)).then(()=>{setSave('Enregistré');if((C.last||'')<P.mois){C.last=P.mois;saveClient()}}).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true));
@@ -1140,9 +1172,9 @@ async function iaReclasser(a){const refs=[...new Set(a.refs||[])];if(!refs.lengt
   const why=('Reclassé : '+(a.raison||'demande à l’assistant')).slice(0,140);let n=0,ferme=0;const per=new Map(),byJe=new Map();
   refs.forEach(r=>{const[k,x,y]=r.split(':');if(k==='R')(per.get(x)||per.set(x,[]).get(x)).push(+y);else if(k==='J')(byJe.get(x)||byJe.set(x,[]).get(x)).push(+y)});
   for(const[pid,Is]of per){const set=t=>{if(lk(t.date)){ferme++;return}audit('Transaction reclassée',`${txTxt(t)} : ${t.acct} → ${a.compte} ${accName(String(a.compte))}${typeof a.taxable==='boolean'&&a.taxable!==!!t.tax?`, taxes ${a.taxable?'cochées':'décochées'}`:''} (${a.raison||'assistant'})`);Object.assign(t,{acct:String(a.compte),st:'manuel',why,unk:false});if(typeof a.taxable==='boolean')t.tax=a.taxable;n++};
-    if(P&&P.mois+'_'+P.src===pid){Is.forEach(i=>P.tx[i]&&set(P.tx[i]));savePerNow();continue}
+    if(P&&P.mois+'_'+P.src===pid){Is.forEach(i=>P.tx[i]&&set(P.tx[i]));if(P.revise){audit('Mois révisé modifié',`${moisLbl(P.mois)} · ${P.src} : révision retirée`);P.revise=null}savePerNow();continue}
     let doc;if(local)doc=LOCAL.periodes[C.id+'/'+pid];else{const q=await db.collection('clients').doc(C.id).collection('periodes').doc(pid).get();doc=q.exists?q.data():null}
-    if(!doc)continue;Is.forEach(i=>doc.tx[i]&&set(doc.tx[i]));doc.todo=doc.tx.filter(aCl).length;doc.updated=new Date().toISOString();
+    if(!doc)continue;Is.forEach(i=>doc.tx[i]&&set(doc.tx[i]));if(doc.revise){audit('Mois révisé modifié',`${pid} : révision retirée`);delete doc.revise}doc.todo=doc.tx.filter(aCl).length;doc.updated=new Date().toISOString();
     if(local)LOCAL.periodes[C.id+'/'+pid]=doc;else await db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(doc)}
   for(const[id,Ks]of byJe){const j=JE.find(x=>x.id===id);if(!j)continue;if(lk(j.date)){ferme+=Ks.length;continue}const{id:_,...d}=j;Ks.forEach(k=>audit('Écriture modifiée',`${j.date} ${j.ref||''} ${j.desc||''} : ligne ${d.lines[k]?.a} → ${a.compte} (${a.raison||'assistant'})`));d.lines=d.lines.map((l,k)=>Ks.includes(k)?{...l,a:String(a.compte)}:l);d.updated=new Date().toISOString();n+=Ks.length;
     if(local){LOCAL.je[C.id+'/'+id]=d}else await(await jeCol()).doc(id).set(d)}
@@ -1200,7 +1232,7 @@ window.addEventListener('popstate',async()=>{const h=parseHash(),{c,t}=h;NAVQ=tr
   try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t);await navRest(h)}}else{if(tab!==t)setTab(t);await navRest(h)}}finally{NAVQ=false}});
 {const h=parseHash();if(h.c)PENDING=h}
 function savePerNow(){if(pTimer){clearTimeout(pTimer);pTimer=null;enforceLock(P);P.multi?flushMulti():savePerFlush(P)}}
-function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},verif:p.verif||{},tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{})})),n:p.tx.length,todo:p.tx.filter(aCl).length,updated:new Date().toISOString()};
+function savePerFlush(p){const pid=p.mois+'_'+p.src;const snap={mois:p.mois,src:p.src,statut:p.statut||'en cours',exported:p.exported||'',chk:p.chk||{},verif:p.verif||{},...(p.revise?{revise:p.revise}:{}),tx:p.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{}),...(t.pj?.length?{pj:t.pj}:{})})),n:p.tx.length,todo:p.tx.filter(aCl).length,updated:new Date().toISOString()};
   if(local){LOCAL.periodes[C.id+'/'+pid]=snap;return}const cid=C.id;pWriting=pWriting.then(()=>db.collection('clients').doc(cid).collection('periodes').doc(pid).set(snap)).catch(()=>{})}
 function fillSelects(){
   $('pSrc').innerHTML=srcAccounts().map(([n,t])=>`<option value="${esc(n)}">${esc(n+' '+t)}</option>`).join('');
@@ -1215,7 +1247,7 @@ async function openPeriod(){
     else{const s=await db.collection('clients').doc(C.id).collection('periodes').doc(mois+'_'+src).get();d=s.exists?s.data():null}}
   catch(e){msg('Impossible de lire cette période pour le moment.',true)}
   if(P.mois!==mois||P.src!==src)return;
-  if(d){P.statut=d.statut;P.exported=d.exported;P.chk=d.chk||{};P.verif=d.verif||{};P.tx=(d.tx||[]).map(t=>({...t,id:++seq}));snapLock();reclass();if(autoMatch())savePer()}
+  if(d){P.statut=d.statut;P.exported=d.exported;P.chk=d.chk||{};P.verif=d.verif||{};P.revise=d.revise||null;P.tx=(d.tx||[]).map(t=>({...t,id:++seq}));snapLock();reclass();if(autoMatch())savePer()}
   {const att=relAttente(src,mois);if(att.length){const r=mergeInto(P,att);LED=null;if(r.added){msg(`${r.added} transaction(s) mises de côté lors d’un relevé précédent (chevauchement d’exercice) ajoutées à ce mois.`);savePer()}}}
   if(!d)snapLock();
   idFilter=null;AIITEMS=[];PREV=[];
@@ -1252,10 +1284,10 @@ async function openRange(){let f=$('rFrom').value,t=$('rTo').value;const src=$('
   msg(`${P.tx.length} transaction(s) de ${moisLbl(months[0])} à ${moisLbl(months[months.length-1])}, sur ${P.parts.filter(p=>p.exists).length} mois avec des données. Les modifications sont enregistrées dans chaque mois.`);render()}
 
 /* ---------- onglets ---------- */
-const CFG=['set','plan','rules','links','per'],PGT={home:['Accueil','Où en est le dossier et ce qu’il reste à faire.'],rev:['Transactions','Déposez un relevé, puis classez les transactions du mois.'],inv:['Factures','Comptes clients et fournisseurs.'],je:['Écritures de journal','Ajustements, amortissement et soldes d’ouverture.'],rec:['Conciliation bancaire','Comparez les livres aux soldes des relevés.'],rep:['Rapports','Bilan, résultats, grand livre et autres rapports.'],mis:['Mission de compilation','Tout le dossier de fin d’exercice, étape par étape.'],pay:['Paie','Salaire de l’actionnaire et des employés : retenues, cotisations et DAS.'],exp:['Export Sage 50','Le fichier d’import des écritures pour Sage 50.']};
+const CFG=['set','plan','rules','links','per'],PGT={home:['Accueil','Où en est le dossier et ce qu’il reste à faire.'],rev:['Transactions','Déposez un relevé, puis classez les transactions du mois.'],inv:['Factures','Comptes clients et fournisseurs.'],je:['Écritures de journal','Ajustements, amortissement et soldes d’ouverture.'],rec:['Conciliation bancaire','Comparez les livres aux soldes des relevés.'],rep:['Rapports','Bilan, résultats, grand livre et autres rapports.'],mis:['Mission de compilation','Tout le dossier de fin d’exercice, étape par étape.'],pay:['Paie','Salaire de l’actionnaire et des employés : retenues, cotisations et DAS.'],exp:['Archive et export','L’archive PDF du dossier, et l’export vers Sage 50 s’il est activé dans Paramètres.']};
 function setTab(t){tab=t;const g=CFG.includes(t)?'set':t;document.querySelectorAll('#side [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g));document.querySelectorAll('#cfgNav [data-t]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
   $('cfgNav').hidden=g!=='set';const pt=PGT[g]||['Réglages','Plan comptable, règles, comptes liés, exercices et paramètres du dossier.'];$('pgTitle').textContent=pt[0];$('pgSub').textContent=pt[1];window.scrollTo?.(0,0);
-  $('tHome').hidden=t!=='home';if(t==='set')renderAudit();if(t==='home')renderHome();
+  $('tHome').hidden=t!=='home';if(t==='set'){renderAudit();renderUsers()}if(t==='home')renderHome();
   for(const[k,id]of[['exp','tExp'],['pay','tPay'],['rev','tRev'],['per','tPer'],['plan','tPlan'],['rules','tRules'],['links','tLinks'],['inv','tInv'],['rec','tRec'],['je','tJe'],['rep','tRep'],['mis','tMis'],['set','tSet']])$(id).hidden=k!==t;
   if(t==='mis')renderMis();
   if(t==='links')renderLinks();if(t==='je')renderJe();if(t==='rec')initRec();if(t==='inv')renderInv();if(t==='rep')initRep();
@@ -1297,11 +1329,11 @@ $('plist').onclick=e=>{const b=e.target.closest('button[data-m]');if(!b)return;$
 /* ---------- révision ---------- */
 function visible(){if(!P)return[];if(idFilter)return P.tx.filter(t=>idFilter.ids.has(t.id));const q=norm($('q').value);
   return P.tx.filter(t=>(filter==='all'||(filter==='todo'&&aCl(t))||(filter==='sug'&&t.st==='suggere')||(filter==='done'&&!aCl(t)&&t.st!=='suggere'))&&(!q||norm(t.desc).includes(q)||String(t.acct).includes(q)))}
-function render(){
+function render(){try{revUI()}catch(e){}
   const tx=P?P.tx:[];const v=visible();
   $('tb').innerHTML=v.length?v.map(t=>`<tr class="${t.st}" data-id="${t.id}">
     <td><input type="checkbox" data-k="sel" aria-label="Sélectionner" ${SEL.has(t.id)?'checked':''}${lk(t.date)?' disabled':''}></td>
-    <td class="d">${esc(t.date)}</td><td>${esc(t.desc)}<div class="why">${esc(t.why||'')}</div></td>
+    <td class="d">${esc(t.date)}</td><td>${esc(t.desc)}${t.pj?.length?` <span title="${esc(t.pj.map(p=>p.n).join(', '))}">${t.pj.map(p=>`<a href="#" data-pjo="${esc(p.c)}" style="text-decoration:none">📎</a>`).join('')}</span>`:''}<div class="why">${esc(t.why||'')}</div></td>
     <td class="num ${t.amt>0?'pos':''}">${esc(fmt(t.amt))}</td>
     <td><select data-k="acct" aria-label="Compte"${lk(t.date)?' disabled title="Exercice fermé"':''}>${optsSel(t.acct)}</select></td>
     <td><input type="checkbox" data-k="tax" aria-label="Taxes incluses" ${t.tax?'checked':''}${lk(t.date)?' disabled':''}></td></tr>`).join('')
@@ -1346,6 +1378,7 @@ function showToast(html,acts){const el=$('toast');el.innerHTML=html;el.classList
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('on'),14000)}
 $('tb').addEventListener('change',e=>{
   const tr=e.target.closest('tr');if(!tr)return;const t=P.tx.find(x=>x.id==tr.dataset.id);if(!t)return;
+  if(e.target.dataset.k!=='sel'&&!revOk()){render();return}
   if(e.target.dataset.k==='sel'){e.target.checked?SEL.add(t.id):SEL.delete(t.id);renderBulk();return}
   if(e.target.dataset.k==='tax'){audit('Taxes modifiées',`${txTxt(t)} : taxes ${e.target.checked?'cochées':'décochées'}`);t.tax=e.target.checked;if(t.st==='auto'){t.st='manuel';t.why='Ajusté à la main'}render();savePer();return}
   if(e.target.value==='__new'){e.target.value=t.acct;newAccount(t);return}
@@ -1458,6 +1491,7 @@ function mergeInto(p,list){
     const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
   p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   if(added&&p.statut==='importée')p.statut='en cours';
+  if(added&&p.revise){audit('Mois révisé modifié',`${moisLbl(p.mois)} · ${p.src} : ${added} transaction(s) ajoutée(s), révision retirée`);p.revise=null}
   if(MSTAT){MSTAT.added+=added;MSTAT.dup+=dup}
   return {added,dup}}
 async function readPeriod(m,src){if(local)return LOCAL.periodes[C.id+'/'+m+'_'+src]||null;const s=await db.collection('clients').doc(C.id).collection('periodes').doc(m+'_'+src).get();return s.exists?s.data():null}
@@ -1733,7 +1767,7 @@ $('bulkX').onclick=()=>{SEL.clear();render()};
 $('bulkDel').onclick=e=>confirm2(e.currentTarget,'',()=>{const n=SEL.size;P.tx.filter(t=>SEL.has(t.id)&&t.inv).forEach(t=>{const iv=INV.find(i=>i.id===t.inv);if(iv){delete iv.pay;saveInv(iv).catch(()=>{})}});
   P.tx=P.tx.filter(t=>!SEL.has(t.id));SEL.clear();LED=null;render();savePer();msg(`${n} transaction(s) supprimée(s).`);$('bulkDel').textContent='Supprimer'});
 $('bulkAcct').onchange=()=>{if($('bulkAcct').value==='__new')newAccount(null,no=>{$('bulkAcct').dataset.v='';renderBulk();$('bulkAcct').value=no||''})};
-$('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}
+$('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}if(!revOk())return;
   const sel=P.tx.filter(t=>SEL.has(t.id));audit('Classement en lot',`${sel.length} transaction(s) → ${a} ${accName(a)}${tx!==''?(tx==='1'?', taxes cochées':', taxes décochées'):''} : ${sel.slice(0,6).map(txTxt).join(' · ')}${sel.length>6?' …':''}`);sel.forEach(t=>{Object.assign(t,{acct:a,st:'manuel',why:'Classé en lot',unk:false});if(tx!=='')t.tax=tx==='1'});
   SEL.clear();render();savePer();
   const keys=[...new Set(sel.map(t=>keyOf(t.desc)).filter(Boolean))];
@@ -1782,6 +1816,7 @@ function afterInv(){INV.sort((a,b)=>b.date.localeCompare(a.date));if(P&&matchInv
 $('invList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.ie){invOpen(INV.find(i=>i.id===b.dataset.ie));return}
   if(b.dataset.iu){const i=INV.find(x=>x.id===b.dataset.iu);if(i){delete i.pay;saveInv(i);renderInv()}return}
+  if(b.dataset.del?.startsWith('inv-')&&!cpaSeul(null))return;
   if(b.dataset.del?.startsWith('inv-'))confirm2(b,'',async()=>{const id=b.dataset.del.slice(4);{const iv=INV.find(x=>x.id===id);if(iv)audit('Facture supprimée',`${iv.type==='achat'?'Achat':'Vente'} ${iv.no||''} ${iv.tiers} ${iv.date} ${fmt(iv.total||0)}`)}try{if(local)delete LOCAL.inv[C.id+'/'+id];else await(await invCol()).doc(id).delete()}catch(err){}INV=INV.filter(i=>i.id!==id);if(P&&P.tx.some(t=>t.inv===id)){matchInvoices(P.tx);render();savePer()}LED=null;renderInv()})});
 async function readInvoice(f,type){let text='',imgs=null;
   if(/\.pdf$/i.test(f.name))text=(await pdfPages(f)).join('\n\n').slice(0,12000);
@@ -1930,9 +1965,11 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   const tr=t=>`<tr${t[2]?` class="${t[2]}"`:''}>${t[0]}</tr>`;
   const link=a=>a===C.tr&&todo?`<a data-gl="${esc(a)}" style="color:var(--claret);font-weight:600" title="${todo} transaction(s) à régulariser : cliquez pour les voir">${esc(a)} ${esc(accName(a))} · à régulariser</a>`:`<a data-gl="${esc(a)}">${esc(a)} ${esc(accName(a))}</a>`;
   let h='',warn=todo&&REP==='gl'&&$('repAcc').value===C.tr?`<p class="note">${todo} transaction(s) au compte transitoire ${esc(C.tr)} dans cette période, à régulariser.</p><div class="row" style="margin:-4px 0 10px"><button class="sm pri" data-askcli>Demander les détails au client</button><button class="sm" data-ansimp>Importer les réponses du client</button></div>`:'';
-  if(REP==='bs'||REP==='is'){const nC=+$('repCmp').value||0,[exD]=exRange(),cur={B:balances(E,null,t),I:balances(E,f||exD,t)};cur.ni=[...cur.I].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
-    const cols=[{t,f,...cur}];for(let k=1;k<=nC;k++){const tk=shiftY(t,k),fk=shiftY(f||exD,k);cols.push({t:tk,f:fk,...(colBal(E,fk,tk)||{})})}
-    const M=REP==='bs'?'B':'I',ok=c=>!!c[M],head=`<tr class="grp"><td></td>${cols.map(c=>`<td class="num">${esc(REP==='bs'?c.t:(c.f+' au '+c.t))}${ok(c)?'':'<br><small>non disponible</small>'}</td>`).join('')}</tr>`;
+  if(REP==='bs'||REP==='is'||REP==='mo'){const MO=REP==='mo',nC=MO?0:+$('repCmp').value||0,[exD,exF]=exRange(),cur={B:balances(E,null,t),I:balances(E,f||exD,t)};cur.ni=[...cur.I].filter(([a])=>+String(a)[0]>=4).reduce((s,[,c])=>s-c,0);
+    let cols=[{t,f,...cur}];for(let k=1;k<=nC;k++){const tk=shiftY(t,k),fk=shiftY(f||exD,k);cols.push({t:tk,f:fk,...(colBal(E,fk,tk)||{})})}
+    if(MO){const d0=(f||exD),d1=(t||exF);cols=[];if(d0&&d1){for(let m=d0.slice(0,7);m<=d1.slice(0,7)&&cols.length<13;){const[y,mm]=m.split('-').map(Number);const fin=new Date(y,mm,0).getDate();const a=m+'-01'<d0?d0:m+'-01',b=`${m}-${String(fin).padStart(2,'0')}`>d1?d1:`${m}-${String(fin).padStart(2,'0')}`;cols.push({f:a,t:b,I:balances(E,a,b),lbl:moisLbl(m)});m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,'0')}`}
+      cols.push({f:d0,t:d1,I:balances(E,d0,d1),lbl:'Total'})}}
+    const M=REP==='bs'?'B':'I',ok=c=>!!c[M],head=`<tr class="grp"><td></td>${cols.map(c=>`<td class="num">${esc(c.lbl||(REP==='bs'?c.t:(c.f+' au '+c.t)))}${ok(c)?'':'<br><small>non disponible</small>'}</td>`).join('')}</tr>`;
     const val=(c,a,sign)=>ok(c)?sign*(c[M].get(a)||0):null,cell=v=>`<td class="num">${v==null?'':fmtN(v)}</td>`;
     const sect=(title,first,sign)=>{const set=new Set(cols.flatMap(c=>ok(c)?[...c[M]].filter(([a,v])=>v&&first.includes(String(a)[0])&&(REP==='bs'||+String(a)[0]>=4)).map(([a])=>a):[]));
       const tot=cols.map(c=>ok(c)?0:null);let x=`<tr class="sec"><td colspan="${cols.length+1}">${title}</td></tr>`;
@@ -1945,7 +1982,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
       h=`<h2>Bilan au ${esc(t)}</h2><table class="rep">${nC?head:''}${a}${row('tot','Total de l\'actif',ta)}${p}${row('sub','Total du passif',tp)}${c}${row('sub','Total de l\'avoir',tc)}${row('tot','Total du passif et de l\'avoir',pa)}</table>
         <p class="${okB?'ok-b':'bad-b'}">${okB?'Le bilan balance.':`Écart de ${fmtN(ta[0]-tp[0]-tc[0])} $ : vérifiez les soldes d'ouverture.`}</p>`}
     else{const[r,tr_]=sect('Revenus','4',-1),[d,td]=sect('Dépenses','56789',1);
-      h=`<h2>État des résultats du ${esc(f)} au ${esc(t)}</h2><table class="rep">${nC?head:''}${r}${row('sub','Total des revenus',tr_)}${d}${row('sub','Total des dépenses',td)}${row('tot','Bénéfice net (perte)',sub(tr_,td,-1))}</table>`}
+      h=`<h2>${MO?'Résultats par mois':'État des résultats'} du ${esc(f||cols[0]?.f||'')} au ${esc(t||cols[cols.length-1]?.t||'')}</h2>${MO?'<div class="scroll">':''}<table class="rep"${MO?' style="font-size:12px"':''}>${nC||MO?head:''}${r}${row('sub','Total des revenus',tr_)}${d}${row('sub','Total des dépenses',td)}${row('tot','Bénéfice net (perte)',sub(tr_,td,-1))}</table>${MO?'</div>':''}`}
     if(nC&&cols.slice(1).some(c=>!ok(c)))h+=`<p class="note">Les années sans données dans ce dossier (ni exercice ni soldes d’ouverture correspondants) sont indiquées « non disponible ».</p>`}
   if(REP==='tb'){const B=balances(E,null,t);const[exD]=exRange();const I=balances(E,f||exD,t);let D=0,K=0,x='';
     const all=new Map([...[...B].filter(([a])=>+String(a)[0]<4),...[...I].filter(([a])=>+String(a)[0]>=4)]);
@@ -1982,17 +2019,21 @@ async function drwOpen(k){const[t,a,b]=k.split('|');const el=$('txDrw');el.hidde
   if(t==='R'){const[mois,...rest]=a.split('_'),src=rest.join('_'),i=+b;let doc;
     if(P&&!P.multi&&P.mois===mois&&P.src===src)doc={tx:P.tx};else{try{doc=await readPeriod(mois,src)}catch(e){}}
     const x=doc?.tx?.[i];if(!x){el.innerHTML=head('Transaction introuvable','Rouvrez le rapport.')+'';$('drwX').onclick=drwClose;return}
-    DRW.x={...x};const ferme=lk(x.date),p=keyOf(x.desc);
+    DRW.x={...x};DRW.rev=(P&&!P.multi&&P.mois===mois&&P.src===src)?P.revise:doc.revise;const ferme=lk(x.date),p=keyOf(x.desc);
     el.innerHTML=head(x.desc,`${esc(x.date)} · Relevé ${esc(src)} ${esc(accName(src))} · ${esc(moisLbl(mois))}${x.why?`<br>${esc(x.why)}`:''}`,x.amt)+
       (ferme?'<p class="msg err">Exercice fermé : cette transaction ne peut plus être modifiée.</p>':
       `<label class="f">Compte${sel()}</label>
        <label class="row" style="gap:8px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="drwTax"${x.tax?' checked':''}> Taxes incluses (TPS/TVQ ventilées)</label>
        <label class="f">Note (facultatif, affichée sous la transaction)<input id="drwWhy" placeholder="ex. remboursement d’abonnement"></label>
        ${p?`<label class="row" style="gap:8px;align-items:flex-start;margin:4px 0 12px"><input type="checkbox" id="drwRule"> <span>Créer une règle : les prochaines transactions « ${esc(p)} » iront aussi dans ce compte.<br><small class="note">Laissez décoché pour une correction ponctuelle : seule cette transaction change.</small></span></label>`:''}
-       <div class="row" style="gap:8px"><button class="pri" id="drwOk">Enregistrer</button><button id="drwGo">Voir dans le mois →</button></div><p class="msg" id="drwMsg"></p>`);
+       <div class="row" style="gap:8px"><button class="pri" id="drwOk">Enregistrer</button><button id="drwGo">Voir dans le mois →</button></div><p class="msg" id="drwMsg"></p>`)+
+      `<h3 style="font-size:14px;margin:16px 0 2px">Pièces jointes</h3><div id="drwPj">${pjListe(x.pj,!ferme)}</div>${ferme?'':`<label class="sm" style="display:inline-block;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:6px 12px">Joindre une facture ou un reçu<input type="file" id="drwPjF" multiple accept=".pdf,.jpg,.jpeg,.png,.heic,.xlsx,.xls,.csv,.doc,.docx" hidden></label>`}<p class="note" id="drwPjM"></p>`;
     $('drwX').onclick=drwClose;if(ferme)return;$('drwAcc').value=x.acct;
+    const pjMaj=async fn=>{await majTx(mois,src,i,t=>{t.pj=fn(t.pj||[]);DRW.x.pj=t.pj});$('drwPj').innerHTML=pjListe(DRW.x.pj,true);LED=null};
+    $('drwPjF').onchange=async e=>{const F=[...e.target.files];e.target.value='';try{const L=await pjEnvoyer(F,t=>$('drwPjM').textContent=t);await pjMaj(p0=>[...p0,...L]);audit('Pièce jointe ajoutée',`${txTxt(x)} : ${L.map(p=>p.n).join(', ')}`);$('drwPjM').textContent=`✓ ${L.length} pièce(s) jointe(s).`}catch(err){$('drwPjM').textContent='Envoi impossible : '+err.message}};
+    $('drwPj').onclick=async e=>{const b=e.target.closest('[data-pjx]');if(!b)return;const k=+b.dataset.pjx,pj=(DRW.x.pj||[])[k];if(!pj||!confirm(`Retirer ${pj.n}?`))return;try{await pjMaj(p0=>p0.filter((_,j)=>j!==k));window.tlFichiers.retirer(pj.c).catch(()=>{});audit('Pièce jointe retirée',`${txTxt(x)} : ${pj.n}`)}catch(err){$('drwPjM').textContent=err.message}};
     $('drwGo').onclick=()=>{drwClose();goMois(mois,src,x.desc)};
-    $('drwOk').onclick=async()=>{const acc=$('drwAcc').value,tax=$('drwTax').checked;$('drwOk').disabled=true;
+    $('drwOk').onclick=async()=>{const acc=$('drwAcc').value,tax=$('drwTax').checked;if(DRW.rev&&!confirm(`${moisLbl(mois)} : ${revTxt(DRW.rev)}.\n\nModifier quand même? Le mois devra être révisé de nouveau.`))return;$('drwOk').disabled=true;
       try{await iaReclasser({refs:[`R:${mois}_${src}:${i}`],compte:acc,taxable:tax,raison:$('drwWhy').value.trim()||'correction depuis le rapport'});
         if($('drwRule')?.checked&&p){C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a:acc,t:tax});saveClient();renderRules();if(P)reclass()}
         LED=null;await runRep();$('drwMsg').className='msg';$('drwMsg').textContent=`✓ Enregistré : ${acc} ${accName(acc)}. Le rapport est à jour.`;setTimeout(()=>{if(DRW&&DRW.b===b)drwClose()},1400)}
@@ -2021,10 +2062,10 @@ $('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');i
     $('pMois').value=m;if(![...$('pSrc').options].some(x=>x.value===src))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(src)}">${esc(src)}</option>`);$('pSrc').value=src;
     filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()}});
 function repRows(){return[...$('repOut').querySelectorAll('tr')].map(r=>[...r.cells].map(c=>c.textContent.trim()))}
-const REPN={bs:'Bilan',is:'Etat des resultats',tb:'Balance de verification',gl:'Grand livre',jr:'Journal general',tx:'TPS-TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',gifi:'IGRF'};
+const REPN={bs:'Bilan',is:'Etat des resultats',mo:'Resultats par mois',tb:'Balance de verification',gl:'Grand livre',jr:'Journal general',tx:'TPS-TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',gifi:'IGRF'};
 async function repPdfBytes(){
   {if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
-    const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+    const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter',orientation:REP==='mo'?'landscape':'portrait'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
     const cl=t=>String(t||'').replace(/[   ]/g,' ').replace(/[✓✗→]/g,'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
     let y=42;doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(cl(C.nom),40,y);y+=14;doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(110);doc.text(`Produit le ${new Date().toLocaleDateString('fr-CA')} · Intranet Boujrad CPA Inc.`,40,y);doc.setTextColor(0);y+=18;
     const room=n=>{if(y+n>H-40){doc.addPage();y=42}};
@@ -2032,7 +2073,7 @@ async function repPdfBytes(){
       if(el.tagName==='H2'){room(30);doc.setFont('helvetica','bold');doc.setFontSize(12.5);doc.text(cl(el.textContent),40,y);y+=12;return}
       if(el.tagName==='P'){const t=cl(el.textContent);if(!t)return;doc.setFont('helvetica',el.querySelector('.bad-b,.ok-b')||el.className.includes('-b')?'bold':'normal');doc.setFontSize(9);const L=doc.splitTextToSize(t,W-80);room(L.length*11+6);doc.text(L,40,y+8);y+=L.length*11+8;return}
       const body=[...el.rows].map(r=>{const k=r.className;return[...r.cells].map(c=>({content:cl(c.querySelector('input')?.value||c.textContent),colSpan:c.colSpan,styles:{halign:c.classList.contains('num')?'right':'left',fontStyle:/sec|grp|sub|tot/.test(k)?'bold':'normal',cellPadding:{top:3,bottom:3,left:c.classList.contains('ind')?14:4,right:4},fillColor:/sec/.test(k)?[240,240,240]:false}}))});
-      doc.autoTable({startY:y,body,theme:'plain',margin:{left:40,right:40},styles:{fontSize:8.5,textColor:20},
+      doc.autoTable({startY:y,body,theme:'plain',margin:{left:40,right:40},styles:{fontSize:REP==='mo'?6.5:8.5,textColor:20},
         didDrawCell:d=>{const k=el.rows[d.row.index]?.className||'';if(/tot/.test(k)){doc.setDrawColor(0);doc.setLineWidth(.8);doc.line(d.cell.x,d.cell.y,d.cell.x+d.cell.width,d.cell.y);doc.line(d.cell.x,d.cell.y+d.cell.height-1,d.cell.x+d.cell.width,d.cell.y+d.cell.height-1);doc.line(d.cell.x,d.cell.y+d.cell.height+1,d.cell.x+d.cell.width,d.cell.y+d.cell.height+1)}else if(/sub/.test(k)){doc.setDrawColor(0);doc.setLineWidth(.5);doc.line(d.cell.x,d.cell.y,d.cell.x+d.cell.width,d.cell.y)}}});
       y=doc.lastAutoTable.finalY+14});
     const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(130);doc.text(`Page ${i} de ${n}`,W-40,H-22,{align:'right'})}
@@ -2040,8 +2081,8 @@ async function repPdfBytes(){
 $('repPdf').onclick=async()=>{if(!downloads){$('repMsg').textContent='Téléchargement indisponible dans cette vue.';return}$('repMsg').textContent='Préparation du PDF…';
   try{const r=await repPdfBytes();await downloads.save(r);$('repMsg').textContent='PDF enregistré.'}catch(e){$('repMsg').textContent=e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.'}};
 /* Envoyer le rapport affiché au client, en PDF */
-const REPT={bs:'Bilan',is:'État des résultats',tb:'Balance de vérification',gl:'Grand livre',jr:'Journal général',tx:'Sommaire TPS/TVQ',txd:'Détail TPS/TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',das:'Sommaire des DAS',gifi:'Codes IGRF'};
-const REPL={bs:'le bilan',is:'l’état des résultats',tb:'la balance de vérification',gl:'le grand livre',jr:'le journal général',tx:'le sommaire TPS/TVQ',txd:'le détail TPS/TVQ',ap:'les comptes fournisseurs',ar:'les comptes clients',das:'le sommaire des DAS',gifi:'les codes IGRF'};
+const REPT={bs:'Bilan',is:'État des résultats',mo:'Résultats par mois',tb:'Balance de vérification',gl:'Grand livre',jr:'Journal général',tx:'Sommaire TPS/TVQ',txd:'Détail TPS/TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',das:'Sommaire des DAS',gifi:'Codes IGRF'};
+const REPL={bs:'le bilan',is:'l’état des résultats',mo:'l’état des résultats par mois',tb:'la balance de vérification',gl:'le grand livre',jr:'le journal général',tx:'le sommaire TPS/TVQ',txd:'le détail TPS/TVQ',ap:'les comptes fournisseurs',ar:'les comptes clients',das:'le sommaire des DAS',gifi:'les codes IGRF'};
 $('repSend').onclick=async()=>{if(!window.tlSendEmail){$('repMsg').textContent='Envoi de courriel indisponible ici.';return}
   const f=$('repFrom').value,t=$('repTo').value,acc=REP==='gl'&&$('repAcc').value?` — compte ${$('repAcc').value} ${accName($('repAcc').value)}`:'';
   const per=f&&t?`du ${dLong(f)} au ${dLong(t)}`:t?`au ${dLong(t)}`:'';const quoi=(REPL[REP]||'le rapport')+acc;
@@ -2214,11 +2255,14 @@ $('ajeOut').addEventListener('click',async e=>{const b=e.target.closest('button'
   const doc={date:AJEP.f,ref:'AJE',desc:String(p.titre||'Régularisation de fin d’exercice').slice(0,120),type:'aje',ex:exOf(AJEP.f),lines:p.lignes,updated:new Date().toISOString()};
   if(b.dataset.ajeno!=null){p.etat='non';ajeRender();return}
   if(b.dataset.ajemod!=null){jeOpen({...doc});ajeMemo(p);return}
-  b.disabled=true;try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/j'+Date.now()]=doc}else await(await jeCol()).doc().set(doc);audit('Régularisation acceptée (AJE)',`${doc.date} ${doc.desc} : ${p.lignes.map(l=>`${l.a} ${l.d?'Dt '+fmt(l.d):'Ct '+fmt(l.c)}`).join(', ')}`);LED=null;p.etat='ok';ajeMemo(p);if(typeof renderJe==='function')renderJe();ajeRender()}
+  if(!cpaSeul(null))return;b.disabled=true;try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/j'+Date.now()]=doc}else await(await jeCol()).doc().set(doc);audit('Régularisation acceptée (AJE)',`${doc.date} ${doc.desc} : ${p.lignes.map(l=>`${l.a} ${l.d?'Dt '+fmt(l.d):'Ct '+fmt(l.c)}`).join(', ')}`);LED=null;p.etat='ok';ajeMemo(p);if(typeof renderJe==='function')renderJe();ajeRender()}
   catch(err){b.disabled=false;alert('Enregistrement impossible : '+(err.message||err))}});
-function jeOpen(j,tpl){jeEdit=j?.id||null;$('jeForm').hidden=false;$('jeErr').textContent='';$('jeDate').value=j?.date||exRange()[1]||'';$('jeRef').value=j?.ref||'';$('jeDesc').value=j?.desc||'';$('jeType').value=j?.type||'';
+let JEPJ=[];
+function jeOpen(j,tpl){jeEdit=j?.id||null;JEPJ=[...(j?.pj||[])];setTimeout(()=>{$('jePj').innerHTML=pjListe(JEPJ,true)},0);$('jeForm').hidden=false;$('jeErr').textContent='';$('jeDate').value=j?.date||exRange()[1]||'';$('jeRef').value=j?.ref||'';$('jeDesc').value=j?.desc||'';$('jeType').value=j?.type||'';
   const L=j?.lines?.length?j.lines:(tpl||[{},{}]);$('jeLines').innerHTML=L.map(l=>jeRow(l.a,l.d?(l.d/100).toFixed(2):'',l.c?(l.c/100).toFixed(2):'')).join('');jeBal();$('jeForm').scrollIntoView({behavior:'smooth',block:'nearest'})}
 $('jeNew').onclick=()=>jeOpen();
+$('jePjF').onchange=async e=>{const F=[...e.target.files];e.target.value='';try{const L=await pjEnvoyer(F,t=>$('jePjM').textContent=t);JEPJ=[...JEPJ,...L];$('jePj').innerHTML=pjListe(JEPJ,true);$('jePjM').textContent='Enregistrez l’écriture pour garder la pièce.'}catch(err){$('jePjM').textContent='Envoi impossible : '+err.message}};
+$('jePj').onclick=e=>{const b=e.target.closest('[data-pjx]');if(!b)return;JEPJ=JEPJ.filter((_,k)=>k!==+b.dataset.pjx);$('jePj').innerHTML=pjListe(JEPJ,true)};
 $('jePaie').onclick=()=>{const f=re=>findAcc(re)||'';jeOpen({ref:'PAIE',desc:'Paie de l’actionnaire — remplacez les montants par ceux du calcul de paie',lines:[
   {a:f(/SALAIRES/)},{a:f(/CHARGE DU RRQ|RRQ.*CHARGE/)},{a:f(/CHARGE DU RQAP/)},{a:f(/CHARGE DE A-?E|ASSURANCE-EMPLOI.*CHARGE/)},{a:f(/FSSQ|FSS/)},{a:f(/CNESST|CSST/)},
   {a:f(/RRQ A PAYER/)},{a:f(/RQAP A PAYER/)},{a:f(/ASSURANCE-EMPLOI A PAYER/)},{a:f(/IMPOT FEDERAL A PAYER/)},{a:f(/QUEBEC A PAYER/)},{a:f(/FSSQ A PAYER/)},{a:f(/CNESST A PAYER/)},{a:f(/PRETS DES PROPRIETAIRES|ACTIONNAIRE/)}]})};
@@ -2228,7 +2272,7 @@ $('jeLines').addEventListener('click',e=>{if(e.target.dataset.x!=null){e.target.
 $('jeCancel').onclick=()=>{$('jeForm').hidden=true};
 $('jeSave').onclick=async()=>{const date=$('jeDate').value;const lines=[...$('jeLines').querySelectorAll('tr')].map(r=>({a:r.querySelector('.jeA').value,d:cents(r.querySelector('.jeD').value),c:cents(r.querySelector('.jeC').value)})).filter(l=>l.a&&(l.d||l.c));
   if(!date){$('jeErr').textContent='Date requise.';return}if(lk(date)||(jeEdit&&lk(JE.find(x=>x.id===jeEdit)?.date))){$('jeErr').textContent='Cette date est dans un exercice fermé : rouvrez-le d’abord (Paramètres).';return}if(!jeBal()||lines.length<2){$('jeErr').textContent='L’écriture doit balancer (débits = crédits).';return}
-  const doc={date,ref:$('jeRef').value.trim().slice(0,20),desc:$('jeDesc').value.trim().slice(0,120),type:$('jeType').value,ex:exOf(date),lines,updated:new Date().toISOString()};
+  const doc={date,ref:$('jeRef').value.trim().slice(0,20),desc:$('jeDesc').value.trim().slice(0,120),type:$('jeType').value,ex:exOf(date),lines,...(JEPJ.length?{pj:JEPJ}:{}),updated:new Date().toISOString()};
   const jl=l=>l.map(x=>`${x.a} ${x.d?'Dt '+fmt(x.d):'Ct '+fmt(x.c)}`).join(', ');const old=jeEdit&&JE.find(x=>x.id===jeEdit);audit(old?'Écriture modifiée':'Écriture ajoutée',`${date} ${doc.ref} ${doc.desc}${doc.type==='aje'?' (AJE)':''} : ${old?jl(old.lines||[])+' → ':''}${jl(lines)}`);
   try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/'+(jeEdit||'j'+Date.now())]=doc}else{const col=await jeCol();await(jeEdit?col.doc(jeEdit):col.doc()).set(doc)}
     $('jeForm').hidden=true;LED=null;renderJe()}catch(e){$('jeErr').textContent='Enregistrement impossible.'}};
@@ -2237,6 +2281,7 @@ async function renderJe(){ouvShow();await loadJe();const[xd,xf]=exRange();const 
     :'<tr><td colspan="5" class="empty">Aucune écriture dans cet exercice.</td></tr>'}
 $('jeList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.je){jeOpen(JE.find(j=>j.id===b.dataset.je));return}
   if(b.dataset.del?.startsWith('je-')){if(lk(JE.find(j=>j.id===b.dataset.del.slice(3))?.date)){b.textContent='Exercice fermé';return}}
+  if(b.dataset.del?.startsWith('je-')&&!cpaSeul(null))return;
   if(b.dataset.del?.startsWith('je-'))confirm2(b,'',async()=>{const id=b.dataset.del.slice(3);{const j=JE.find(x=>x.id===id);if(j)audit('Écriture supprimée',`${j.date} ${j.ref||''} ${j.desc||''} : ${(j.lines||[]).map(x=>`${x.a} ${x.d?'Dt '+fmt(x.d):'Ct '+fmt(x.c)}`).join(', ')}`)}try{if(local)delete LOCAL.je[C.id+'/'+id];else await(await jeCol()).doc(id).delete()}catch(err){}LED=null;renderJe()})});
 
 /* ---------- comptes liés ---------- */
@@ -2347,12 +2392,15 @@ $('chatIn').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.met
 const arm={};function confirm2(btn,label,fn){if(arm[btn.id||btn.dataset.del]){delete arm[btn.id||btn.dataset.del];fn();return}
   const k=btn.id||btn.dataset.del;arm[k]=1;const old=btn.textContent;btn.textContent='Cliquez encore pour confirmer';setTimeout(()=>{if(arm[k]){delete arm[k];btn.textContent=old}},5000)}
 async function delPeriod(pid){if(monthLocked(pid.slice(0,7))){msg('Ce mois touche un exercice fermé : rouvrez l’exercice pour le modifier.',true);throw new Error('lock')}if(local){delete LOCAL.periodes[C.id+'/'+pid];return}await pWriting;await db.collection('clients').doc(C.id).collection('periodes').doc(pid).delete()}
-$('pClear').onclick=e=>confirm2(e.currentTarget,'',async()=>{if(!P)return;clearTimeout(pTimer);pTimer=null;const pid=P.mois+'_'+P.src;
+$('pRev').onclick=()=>{if(!P)return;if(P.revise){if(!confirm('Retirer la révision de ce mois?'))return;audit('Révision retirée',`${moisLbl(P.mois)} · ${P.src}`);P.revise=null}
+  else{const ouv=P.tx.filter(aCl).length;if(ouv&&!confirm(`${ouv} transaction(s) encore à classer. Marquer le mois révisé quand même?`))return;P.revise={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};audit('Mois révisé',`${moisLbl(P.mois)} · ${P.src} ${accName(P.src)}`)}
+  savePer();revUI()};
+$('pClear').onclick=e=>cpaSeul($('msg'))&&confirm2(e.currentTarget,'',async()=>{if(!P)return;clearTimeout(pTimer);pTimer=null;const pid=P.mois+'_'+P.src;
   try{audit('Période vidée',`${moisLbl(P.mois)} · ${P.src} ${accName(P.src)} · ${P.tx.length} transaction(s) retirée(s)`);await delPeriod(pid);P.tx=[];P.statut='en cours';AIITEMS=[];idFilter=null;render();msg(`Période ${moisLbl(P.mois)} vidée. Vous pouvez redéposer le relevé.`);setSave('Enregistré')}catch(err){msg('Effacement impossible pour le moment.',true)}
   $('pClear').textContent='Vider cette période'});
 $('plist').addEventListener('click',e=>{const b=e.target.closest('button[data-del]');if(!b)return;e.stopPropagation();
   confirm2(b,'',async()=>{try{await delPeriod(b.dataset.del);if(P&&P.mois+'_'+P.src===b.dataset.del){P.tx=[];P.statut='en cours';render()}loadPeriods()}catch(err){b.textContent='Erreur'}})},true);
-$('wipe').onclick=e=>confirm2(e.currentTarget,'',async()=>{if((C.ex||[]).some(x=>x.statut==='ferme')){$('wipeMsg').textContent='Des exercices sont fermés : rouvrez-les avant de tout effacer.';return}clearTimeout(pTimer);pTimer=null;$('wipeMsg').textContent='Effacement…';
+$('wipe').onclick=e=>cpaSeul($('wipeMsg'))&&confirm2(e.currentTarget,'',async()=>{if((C.ex||[]).some(x=>x.statut==='ferme')){$('wipeMsg').textContent='Des exercices sont fermés : rouvrez-les avant de tout effacer.';return}clearTimeout(pTimer);pTimer=null;$('wipeMsg').textContent='Effacement…';
   try{let ids=[];if(local)ids=Object.keys(LOCAL.periodes).filter(k=>k.startsWith(C.id+'/')).map(k=>k.slice(C.id.length+1));
     else{const sn=await db.collection('clients').doc(C.id).collection('periodes').get();ids=sn.docs.map(d=>d.id)}
     for(const id of ids)await delPeriod(id);
@@ -2438,7 +2486,7 @@ $('sSage').onchange=()=>{C.sage50=$('sSage').checked;sageUI();saveClient()};
 const sageUI=()=>document.body.classList.toggle('nosage',!C?.sage50);
 $('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.desc=$('sDesc').value.trim();C.profil={...(C.profil||{}),tx:$('sTx').checked,emp:$('sEmp').checked};C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
   $('cName').textContent=C.nom;reclass();saveClient();fillExSel();render();if(P&&P.tx.length)savePer();$('sMsg').textContent='Enregistré.'};
-let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
+let delArm=false;$('delC').onclick=()=>{if(!cpaSeul(null))return;if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
   C.deleted=true;saveClient();const i=CLIENTS.findIndex(c=>c.id===C.id);if(i>=0)CLIENTS[i].deleted=true;$('back').click()};
 
 /* ---------- exercices ---------- */
@@ -2477,13 +2525,25 @@ function renderExList(){const L=C.ex||[];
     :'<tr><td colspan="4" class="empty">Indiquez le début et la fin de l’exercice ci-dessus, puis Enregistrer.</td></tr>';
   const e=curEx();$('yearEnd').hidden=!e||e.statut==='ferme';$('exReopen').hidden=!e||e.statut!=='ferme';renderLk();if(tab==='set')renderAudit()}
 const lkRegle=x=>{if(x.statut==='ferme'||x.deverr)return false;const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));return!!(C.lkAvant&&x.deb<C.lkAvant)};
-$('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exopen],[data-exunlock],[data-exrelock]');if(!b)return;const id=b.dataset.exopen||b.dataset.exunlock||b.dataset.exrelock;const x=(C.ex||[]).find(y=>y.id===id);if(!x)return;
+$('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exopen],[data-exunlock],[data-exrelock]');if(!b)return;const id=b.dataset.exopen||b.dataset.exunlock||b.dataset.exrelock;const x=(C.ex||[]).find(y=>y.id===id);if(!x)return;if(!b.dataset.exrelock&&!cpaSeul($('yeMsg')))return;
   if(b.dataset.exrelock){delete x.deverr;lkJournal(`Exercice ${exLbl(x)} reverrouillé`);saveClient();fillExSel();LED=null;return}
   const ferme=x.statut==='ferme';if(!confirm(`Voulez-vous vraiment ${ferme?'rouvrir':'déverrouiller'} l’exercice ${exLbl(x)}?\n\nSi la T2 de cet exercice a déjà été produite, une modification changera des chiffres déjà déclarés.${ferme?'\nAprès vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.':'\nIl restera modifiable jusqu’à ce que vous cliquiez « Reverrouiller ».'}`))return;
   if(ferme){x.statut='ouvert';delete x.fermeLe}else x.deverr=true;lkJournal(`Exercice ${exLbl(x)} ${ferme?'rouvert':'déverrouillé temporairement'}`);saveClient();fillExSel();LED=null;if(P)openPeriod()});
+async function renderUsers(){const box=$('usrList');if(!box)return;if(!window.tlAdmin){$('usrPanel').hidden=true;return}
+  const admin=estCPA();$('usrInv').hidden=!admin;
+  try{const[M,I]=await Promise.all([window.tlAdmin.membres(),admin?window.tlAdmin.invitations():Promise.resolve([])]);const nA=M.filter(m=>m.role==='admin').length;
+    box.innerHTML=M.map(m=>`<tr><td>${esc(m.email)}${m.email===window.tlMoi?' <span class="note">(vous)</span>':''}</td><td>${admin&&!(m.role==='admin'&&nA<2)?`<select data-urole="${esc(m.user_id)}"><option value="membre"${m.role!=='admin'?' selected':''}>Technicien</option><option value="admin"${m.role==='admin'?' selected':''}>CPA (administrateur)</option></select>`:m.role==='admin'?'CPA (administrateur)':'Technicien'}</td><td>${admin&&m.email!==window.tlMoi?`<button class="sm danger" data-uout="${esc(m.user_id)}" data-mail="${esc(m.email)}">Retirer l’accès</button>`:''}</td></tr>`).join('')+
+      I.map(i=>`<tr><td>${esc(i.email)} <span class="pill todo">invitation en attente</span></td><td>${i.role==='admin'?'CPA (administrateur)':'Technicien'}</td><td><button class="sm" data-uinv="${esc(i.email)}">Annuler</button></td></tr>`).join('')}
+  catch(e){box.innerHTML=`<tr><td colspan="3" class="empty">Lecture impossible : ${esc(e.message||e)}</td></tr>`}}
+$('usrGo').onclick=async()=>{const m=$('usrMail').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)){$('usrMsg').textContent='Courriel invalide.';return}
+  try{await window.tlAdmin.inviter(m,$('usrRole').value);audit('Utilisateur invité',`${m} (${$('usrRole').value==='admin'?'CPA':'Technicien'})`);$('usrMail').value='';$('usrMsg').textContent=`✓ ${m} invité.`;renderUsers()}catch(e){$('usrMsg').textContent='Invitation impossible : '+e.message}};
+$('usrList').addEventListener('change',async e=>{const u=e.target.dataset.urole;if(!u)return;try{await window.tlAdmin.role(u,e.target.value);audit('Rôle modifié',`${e.target.closest('tr').cells[0].textContent} → ${e.target.value==='admin'?'CPA':'Technicien'}`);$('usrMsg').textContent='✓ Rôle modifié (effectif à sa prochaine connexion).';renderUsers()}catch(x){$('usrMsg').textContent='Modification impossible : '+x.message}});
+$('usrList').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.uout){if(!confirm(`Retirer l’accès de ${b.dataset.mail} à l’intranet?`))return;try{await window.tlAdmin.retirer(b.dataset.uout);audit('Accès retiré',b.dataset.mail);renderUsers()}catch(x){$('usrMsg').textContent=x.message}}
+  if(b.dataset.uinv){try{await window.tlAdmin.annuler(b.dataset.uinv);renderUsers()}catch(x){$('usrMsg').textContent=x.message}}});
 $('audQ').oninput=()=>renderAudit();
 $('audCsv').onclick=async()=>{if(!downloads)return;const q=x=>`"${String(x||'').replace(/"/g,'""')}"`;const csv='\ufeffQuand;Qui;Quoi;Détail\r\n'+AUDL.map(e=>[e.le,e.qui,e.quoi,e.detail].map(q).join(';')).join('\r\n');try{await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_piste_de_verification.csv`,data:new TextEncoder().encode(csv)})}catch(e){}};
-$('lkSave').onclick=()=>{const v2=false,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
+$('lkSave').onclick=()=>{if(!cpaSeul($('lkMsg')))return;const v2=false,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
   const raison='';if(moins&&!confirm('Vous réduisez la protection : des exercices déjà produits redeviendront modifiables. Continuer?')){renderLk();return}
   const avant=C.lkAvant?'avant le '+C.lkAvant:'sans date';C.lk2=v2;C.lkAvant=av;
   lkJournal(`Date de verrouillage : ${avant} → ${av?'avant le '+av:'aucune'}`);saveClient();fillExSel();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
@@ -2494,7 +2554,7 @@ function tbFor(E,x,o={}){const m=new Map(),add=(a,c)=>m.set(a,(m.get(a)||0)+c),r
   E.forEach(e=>{if(e.date>x.fin)return;if(ouv&&e.date<ouv.date)return;if(o.noAje&&e.aje&&e.date>=x.deb)return;
     e.lines.forEach(([a,c])=>add(+String(a)[0]>=4&&e.date<x.deb?re:a,c))});
   return m}
-$('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{await fermerEx(curEx());$('yearEnd').textContent='Fermer l’exercice affiché'});
+$('yearEnd').onclick=e=>{if(!cpaSeul($('yeMsg')))return;confirm2(e.currentTarget,'',async()=>{await fermerEx(curEx());$('yearEnd').textContent='Fermer l’exercice affiché'})};
 async function fermerEx(x,garder){if(!x){$('yeMsg').textContent='Indiquez d’abord les dates de l’exercice.';return}
   if(P)savePerNow();$('yeMsg').textContent='Calcul des soldes de clôture…';
   try{LED=null;const E=await loadLedger();const todo=E.filter(t=>t.todo&&t.date>=x.deb&&t.date<=x.fin).length;
@@ -2506,11 +2566,11 @@ async function fermerEx(x,garder){if(!x){$('yeMsg').textContent='Indiquez d’ab
     saveClient();if(!garder)useEx(n.id);
     $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')}
   catch(err){$('yeMsg').textContent='Calcul impossible.'}}
-$('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
+$('exReopen').onclick=e=>cpaSeul($('yeMsg'))&&confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
   $('yeMsg').textContent=`Exercice ${exLbl(x)} rouvert. Après vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.`;$('exReopen').textContent='Rouvrir l’exercice affiché'});
 $('exNew').onclick=async()=>{const L=C.ex||[],last=L[L.length-1];if(!last){$('yeMsg').textContent='Indiquez d’abord le début et la fin du premier exercice ci-dessus.';return}
   const vieux=L.slice(0,-1).filter(x=>x.statut!=='ferme');
-  if(last.statut!=='ferme'&&confirm(`Avant d’ouvrir le nouvel exercice : la T2 de l’exercice ${exLbl(last)} est-elle produite?${vieux.length?`\n\nÀ noter : ${vieux.map(exLbl).join(', ')} ${vieux.length>1?'sont':'est'} aussi encore ouvert${vieux.length>1?'s':''}. Si leur T2 est produite, fermez-les dans l’ordre (le plus ancien d’abord).`:''}\n\nOK = fermer cet exercice maintenant (ses soldes de clôture deviennent les soldes d’ouverture du nouvel exercice).\nAnnuler = le laisser ouvert pour l’instant.`)){await fermerEx(last);return}
+  if(last.statut!=='ferme'&&estCPA()&&confirm(`Avant d’ouvrir le nouvel exercice : la T2 de l’exercice ${exLbl(last)} est-elle produite?${vieux.length?`\n\nÀ noter : ${vieux.map(exLbl).join(', ')} ${vieux.length>1?'sont':'est'} aussi encore ouvert${vieux.length>1?'s':''}. Si leur T2 est produite, fermez-les dans l’ordre (le plus ancien d’abord).`:''}\n\nOK = fermer cet exercice maintenant (ses soldes de clôture deviennent les soldes d’ouverture du nouvel exercice).\nAnnuler = le laisser ouvert pour l’instant.`)){await fermerEx(last);return}
   const d=addDays(last.fin,1);const n={id:d,deb:d,fin:finOf(d),statut:'ouvert',ouv:null};C.ex.push(n);saveClient();useEx(n.id);$('yeMsg').textContent=`Exercice ${exLbl(n)} ajouté. Fermez le précédent pour reporter ses soldes.`};
 function snapLock(){if(P)P._lk=P.tx.filter(t=>lk(t.date)).map(t=>({...t}))}
 function enforceLock(p){if(!p||!p._lk)return;const snap=new Map(p._lk.map(t=>[t.id,t])),seen=new Set(),out=[];let ch=false;
@@ -3212,6 +3272,10 @@ async function arcBuild(exIds,withData,say){const orig=C.exCur,files=[],REPS=[['
       for(const sub of SUBS){if(local){const src=sub==='periodes'?LOCAL.periodes:sub==='ecritures'?(LOCAL.je||{}):sub==='missions'?(LOCAL.mis||{}):sub==='paies'?(LOCAL.pay||{}):(LOCAL.inv||{});one.clients[0][sub]=Object.entries(src).filter(([k])=>k.startsWith(C.id+'/')).map(([k,v])=>({id:k.split('/')[1],data:v}))}
         else one.clients[0][sub]=(await db.collection('clients').doc(C.id).collection(sub).get()).docs.map(d=>({id:d.id,data:d.data()}))}
       files.push(['Donnees/dossier-importable.json',JSON.stringify(one)])}
+    try{say('Piste de vérification…');await audFlush();const A=(await audLire()).sort((a,b)=>a.le.localeCompare(b.le));if(A.length){const q=v=>{v=String(v??'');return /[;"\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};files.push(['Piste_de_verification.csv','\ufeffQuand;Qui;Quoi;Détail\r\n'+A.map(e=>[e.le,e.qui,e.quoi,e.detail].map(q).join(';')).join('\r\n')])}}catch(e){}
+    if(window.tlFichiers){const L=[];try{const per=local?Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v):(await db.collection('clients').doc(C.id).collection('periodes').get()).docs.map(d=>d.data());
+        per.forEach(p=>(p.tx||[]).forEach(t=>(t.pj||[]).forEach(f=>L.push([`Pieces_jointes/${t.date} ${t.desc.replace(/[^\w .-]+/g,'_').slice(0,40)} - ${f.n.replace(/[^\w .-]+/g,'_')}`,f.c]))));(await loadJe()).forEach(j=>(j.pj||[]).forEach(f=>L.push([`Pieces_jointes/${j.date} ecriture ${String(j.ref||'').replace(/[^\w-]+/g,'_')} - ${f.n.replace(/[^\w .-]+/g,'_')}`,f.c])))}catch(e){}
+      for(const[k,[n,c]]of L.entries()){say(`Pièces jointes : ${k+1} sur ${L.length}…`);try{files.push([n,await window.tlFichiers.lire(c)])}catch(e){}}}
     files.push(['LISEZMOI.txt',`ARCHIVE DU DOSSIER — ${C.nom}\nProduite le ${new Date().toLocaleDateString('fr-CA')} par Boujrad CPA Inc.\n\nUn dossier par exercice, avec les rapports en PDF (prêts à imprimer) et, s'il y a lieu, le dossier de la mission de compilation.\n${withData?`\nDonnees/grand-livre-complet.csv : toutes les écritures comptables (s'ouvre dans Excel; s'importe dans tout logiciel comptable).\nDonnees/plan-comptable.csv : le plan comptable.\nDonnees/dossier-importable.json : le dossier complet dans un format ouvert, pour le reprendre dans le logiciel de Boujrad CPA Inc. ou le convertir pour un autre logiciel.\n`:''}`])}
   finally{useEx(orig,true);REP=keepREP;$('repFrom').value=keepF;$('repTo').value=keepT;$('repAcc').value=keepAcc;LED=null}
   return files}
@@ -3283,7 +3347,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
   const now=new Date().toISOString().slice(0,7),by=m=>L.filter(p=>p.mois===m),todo=ms.reduce((s,m)=>s+by(m).reduce((t,p)=>t+(+p.todo||0),0),0);
   $('navTodo').hidden=!todo;$('navTodo').textContent=todo;$('navTodo').title=`${todo} transaction(s) à classer dans l’exercice (tous les mois) : voyez les mois en rouge dans l’Accueil.`;
   $('hMonths').innerHTML=ms.map(m=>{const P_=by(m),n=P_.reduce((s,p)=>s+(+p.n||0),0),t=P_.reduce((s,p)=>s+(+p.todo||0),0),fut=m>now;
-    const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')&&C.sage50?'Importé dans Sage':'Classé';
+    const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.revise)?'Révisé ✓':P_.every(p=>p.statut==='importée')&&C.sage50?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
   {const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb)),vieux=L.slice(0,-2).filter(x=>x.statut!=='ferme');
