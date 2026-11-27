@@ -1666,7 +1666,8 @@ function tbFor(E,x,o={}){const m=new Map(),add=(a,c)=>m.set(a,(m.get(a)||0)+c),r
   E.forEach(e=>{if(e.date>x.fin)return;if(ouv&&e.date<ouv.date)return;if(o.noAje&&e.aje&&e.date>=x.deb)return;
     e.lines.forEach(([a,c])=>add(+String(a)[0]>=4&&e.date<x.deb?re:a,c))});
   return m}
-$('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{const x=curEx();if(!x){$('yeMsg').textContent='Indiquez d’abord les dates de l’exercice.';return}
+$('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{await fermerEx(curEx());$('yearEnd').textContent='Fermer l’exercice affiché'});
+async function fermerEx(x,garder){if(!x){$('yeMsg').textContent='Indiquez d’abord les dates de l’exercice.';return}
   if(P)savePerNow();$('yeMsg').textContent='Calcul des soldes de clôture…';
   try{LED=null;const E=await loadLedger();const todo=E.filter(t=>t.todo&&t.date>=x.deb&&t.date<=x.fin).length;
     const B=tbFor(E,x),re=reAcct(),s={};B.forEach((c,a)=>{if(!c)return;const k=(+String(a)[0]>=4||isDiv(a))?re:a;s[k]=(s[k]||0)+c});Object.keys(s).forEach(k=>{if(!s[k])delete s[k]});
@@ -1674,13 +1675,14 @@ $('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{const x=curEx();if
     const nd=addDays(x.fin,1);let n=C.ex.find(y=>y.deb===nd);
     if(!n){n={id:nd,deb:nd,fin:finOf(nd),statut:'ouvert',ouv:null};C.ex.push(n);C.ex.sort((a,b)=>a.deb.localeCompare(b.deb))}
     const upd=n.statut!=='ferme';if(upd)n.ouv={date:nd,s};
-    saveClient();useEx(n.id);
+    saveClient();if(!garder)useEx(n.id);
     $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')}
-  catch(err){$('yeMsg').textContent='Calcul impossible.'}
-  $('yearEnd').textContent='Fermer l’exercice affiché'});
+  catch(err){$('yeMsg').textContent='Calcul impossible.'}}
 $('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
   $('yeMsg').textContent=`Exercice ${exLbl(x)} rouvert. Après vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.`;$('exReopen').textContent='Rouvrir l’exercice affiché'});
-$('exNew').onclick=()=>{const L=C.ex||[],last=L[L.length-1];if(!last){$('yeMsg').textContent='Indiquez d’abord le début et la fin du premier exercice ci-dessus.';return}
+$('exNew').onclick=async()=>{const L=C.ex||[],last=L[L.length-1];if(!last){$('yeMsg').textContent='Indiquez d’abord le début et la fin du premier exercice ci-dessus.';return}
+  const vieux=L.slice(0,-1).filter(x=>x.statut!=='ferme');
+  if(last.statut!=='ferme'&&confirm(`Avant d’ouvrir le nouvel exercice : la T2 de l’exercice ${exLbl(last)} est-elle produite?${vieux.length?`\n\nÀ noter : ${vieux.map(exLbl).join(', ')} ${vieux.length>1?'sont':'est'} aussi encore ouvert${vieux.length>1?'s':''}. Si leur T2 est produite, fermez-les dans l’ordre (le plus ancien d’abord).`:''}\n\nOK = fermer cet exercice maintenant (ses soldes de clôture deviennent les soldes d’ouverture du nouvel exercice).\nAnnuler = le laisser ouvert pour l’instant.`)){await fermerEx(last);return}
   const d=addDays(last.fin,1);const n={id:d,deb:d,fin:finOf(d),statut:'ouvert',ouv:null};C.ex.push(n);saveClient();useEx(n.id);$('yeMsg').textContent=`Exercice ${exLbl(n)} ajouté. Fermez le précédent pour reporter ses soldes.`};
 function snapLock(){if(P)P._lk=P.tx.filter(t=>lk(t.date)).map(t=>({...t}))}
 function enforceLock(p){if(!p||!p._lk)return;const snap=new Map(p._lk.map(t=>[t.id,t])),seen=new Set(),out=[];let ch=false;
@@ -2456,6 +2458,9 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';
     const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.statut==='importée')?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
+  {const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb)),vieux=L.slice(0,-2).filter(x=>x.statut!=='ferme');
+    if(vieux.length)add('g',`${vieux.length>1?`${vieux.length} exercices de plus de deux ans sont`:`L’exercice ${exLbl(vieux[0])} est`} encore ouvert${vieux.length>1?'s':''}`,`${vieux.map(exLbl).join(' · ')} : si la T2 est produite, c’est le temps de fermer — les chiffres déclarés seront protégés.`,'set','Fermer…');
+    const prec=L.length>=2?L[L.length-2]:null;if(prec&&prec.statut!=='ferme'&&!vieux.includes(prec)&&new Date()>new Date(addDays(prec.fin,180)+'T12:00'))add('g',`Exercice ${exLbl(prec)} encore ouvert`,'Plus de six mois après sa fin : si la T2 est produite, fermez-le pour protéger les chiffres déclarés.','set','Fermer…')}
   {const trn=ms.reduce((s,m)=>s+by(m).reduce((t,p)=>t+(+p.trn||0),0),0);if(trn){const m=ms.find(m=>by(m).some(p=>+p.trn));add('g',`Compte transitoire ${esc(C.tr)} : ${trn} transaction${trn>1?'s':''} à régulariser`,`Classées au transitoire en attendant une précision : ${[...new Set(ms.flatMap(m=>by(m).filter(p=>+p.trn).map(p=>`${moisLbl(m)} : ${p.trn}`)))].slice(0,8).join(' · ')}`,'mo:'+m+':'+(by(m).find(p=>+p.trn)?.src||''),'Voir')}}
   if(todo){const m=ms.find(m=>by(m).some(p=>+p.todo));add('r',`${todo} transaction${todo>1?'s':''} au compte transitoire`,`${[...new Set(ms.flatMap(m=>by(m).filter(p=>+p.todo).map(p=>`${moisLbl(m)} (${p.src} ${accName(p.src)}) : ${p.todo}`)))].slice(0,6).join(' · ')}`,'mo:'+m+':'+(by(m).find(p=>+p.todo)?.src||''),'Classer');T.push(`<li><i class="g"></i><div>Demander les détails au client<small>${(()=>{const d=(C.demandes||[]).at(-1);return d?`Dernière demande envoyée le ${new Date(d.date).toLocaleDateString('fr-CA',{day:'numeric',month:'long'})} à ${esc(d.to)} (${d.n} transaction${d.n>1?'s':''})`:'Envoie la liste des transactions à préciser par courriel'})()}</small></div><button class="sm" data-askcli>Envoyer</button></li>`)}
   const SA=new Set(C.sansAct||[]),miss=ms.filter(m=>m<now&&!by(m).length&&!SA.has(m));if(miss.length)T.push(`<li><i class="g"></i><div>${miss.length} mois sans relevé<small>${miss.slice(0,6).map(moisLbl).join(', ')+(miss.length>6?'…':'')}</small></div><div class="row" style="gap:6px;justify-content:flex-end"><button class="sm" data-sansact="${miss[0]}" title="Aucun relevé à déposer pour ce mois">Aucune activité en ${esc(moisLbl(miss[0]))}</button><button class="sm" data-go="mo:${miss[0]}:">Déposer</button></div></li>`);
