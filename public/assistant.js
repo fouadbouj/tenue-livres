@@ -64,7 +64,7 @@ async function tour(){BUSY=true;render();$('iaGo').disabled=true;
       if(outils.length&&k<3){const res=[];for(const o of outils.slice(0,3)){const f=A.outils[o?.type];{const x=f?await f(o).catch(e=>'Erreur : '+e.message):'Outil inconnu : '+o?.type;res.push(`Résultat de l’outil ${o?.type} :\n`+(typeof x==='string'?x:JSON.stringify(x)))}}
         if(r.message)LOG.push({r:'sys',t:r.message});LOG.push({r:'tool',t:res.join('\n\n').slice(0,40000)});render();continue}
       if(r?.message)LOG.push({r:'ai',t:String(r.message)});
-      for(const a of actions){if(!a||!A.actions[a.type])continue;if(A.actions[a.type].auto){try{const res=await A.actions[a.type].executer(a);LOG.push({r:'sys',t:res||'Fait'})}catch(e){LOG.push({r:'sys',t:'Impossible : '+e.message})}}else{try{if(A.actions[a.type].capture)a._avant=A.actions[a.type].capture(a)}catch(e){}LOG.push({r:'act',a,s:''})}}
+      for(const a of actions){if(!a||!A.actions[a.type])continue;if(A.actions[a.type].auto){try{const res=await A.actions[a.type].executer(a);LOG.push({r:'sys',t:res||'Fait'});try{A.apres&&A.apres()}catch(e){}}catch(e){LOG.push({r:'sys',t:'Impossible : '+e.message})}}else{try{if(A.actions[a.type].capture)a._avant=A.actions[a.type].capture(a)}catch(e){}LOG.push({r:'act',a,s:''})}}
       break}}
   catch(e){LOG.push({r:'ai',t:'Je n’ai pas pu répondre ('+(e.message||'erreur')+'). Réessayez dans un instant.'})}
   BUSY=false;save();render();$('iaGo').disabled=false;if(!VOIX)$('iaIn').focus();
@@ -92,7 +92,7 @@ function voix(on){if(on&&!SR){LOG.push({r:'sys',t:'La reconnaissance vocale n’
       REC.onend=()=>{if(VOIX&&!PARLE&&!BUSY)setTimeout(ecouter,250)};REC.onerror=e=>{if(e.error==='not-allowed'){voix(false);LOG.push({r:'sys',t:'Le micro est bloqué : autorisez-le dans le navigateur.'});render()}}}
     ecouter()}else{try{REC&&REC.abort()}catch(e){}speechSynthesis?.cancel();clearTimeout(minuterie);tampon=''}}
 function confirmerTout(oui){const P=LOG.map((m,i)=>[m,i]).filter(([m])=>m.r==='act'&&!m.s);if(!P.length)return false;
-  (async()=>{for(const[m]of P){if(!oui){m.s='no';continue}m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok'}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}}save();render();
+  (async()=>{for(const[m]of P){if(!oui){m.s='no';continue}m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok';try{A.apres&&A.apres()}catch(e){}}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}}save();render();
     const r=P.map(([m])=>m.s==='ok'?m.res:m.s==='no'?'Annulé':m.res).join('. ');if(VOIX)dire(r)})();return true}
 function envoyer(t){t=String(t||'').trim();if(!t||BUSY)return;LOG.push({r:'me',t});$('iaIn').value='';
   if(t.length<40&&(CONF.test(t)||ANNU.test(t))&&confirmerTout(CONF.test(t))){save();render();return}
@@ -113,7 +113,7 @@ function init(cfg){A={exemples:[],outils:{},actions:{},accueil:'Bonjour! Que pui
     $('iaLog').onclick=async e=>{const b=e.target.closest('button');if(!b)return;
       if(b.dataset.ex){envoyer(b.dataset.ex);return}
       if(b.dataset.no){LOG[+b.dataset.no].s='no';save();render();return}
-      if(b.dataset.ok){const m=LOG[+b.dataset.ok];m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok'}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}save();render()}}}
+      if(b.dataset.ok){const m=LOG[+b.dataset.ok];m.s='run';render();try{m.res=await A.actions[m.a.type].executer(m.a)||'Fait';m.s='ok';try{A.apres&&A.apres()}catch(e){}}catch(err){m.res='Impossible : '+(err.message||err);m.s='err'}save();render()}}}
   $('iaSub').textContent=A.nom;render();
   try{if(sessionStorage.getItem('ia-voix')==='1'&&SR){$('iaPan').hidden=false;$('iaPan').classList.add('mini');voix(true)}}catch(e){}}
 window.ASSISTANT={init,refresh:()=>render(),demander:t=>{const p=$('iaPan');if(!p)return;p.hidden=false;render();envoyer(t)}};

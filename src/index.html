@@ -988,9 +988,12 @@ function adepAssurer(){let a=adepAcc();if(a)return a;const pris=new Set(PLAN.map
 const VIR=/VIREMENT|TRANSFER|TRANSFERT|\bTFR\b|\bCHANGE\b|\bFX\b|PAIEMENT.{0,20}(VISA|CARTE|MASTERCARD|AMEX)|PAYMENT.{0,14}(THANK|RECEIVED|MERCI)|PAIEMENT MERCI|PAYPAL|WITHDRAWAL|RETRAIT|CONVERSION/;
 async function pairInterne(){if(!C)return 0;const L=await iaPeriodes();if(new Set(L.map(p=>p.src)).size<2)return 0;
   L.forEach(p=>{if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)p.tx=P.tx});
+  {const u0=L.filter(p=>devOf(p.src)==='USD').flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(u0.length)await tauxAssurer(u0[0],u0[u0.length-1])}
   /* réparation : chaque virement apparié doit avoir exactement un côté « déjà compté » (sinon il compte deux fois) */
   const ch=new Set();{const G=new Map();L.forEach(p=>(p.tx||[]).forEach(t=>{if(t.pair){(G.get(t.pair)||G.set(t.pair,[]).get(t.pair)).push({p,t,src:p.src})}}));
-    for(const[,X]of G){if(X.length===2){const[a,b]=X;const m=a.t.mirror?1:0+(b.t.mirror?1:0);if((a.t.mirror?1:0)+(b.t.mirror?1:0)===1)continue;
+    for(const[,X]of G){if(X.length===2&&X.some(x=>x.t.aConf)){const[a,b]=X,c=x=>devOf(x.src)==='USD'?(tauxDe(x.t.date)?x.t.amt*tauxDe(x.t.date):null):x.t.amt;const ca=c(a),cb=c(b);
+        if(a.t.date===b.t.date&&ca!=null&&cb!=null&&Math.abs(ca+cb)<=Math.abs(ca)*0.025){X.forEach(x=>delete x.t.aConf);ch.add(a.p);ch.add(b.p)}}
+      if(X.length===2){const[a,b]=X;const m=a.t.mirror?1:0+(b.t.mirror?1:0);if((a.t.mirror?1:0)+(b.t.mirror?1:0)===1)continue;
         const keep=devOf(a.src)!==devOf(b.src)?(devOf(a.src)==='USD'?b:a):(a.t.amt<0?a:b),mir=keep===a?b:a;
         Object.assign(keep.t,{acct:mir.src,mirror:false,st:'apparie',aConf:1});delete keep.t.mirror;Object.assign(mir.t,{acct:keep.src,mirror:true,st:'apparie'});ch.add(a.p);ch.add(b.p)}
       else if(X.length===1){const t=X[0].t;delete t.pair;delete t.mirror;Object.assign(t,{st:'transit',acct:C.tr,why:'Virement apparié dont le pendant a disparu : à reclasser'});ch.add(X[0].p)}}}
@@ -1002,7 +1005,7 @@ async function pairInterne(){if(!C)return 0;const L=await iaPeriodes();if(new Se
     const C_=pool.filter(b=>!b.t.pair&&b.src!==a.src&&b.t.amt>0&&b.c!=null&&dd(a.t.date,b.t.date)<=4&&(a.k||b.k)&&(devOf(a.src)===devOf(b.src)?b.t.amt===-a.t.amt:Math.abs(a.c+b.c)<=Math.abs(a.c)*0.04));
     if(!C_.length)continue;const meme=x=>devOf(x.src)===devOf(a.src)?0:1;const b=C_.sort((x,y)=>meme(x)-meme(y)||dd(a.t.date,x.t.date)-dd(a.t.date,y.t.date)||Math.abs(a.c+x.c)-Math.abs(a.c+y.c))[0];
     const keep=devOf(a.src)!==devOf(b.src)&&devOf(a.src)==='USD'?b:a,mir=keep===a?b:a,id='v'+Date.now().toString(36)+n;
-    Object.assign(keep.t,{acct:mir.src,tax:false,st:'apparie',unk:false,pair:id,why:`Virement entre vos comptes : ${mir.src} ${accName(mir.src)}, ${mir.t.date}`,...(devOf(a.src)!==devOf(b.src)||a.t.date!==b.t.date?{aConf:1}:{})});
+    Object.assign(keep.t,{acct:mir.src,tax:false,st:'apparie',unk:false,pair:id,why:`Virement entre vos comptes : ${mir.src} ${accName(mir.src)}, ${mir.t.date}`,...(a.t.date!==b.t.date||Math.abs(a.c+b.c)>Math.abs(a.c)*0.025?{aConf:1}:{})});
     Object.assign(mir.t,{acct:keep.src,tax:false,st:'apparie',unk:false,pair:id,mirror:true,why:`Déjà compté avec ${keep.src} ${accName(keep.src)} (${keep.t.date}) : virement entre vos comptes`});
     ch.add(a.p);ch.add(b.p);n++}
   for(const p of ch){p.updated=new Date().toISOString();p.todo=(p.tx||[]).filter(t=>isTr(t)&&!t.mirror).length;if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src){savePerNow();continue}
@@ -1246,6 +1249,8 @@ async function iaConciliation(o){await iaTx();if(!LED)LED=await loadLedger();con
     const o2=C.ouv,s0=o2&&S.find(s=>s.du===o2.date);out.push({compte:src+' '+accName(src),devise:usd?'USD':'CAD',ouverture:s0&&o2.s?{livres:iaMt(o2.s[src]||0),releve:iaMt(s0.sd)+(usd?' US$':'')}:null,
       solde_livres_fin:S.length?iaMt(balances(LED,null,S[S.length-1].au).get(src)||0):null,releves:rel,externes_total:iaMt(items.filter(t=>!t.own).reduce((a,t)=>a+t.amt,0))})}
   return out}
+/* après une modification (assistant, appariement…) : l'écran affiché se met à jour tout seul */
+function rafraichir(){if(!C)return;LED=null;try{if(tab==='rec')runRec(true);else if(tab==='rep')runRep(true);else if(tab==='je')renderJe();else if(tab==='home')renderHome().catch(()=>{});else if(tab==='set'){renderSettings();renderDev()}else if(tab==='rules')renderRules();else if(tab==='inv')renderInv();else if(tab==='rev'&&P)(P.multi?openRange():openPeriod())}catch(e){console.warn(e)}}
 function iaInit(){if(!window.ASSISTANT||!sampleFn||iaInit.ok)return;iaInit.ok=1;
   window.ASSISTANT.init({id:'compta',nom:'Comptabilité',ask:p=>sampleFn.json(p,{modelTier:'default'}),contexte:iaContexte,
     accueil:'Bonjour! Je peux passer des écritures, reclasser des transactions (déjà classées ou non, avec ou sans taxes), apparier des virements avec vos comptes liés, créer des règles de classement, ajouter des comptes, mettre à jour le profil du dossier (description, méthode, notes), répondre sur les soldes et ouvrir des rapports. Je vous montre toujours la modification avant de l’appliquer.',
@@ -1266,6 +1271,7 @@ Reclasser fonctionne aussi sur des transactions DÉJÀ classées, dans n'importe
 APPARIER un virement entre deux comptes du client (compte personnel du propriétaire, autre compte de banque, carte de crédit — voir « Comptes liés ») : trouve la transaction (outil chercher avec le montant), repère dans les comptes liés le montant opposé à quelques jours près, puis reclasser vers le compte de ce compte lié avec la raison « Apparié : <nom du compte lié>, <date> ». S'il n'y a pas de correspondance, dis-le et propose le compte le plus probable (avance de l'actionnaire, etc.).
 Pour reclasser « toutes les transactions X », cherche d'abord (ou prends celles du contexte), puis propose une seule action reclasser avec toutes les refs. Si c'est récurrent, propose aussi une règle. Les montants des écritures sont en dollars. Les demandes peuvent être dictées à voix haute : un numéro de compte peut arriver coupé (« 10 60 », « 10,60 » = compte 1060). Les résultats d'outils arrivent en JSON : lis-les directement, ne relance pas le même outil. Sois direct comme un comptable d'expérience : si la demande et l'écran (contexte) donnent déjà les comptes et le montant (ex. « l'écart de 0,03 $ du 1060 au BNR »), propose l'action tout de suite, sans outil. N'utilise un outil que s'il te manque une donnée, une seule fois, puis propose l'action. Réponds toujours avec le JSON demandé. N'utilise jamais un compte de titre ou de total (numéros ronds comme 4000 ou lignes TOTAL) : seulement les comptes de détail listés.`,
     outils:{chercher:iaChercher,conciliation:iaConciliation},
+    apres:rafraichir,
     actions:{
       ecriture:{titre:a=>`Écriture du ${a.date||'?'}${a.ref?' — '+a.ref:''}`,
         verifier:a=>{if(!C)return'Aucun dossier ouvert.';const L=a.lignes||[];if(!/^\d{4}-\d{2}-\d{2}$/.test(a.date||''))return'Date invalide.';if(lk(a.date))return'Cette date est dans un exercice fermé.';
