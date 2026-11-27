@@ -182,9 +182,9 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],immoOk:c.immoOk||{},attente:c.attente||[],attenteSt:c.attenteSt||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],immoOk:c.immoOk||{},verifTx:c.verifTx||{},attente:c.attente||[],attenteSt:c.attenteSt||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
-function saveClient(){const data=cleanClient(C);setSave('Enregistrement…');
+function saveClient(){LED=null;const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
   cWriting=cWriting.then(()=>db.collection('clients').doc(C.id).set(data)).then(()=>setSave('Enregistré')).catch(e=>setSave(e.code==='quota_exceeded'?'Base pleine : enregistrement impossible':'Erreur d’enregistrement',true))}
 let pTimer=null,pWriting=Promise.resolve();
@@ -829,9 +829,10 @@ $('ask').onclick=()=>askAI(false);
 /* ---------- points à vérifier ---------- */
 const EXEMPT=/ASSURANCE|FRAIS BANC|FRAIS DE BANQUE|INTERET|SALAIRE|IMMATRICUL|PERMIS|TAXES MUNICIPALES|TAXES FONCIERES|DONS|AMENDE|PENALITE|RETRAIT|ACTIONNAIRE|EMPRUNT|PRET/;
 const TAXABLE=new RegExp([CAT.carb,CAT.elec,CAT.tel,CAT.log,CAT.four,CAT.pub,CAT.veh].map(r=>r.source).join('|'));
-const BIGSKIP=/LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC|SOUS.?TRAIT|HONORAIRE|AVANCE|DIVIDENDE|INTERET|ASSURANCE|FRAIS BANCAIRE|COTISATION|TAXES|PERMIS|ABONNEMENT|TELECOM|ELECTRICITE|CARBURANT|PUBLICITE|REPAS|DEPLACEMENT|FORMATION|DONS?\b|SERVICES PROFESSIONNELS|CONSULTANT/;
+const BIGSKIP=/JURIDIQUE|LEGAL|AVOCAT|NOTAIRE|COMPTABILITE|LOYER|SALAIRE|REMBOURS|CARTE|EMPRUNT|PRET|TPS|TVQ|RETRAIT|ACTIONNAIRE|TRANSITOIRE|IMPOT|DAS|REVENU QUEBEC|SOUS.?TRAIT|HONORAIRE|AVANCE|DIVIDENDE|INTERET|ASSURANCE|FRAIS BANCAIRE|COTISATION|TAXES|PERMIS|ABONNEMENT|TELECOM|ELECTRICITE|CARBURANT|PUBLICITE|REPAS|DEPLACEMENT|FORMATION|DONS?\b|SERVICES PROFESSIONNELS|CONSULTANT/;
 /* « Dépense importante » : pas signalée quand une règle du client classe déjà ce fournisseur dans un compte qui ne peut pas être une immobilisation (ex. Marta → sous-traitance). Sans règle, ou vers un compte d’équipement, on signale. */
 const IMMO=/^(?!.*(LOCATION|LOYER|DENEIGEMENT|GESTION|CONCIERGERIE|BUANDERIE)).*(MATERIEL|EQUIPEMENT|OUTIL|\bMOBILIER\b|AMEUBLEMENT|ORDINATEUR|INFORMATIQUE|LOGICIEL|ENTRETIEN|REPARATION|AMELIORATION|RENOVATION|FOURNITURE|MATERIAUX|ACHAT|VEHICULE|CAMION|MACHIN|INSTRUMENT|APPAREIL|IMMOBILISATION|DIVERS|AUTRES? (DEPENSES|FRAIS))/;
+const PROF=/\b(AVOCATS?|NOTAIRES?|LAWYERS?|JURIDIQUE|LEGAL|CPA|COMPTABLES?|HUISSIER|ARPENTEUR|ACTUAIRE)\b/;
 const parRegle=t=>t.st==='auto'&&/^Règle du client/.test(t.why||'');
 /* Professions dont les services sont exonérés : sans réglage contraire, on suppose le client non inscrit à la TPS/TVQ. */
 const EXONERE=/\b(MEDECIN|DR|DRE|DOCTEUR|CLINIQUE MEDICALE|DENTISTE|PSYCHOLOGUE|PHYSIOTHERAPEUTE|CHIROPRATICIEN|OPTOMETRISTE|ORTHOPHONISTE|ERGOTHERAPEUTE|INFIRMIER|INFIRMIERE|SAGE-FEMME|AUDIOLOGISTE|PODIATRE|ACUPUNCTEUR|GARDERIE|CPE)\b/;
@@ -856,7 +857,7 @@ function checks(){
   for(const[a,l]of grp){const u=[...new Set(l)];if(l.length>=2||(Math.abs(a)>=50000&&Math.abs(a)%10000===0))add('moyen',`Virement récurrent ou rond : ${fmt(a)}${u.length>1?` × ${u.length}`:''}`,'Souvent un loyer, un salaire ou un remboursement de prêt. Demandez au client, classez-le, puis retenez la règle.',u)}
   const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3)dups.push([a,b])}
   dups.forEach(([a,b])=>add('moyen',`Doublon possible : ${a.desc}`,`${fmt(a.amt)} le ${a.date} et le ${b.date}. Double paiement?`,[a,b]));
-  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t))&&!(parRegle(t)&&!IMMO.test(nm(t)))&&!immoDejaOk(t));
+  const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t))&&!(parRegle(t)&&!IMMO.test(nm(t)))&&!PROF.test(norm(t.desc))&&!immoDejaOk(t));
   big.forEach(t=>add('moyen',`Dépense importante : ${t.desc} (${fmt(t.amt)})`,'Plus de 1 500 $ : obtenez la facture et vérifiez si c’est une immobilisation à amortir plutôt qu’une dépense.',[t]));
   const self=tx.filter(t=>t.acct===(t.src||P.src));if(self.length)add('haut',`Classé dans le compte du relevé lui-même : ${self.length}`,`Ces transactions vont dans ${P.src} ${accName(P.src)}, le compte de banque du relevé : l'écriture s'annule. Choisissez le bon compte.`,self);
   const hdr=tx.filter(t=>{const p=PLAN.find(q=>q[0]===t.acct);return p&&isHeader(p[0],p[1])});if(hdr.length)add('haut',`Compte de titre ou de total : ${hdr.length}`,`Sage refuse les écritures dans ${[...new Set(hdr.map(t=>t.acct+' '+accName(t.acct)))].join(', ')}. Choisissez un compte détaillé.`,hdr);
@@ -879,11 +880,17 @@ let CHK=[],CHKV=false;
 const chkCle=(c,pre)=>(pre==='a'?'ia:':'')+c.title;
 const chkCat=c=>c.title.split(/\s[:(]/)[0].trim();
 const chkOff=c=>(C.chkOff||[]).includes(chkCat(c));
-const chkFait=k=>!!(P&&P.verif&&P.verif[k]);
-function itemHtml(c,i,pre){const k=chkCle(c,pre),v=chkFait(k),info=v?P.verif[k]:null;
+/* Points vérifiés : retenus au niveau du dossier, transaction par transaction (type de point + compte + date + montant + description).
+   Ils restent vérifiés en vue « Un mois » comme « Plusieurs mois », après un changement de page, et quand le compte du point change.
+   Une nouvelle transaction qui s'ajoute au point le fait revenir. */
+const vSig=t=>(t.src||P.src)+'|'+t.date+'|'+t.amt+'|'+norm(t.desc).slice(0,40);
+const vKeys=(c,pre)=>{const cat=(pre==='a'?'ia:':'')+chkCat(c);const L=P?P.tx.filter(t=>c.ids.includes(t.id)):[];return L.length?L.map(t=>cat+'|'+vSig(t)):[cat+'|'+(P?.src||'')+'|'+c.title]};
+const vInfo=(c,pre)=>{const V=C.verifTx||{},ks=vKeys(c,pre);if(ks.every(k=>V[k]))return V[ks[0]];return(P&&P.verif&&P.verif[chkCle(c,pre)])||null};
+const chkFait=(c,pre)=>!!vInfo(c,pre);
+function itemHtml(c,i,pre){const info=vInfo(c,pre),v=!!info;
   return `<li class="${v?'ok':c.lvl}"><div><strong>${esc(c.title)}</strong><span>${esc(c.detail)}</span>${v?`<small class="note" style="display:block;margin-top:2px">Vérifié le ${new Date(info.le).toLocaleDateString('fr-CA',{day:'numeric',month:'long',year:'numeric'})}${info.par?' par '+esc(info.par):''}</small>`:''}</div><div class="row" style="gap:6px;flex-wrap:nowrap">${c.ids.length?`<button class="sm" data-c="${pre}${i}">Voir</button>`:''}${c.lvl==='ok'?'':v?`<button class="sm" data-unv="${pre}${i}" title="Remettre dans les points à vérifier">↺ Remettre</button>`:`<button class="sm pri" data-vok="${pre}${i}" title="Point vérifié : le retirer de la liste">✓ Vérifié</button>${pre==='c'?`<button class="sm" data-mute="${esc(chkCat(c))}" title="Ne plus signaler ce type de point pour ce dossier" aria-label="Ne plus signaler ce type de point pour ce dossier">🔕</button>`:''}`}</div></li>`}
 function renderChecks(){CHK=checks();const all=[...CHK.map((c,i)=>[c,i,'c']),...AIITEMS.map((c,i)=>[c,i,'a'])].filter(([c,,p])=>c.lvl!=='ok'&&!(p==='c'&&chkOff(c)));
-  const vus=all.filter(([c,,p])=>chkFait(chkCle(c,p))),ouv=all.filter(([c,,p])=>!chkFait(chkCle(c,p)));
+  const vus=all.filter(([c,,p])=>chkFait(c,p)),ouv=all.filter(([c,,p])=>!chkFait(c,p));
   $('chkN').textContent=ouv.length;$('chkNA').textContent=ouv.length;$('chkNV').textContent=vus.length;$('chkVA').setAttribute('aria-pressed',!CHKV);$('chkVV').setAttribute('aria-pressed',CHKV);
   if(!P||!P.tx.length){$('chk').innerHTML='<li><div><span>Déposez un relevé pour voir les vérifications.</span></div></li>';$('aiBox').hidden=true}
   else if(CHKV){$('chk').innerHTML=(vus.length?vus.map(([c,i,p])=>itemHtml(c,i,p)).join(''):'<li><div><span>Aucun point vérifié pour cette période. Cliquez sur « ✓ Vérifié » dans un point pour l’y déplacer.</span></div></li>')+((C.chkOff||[]).length?`<li><div><strong>Types de points désactivés pour ce dossier</strong><span>${(C.chkOff||[]).map(k=>`${esc(k)} <a href="#" data-unmute="${esc(k)}">réactiver</a>`).join(' · ')}</span></div></li>`:'');$('aiBox').hidden=true}
@@ -894,7 +901,8 @@ $('chkVA').onclick=()=>{CHKV=false;renderChecks()};$('chkVV').onclick=()=>{CHKV=
 document.getElementById('chkPanel').addEventListener('click',e=>{const m=e.target.closest('[data-mute],[data-unmute]');if(!m)return;e.preventDefault();
   if(m.dataset.mute){if(!confirm(`Ne plus signaler « ${m.dataset.mute} » pour ce dossier? (Réactivable dans l’onglet Vérifiés.)`))return;C.chkOff=[...new Set([...(C.chkOff||[]),m.dataset.mute])]}else C.chkOff=(C.chkOff||[]).filter(k=>k!==m.dataset.unmute);saveClient();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const b=e.target.closest('button[data-vok],button[data-unv]');if(!b||!P)return;const k=b.dataset.vok||b.dataset.unv,c=k[0]==='c'?CHK[+k.slice(1)]:AIITEMS[+k.slice(1)];if(!c)return;
-  P.verif=P.verif||{};const cle=chkCle(c,k[0]);if(b.dataset.vok)P.verif[cle]={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};else delete P.verif[cle];
+  C.verifTx=C.verifTx||{};const qui={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};
+  vKeys(c,k[0]).forEach(x=>{if(b.dataset.vok)C.verifTx[x]=qui;else delete C.verifTx[x]});if(P.verif)delete P.verif[chkCle(c,k[0])];saveClient();
   if(/^Dépense importante/.test(c.title)){C.immoOk=C.immoOk||{};P.tx.filter(t=>c.ids.includes(t.id)).forEach(t=>{if(b.dataset.vok)C.immoOk[immoCle(t)]=P.mois+'_'+P.src;else delete C.immoOk[immoCle(t)]});saveClient()}
   savePer();renderChecks()});
 document.getElementById('chkPanel').addEventListener('click',e=>{const k=e.target.closest('button[data-c]')?.dataset.c;if(!k)return;
@@ -935,7 +943,7 @@ const addDays=(d,n)=>{const x=new Date(d+'T12:00');x.setDate(x.getDate()+n);retu
 async function invCol(){return db?db.collection('clients').doc(C.id).collection('factures'):null}
 async function loadInv(){INV=[];try{if(local)INV=Object.entries(LOCAL.inv||{}).filter(([k])=>k.startsWith(C.id+'/')).map(([k,v])=>({id:k.split('/')[1],...v}));
   else{const s=await(await invCol()).get();INV=s.docs.map(d=>({id:d.id,...d.data()}))}}catch(e){}INV.sort((a,b)=>b.date.localeCompare(a.date));return INV}
-async function saveInv(i){const{id,...doc}=i;doc.updated=new Date().toISOString();
+async function saveInv(i){LED=null;const{id,...doc}=i;doc.updated=new Date().toISOString();
   if(local){LOCAL.inv=LOCAL.inv||{};const k=id||'i'+Date.now()+Math.random().toString(36).slice(2,6);LOCAL.inv[C.id+'/'+k]=doc;i.id=k;return}
   const col=await invCol();const ref=id?col.doc(id):col.doc();i.id=ref.id;await ref.set(doc)}
 function invLines(i){const cf=cfAcc(),cc=ccAcc();let L=i.type==='achat'?[[i.acct,i.ht],[C.tpsA,i.tps],[C.tvqA,i.tvq],[cf,-i.total]]:[[cc,i.total],[i.acct,-i.ht],[C.tpsV,-i.tps],[C.tvqV,-i.tvq]];
