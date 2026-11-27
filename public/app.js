@@ -412,7 +412,7 @@ async function openPeriod(){
   catch(e){msg('Impossible de lire cette période pour le moment.',true)}
   if(P.mois!==mois||P.src!==src)return;
   if(d){P.statut=d.statut;P.exported=d.exported;P.chk=d.chk||{};P.verif=d.verif||{};P.tx=(d.tx||[]).map(t=>({...t,id:++seq}));snapLock();reclass();if(autoMatch())savePer()}
-  {const att=relAttente(src,mois);if(att.length){const r=mergeInto(P,att);if(r.added){msg(`${r.added} transaction(s) mises de côté lors d’un relevé précédent (chevauchement d’exercice) ajoutées à ce mois.`);savePer()}}}
+  {const att=relAttente(src,mois);if(att.length){const r=mergeInto(P,att);LED=null;if(r.added){msg(`${r.added} transaction(s) mises de côté lors d’un relevé précédent (chevauchement d’exercice) ajoutées à ce mois.`);savePer()}}}
   if(!d)snapLock();
   idFilter=null;AIITEMS=[];PREV=[];
   try{const[y,m]=mois.split('-').map(Number);const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;let pd=null;
@@ -646,6 +646,7 @@ const msg=(t,err)=>{$('msg').textContent=t;$('msg').className='msg'+(err?' err':
 /* Deux relevés consécutifs qui partagent seulement leur date de coupure (8 sept–8 oct, puis 8 oct–8 nov) ne contiennent jamais la même transaction :
    ce jour-là, une transaction du relevé voisin ne compte pas comme doublon. Deux relevés qui se recouvrent vraiment (mensuel + export du 15 au 30) se dédoublonnent. */
 const voisins=(a,b)=>{if(!a||!b||a===b)return false;const[ad,aa]=a.split('_'),[bd,ba]=b.split('_');const lo=ad>bd?ad:bd,hi=aa<ba?aa:ba;return hi<=lo};
+let MSTAT=null,REPORT=[];
 function mergeInto(p,list){
   let added=0,dup=0;const seen=new Map();
   for(const x of list){const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);
@@ -653,6 +654,7 @@ function mergeInto(p,list){
     const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
   p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   if(added&&p.statut==='importée')p.statut='en cours';
+  if(MSTAT){MSTAT.added+=added;MSTAT.dup+=dup}
   return {added,dup}}
 async function readPeriod(m,src){if(local)return LOCAL.periodes[C.id+'/'+m+'_'+src]||null;const s=await db.collection('clients').doc(C.id).collection('periodes').doc(m+'_'+src).get();return s.exists?s.data():null}
 /* Relevés qui chevauchent la fin (ou le début) de l'exercice : les transactions hors de l'exercice en cours sont mises de côté
@@ -664,20 +666,29 @@ function relAttente(src,mois){const b=exBornes();if(!b||!C)return[];const[xd,xf]
   if(pris.length)C.attente=C.attente.filter(x=>!pris.includes(x));
   if(st.length){C.attenteSt=C.attenteSt.filter(x=>!st.includes(x));st.forEach(addStmt)}
   if(pris.length||st.length)saveClient();return pris.map(({date,desc,amt,rel})=>({date,desc,amt,...(rel?{rel}:{})}))}
-async function importAny(list){const b=exBornes();let hors=[];
+async function importAny(list){const b=exBornes();let hors=[];if(MSTAT)MSTAT.lu+=list.length;
   if(b){const[xd,xf]=b;hors=list.filter(x=>x.date<xd||x.date>xf);
-    if(hors.length){list=list.filter(x=>x.date>=xd&&x.date<=xf);const k=x=>x.src+'|'+x.date+'|'+x.amt;const have=new Map();(C.attente||[]).forEach(x=>have.set(k(x),(have.get(k(x))||0)+1));const seen=new Map();
+    if(hors.length){list=list.filter(x=>x.date>=xd&&x.date<=xf);
+      /* déjà dans les livres de l'autre exercice (ex. relevé reversé l'année suivante) : doublons, pas « mis de côté » */
+      const parM=new Map();hors.forEach(x=>{const m=x.date.slice(0,7);parM.set(m,[...(parM.get(m)||[]),x])});const neufs=[];
+      for(const[m,L]of parM){let tx=[];try{const d=await readPeriod(m,P.src);tx=d?.tx||[]}catch(e){}const seen=new Map();
+        L.forEach(x=>{const k=x.date+'|'+x.amt,n=(seen.get(k)||0)+1;seen.set(k,n);const h=tx.filter(t=>t.date===x.date&&t.amt===x.amt&&!voisins(t.rel,x.rel)).length;if(n<=h){if(MSTAT)MSTAT.dup++}else neufs.push(x)})}
+      hors=neufs}
+    if(hors.length){const k=x=>x.src+'|'+x.date+'|'+x.amt;const have=new Map();(C.attente||[]).forEach(x=>have.set(k(x),(have.get(k(x))||0)+1));const seen=new Map();
+      if(MSTAT)MSTAT.cote+=hors.length;
       C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src,...(x.rel?{rel:x.rel}:{})})).filter(x=>{const n=(seen.get(k(x))||0)+1;seen.set(k(x),n);return n>(have.get(k(x))||0)})];saveClient()}}
   list=list.concat(relAttente(P.src));
-  if(list.length)await importAny0(list);else msg('');
+  if(list.length)await importAny0(list);else msg('');LED=null;
   if(hors.length){const[xd,xf]=b,ap=hors.filter(x=>x.date>xf).length,av=hors.length-ap;
     msg(`${$('msg').textContent} ${ap?`${ap} transaction(s) après la fin d’exercice (${xf})`:''}${ap&&av?' et ':''}${av?`${av} transaction(s) avant le début de l’exercice (${xd})`:''} mise(s) de côté : elles ne touchent pas cet exercice et seront ajoutées automatiquement quand vous travaillerez dans l’exercice où elles tombent.`.trim())}}
 /* Partage un relevé qui chevauche les bornes de l'exercice : la partie dans l'exercice sert à la conciliation, le reste attend son exercice. */
 function stmtExercice(st,list){const b=exBornes();if(!st||!b)return st;const[xd,xf]=b;if(st.du>=xd&&st.au<=xf)return st;
+  const deja=q=>[...(C.stmts||[]),...(C.attenteSt||[])].some(x=>x.src===q.src&&x.du===q.du&&x.au===q.au);
+  if(st.au<xd||st.du>xf){if(!deja(st))C.attenteSt=[...(C.attenteSt||[]),st];return null}
   const sum=f=>list.filter(f).reduce((a,x)=>a+x.amt,0);let{du,au,sd,sf}=st;const parts=[];
   if(du<xd&&au>=xd){const s0={...st,au:addDays(xd,-1),sf:sd+sum(x=>x.date<xd),nom:st.nom+' (avant l’exercice)'};parts.push(s0);sd=s0.sf;du=xd}
   let fin=null;if(au>xf&&du<=xf){fin={...st,du:addDays(xf,1),sd:sd+sum(x=>x.date>=du&&x.date<=xf),nom:st.nom+' (après la fin d’exercice)'};au=xf;sf=fin.sd}
-  if(fin)parts.push(fin);C.attenteSt=[...(C.attenteSt||[]),...parts.filter(p=>!(C.attenteSt||[]).some(q=>q.src===p.src&&q.du===p.du&&q.au===p.au))];
+  if(fin)parts.push(fin);C.attenteSt=[...(C.attenteSt||[]),...parts.filter(p=>!deja(p))];
   return{...st,du,au,sd,sf,nom:st.nom+(parts.length?' (partie dans l’exercice)':'')}}
 async function importAny0(list){
   if(P.multi){const L=list.map(x=>({...x,_m:x.date.slice(0,7)}));L.forEach(x=>{if(!P.parts.some(p=>p.mois===x._m))P.parts.push({mois:x._m,src:P.src,statut:'en cours',exported:'',exists:false})});
@@ -709,7 +720,13 @@ async function addTx(list){
 
 async function handle(files){
   if(!P||(!P.multi&&P.src!==$('pSrc').value)){if(!$('pSrc').value){msg('Choisissez d’abord le compte du relevé (banque ou carte).',true);return}if(!$('pMois').value)$('pMois').value=new Date().toISOString().slice(0,7);await openPeriod();if(!P){msg('Impossible d’ouvrir la période.',true);return}}
-  for(const f of files.filter(f=>/\.pdf$/i.test(f.name))){try{await readStatementPdf(f)}catch(e){console.error(e);msg(`Lecture impossible de ${f.name} : ${e.message||e}. Réessayez, ou exportez le relevé en CSV depuis le site de la banque.`,true)}}
+  const pdfs=files.filter(f=>/\.pdf$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name));const lignes=[];let err=false;
+  for(const f of pdfs){REPORT=[];MSTAT={lu:0,added:0,dup:0,cote:0};
+    try{await readStatementPdf(f);const r=REPORT[0];const m=MSTAT;
+      if(r)lignes.push(`${f.name}${r.du?` (du ${r.du} au ${r.au})`:''} : ${r.n} lues${r.ok?' ✓ soldes concordants':' ⚠ soldes non vérifiés'} · ${m.added} ajoutée(s) · ${m.dup} doublon(s) ignoré(s)${m.cote?` · ${m.cote} mise(s) de côté (hors exercice)`:''}`)}
+    catch(e){console.error(e);err=true;lignes.push(`${f.name} : lecture impossible (${e.message||e}). Réessayez, ou exportez le relevé en CSV.`)}
+    MSTAT=null}
+  if(pdfs.length>1||lignes.length&&pdfs.length){$('msg').style.whiteSpace='pre-line';msg((pdfs.length>1?'Relevés versés :\n':'')+lignes.join('\n')+(pdfs.length===1&&!err?'\n'+$('msg').textContent:''),err)}
   queue=[];
   for(const f of files.filter(f=>!/\.pdf$/i.test(f.name))){
     try{const rows=await rowsOf(f);if(rows.length<2){msg(f.name+' : fichier vide ou illisible.',true);continue}queue.push({name:f.name,g:guess(rows)})}
@@ -759,7 +776,8 @@ async function readStatementPdf(f){
   if(out._st)out.forEach(x=>x.rel=out._st.du+'_'+out._st.au);
   const tot=out.reduce((a,x)=>a+x.amt,0),ok=out._st&&tot===out._st.sf-out._st.sd;
   await importAny(out);msg($('msg').textContent+(out._direct?' Relevé lu directement (sans IA) : solde d’ouverture + transactions = solde de clôture, au cent près.':ok?' Lu par l’IA : le total concorde avec les soldes du relevé.':out._st?` Lu par l’IA : ATTENTION, écart de ${fmt(out._st.sf-out._st.sd-tot)} avec les soldes du relevé — une transaction manque ou est mal lue.`:' Lu par l’IA dans le PDF : comparez le total avec le relevé.')+(out._err?.length?` Attention, pages non lues : ${out._err.join(' · ')}.`:''));
-  if(out._st){const o=out._st;C.stmts=(C.stmts||[]).filter(x=>!(x.src===o.src&&x.du===o.du&&x.au===o.au));addStmt(stmtExercice(o,out));saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
+  if(out._st)REPORT.push({nom:f.name,du:out._st.du,au:out._st.au,n:out.length,ok:out._direct||ok,via:out._direct?'lecture directe':'IA'});else REPORT.push({nom:f.name,n:out.length,ok:false,via:'IA'});
+  if(out._st){const o=out._st,b=exBornes(),dehors=b&&(o.au<b[0]||o.du>b[1]);if(!(dehors&&(C.stmts||[]).some(x=>x.src===o.src&&x.du===o.du&&x.au===o.au)))C.stmts=(C.stmts||[]).filter(x=>!(x.src===o.src&&x.du===o.du&&x.au===o.au));{const sx=stmtExercice(o,out);if(sx)addStmt(sx)}saveClient();msg($('msg').textContent+' Soldes du relevé repris pour la conciliation.')}
 }
 async function pdfTx(f,say){
   say('Lecture du PDF…');const pages=await pdfPages(f);const out=[];const errs=[];
