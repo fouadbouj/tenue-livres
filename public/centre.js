@@ -97,11 +97,75 @@ function repDlg(c){let d=$('repDlg');if(!d){d=document.createElement('dialog');d
     try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to,subject:$('rdS').value,text:$('rdT').value});await sb.from('cc_notes').insert({client_id:c.id,type:'courriel',texte:`Demande d’autorisation comme représentant (ARC) envoyée à ${to}`,auteur:who()});
       d.close();notify(`Demande de représentant envoyée à ${to}`)}catch(e){$('rdM').textContent='Envoi impossible : '+(e.message||e);b.disabled=false}};
   d.showModal()}
+/* ---------- trousse d'accueil d'un nouveau client : tout ce qu'il faut obtenir de lui, envoyé en un seul courriel ---------- */
+let TRMR=null;
+function trEtat(c){const soc=societe(c),acc=ACC.filter(a=>a.client_id===c.id),svc=SVC.filter(x=>x.client_id===c.id&&x.service==='nouveau'&&x.statut!=='annulée').sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0],
+  k=CTR.filter(x=>x.client_id===c.id&&x.statut!=='annulé').sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0],
+  mr=PUB.filter(p=>p.client_id===c.id&&p.signature_requise&&/MR-69|procuration/i.test(p.titre+' '+p.type)).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0],
+  arcEnv=NOT.some(n=>n.client_id===c.id&&/représentant \(ARC\)/.test(n.texte||''));
+  return[
+   {k:'portail',t:'Accès au portail client',ok:acc.some(a=>a.user_id),etat:acc.some(a=>a.user_id)?'Compte lié':acc.length?'Code créé, en attente du client':'À créer (automatique à l’envoi)'},
+   ...(soc?[{k:'quest',t:'Questionnaire d’ouverture et pièces (statuts, registres, états financiers, avis, relevés, prêts, identité)',ok:['reçue','traitée'].includes(svc?.statut),etat:svc?(svc.statut==='envoyée'?'Envoyé, pas encore ouvert':svc.statut==='en cours'?'Le client le remplit':svc.statut==='reçue'?'Reçu : à traiter (onglet Demandes)':'Traité'):'Inclus à l’envoi'}]:[]),
+   {k:'contrat',t:'Contrat de services (et accord de DPA)',ok:k?.statut==='signé',etat:!k?'Pas encore préparé : préparez-le dans l’onglet « Contrat de services »':k.statut==='signé'?'Signé le '+dl(k.signe_le):k.statut==='envoyé'?'Envoyé, en attente de signature':'Brouillon : envoyez-le depuis l’onglet Contrat',lien:k?.statut==='signé'?null:'contrat'},
+   {k:'arc',t:'Autorisation ARC (le client nous ajoute comme représentant)',ok:!!c.checklist?.procARC,etat:c.checklist?.procARC?'Confirmée':arcEnv?'Instructions envoyées : cochez quand l’accès apparaît dans Représenter un client':'Instructions incluses à l’envoi',chk:'procARC'},
+   {k:'mr69',t:'Procuration Revenu Québec (MR-69) à signer',ok:!!mr?.signe_le||!!c.checklist?.procRQ,etat:mr?.signe_le?'Signée le '+dl(mr.signe_le):mr?'Envoyée, en attente de signature':TRMR?`Prête à envoyer : ${TRMR.name}`:'Produisez-la dans Mon dossier pour les représentants professionnels, puis joignez le PDF ici',file:!mr},
+   {k:'identite',t:'Identité vérifiée et conflits d’intérêts',ok:!!(c.checklist?.identite&&c.checklist?.conflits),etat:c.checklist?.identite&&c.checklist?.conflits?'Faits':'À cocher dans la fiche après vérification',lien:'fiche'}]}
+function trTexte(c,o){const ct=(c.contact||'').split(' ')[0],L=[];let n=0;const R=REPR||{},kk=R.affiche&&R[R.affiche]?R.affiche:['ne','idgroupe','idrep'].find(x=>R[x]),idv=kk?R[kk]:'[identifiant du cabinet]';
+  if(o.invite)L.push(`${++n}. Créez votre accès au portail client (votre espace sécurisé pour tout nous transmettre) :\n   ${o.invite}\n   Choisissez « Créer un compte » avec cette adresse courriel. Code d’invitation : ${o.code}`);
+  if(o.quest)L.push(`${++n}. Remplissez le questionnaire d’ouverture de dossier et déposez vos documents (environ 15 minutes) :\n   ${o.quest}\n   Vous pouvez l’enregistrer et y revenir plus tard.`);
+  if(o.contrat)L.push(`${++n}. Lisez et signez votre contrat de services dans le portail (onglet « Entreprise », section « À payer et documents du cabinet »).`);
+  if(o.mr69)L.push(`${++n}. Signez la procuration de Revenu Québec dans le portail (bouton « Lire et signer »). Elle nous permet d’agir pour vous auprès de Revenu Québec.`);
+  if(o.arc)L.push(`${++n}. Autorisez-nous auprès de l’ARC dans votre compte (${societe(c)?'Mon dossier d’entreprise › Autoriser ou gérer les représentants':'Mon dossier › Profil › gérer les représentants'} › Autoriser un représentant) :\n   entrez ${kk==='ne'?'notre numéro d’entreprise':'notre identifiant'} ${idv}, vérifiez que « Boujrad CPA Inc. » s’affiche, choisissez le niveau 2${societe(c)?' et le numéro d’entreprise au complet':''}, puis confirmez.\n   Guide pas à pas : https://boujradcpa.com/guides/autoriser-representant.html`);
+  return`Bonjour${ct?' '+ct:''},
+
+Bienvenue chez Boujrad CPA Inc.! Merci de votre confiance.
+
+Pour ouvrir votre dossier${c.nom&&societe(c)?' de '+c.nom:''}, voici les ${n} étape${n>1?'s':''} à faire de votre côté. Tout se fait en ligne, à votre rythme :
+
+${L.join('\n\n')}
+
+Une fois ces étapes faites, nous nous occupons du reste : transfert du dossier avec votre ancien comptable, reprise de la comptabilité et des échéances.
+
+Vous avez une question? Répondez simplement à ce courriel ou écrivez-nous dans la section « Messages » du portail.
+
+Au plaisir de travailler avec vous,`}
+function fTrousse(){const c=EDIT,E=trEtat(c),reste=E.filter(e=>!e.ok),k=CTR.filter(x=>x.client_id===c.id&&x.statut!=='annulé').sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0];
+  $('fBody').innerHTML=`<p class="sub" style="margin-top:0">Tout ce qu’il faut obtenir d’un nouveau client, au même endroit. Préparez ce qui vient du cabinet (contrat, procuration MR-69), puis envoyez la trousse : le client reçoit <strong>un seul courriel</strong> avec ses étapes, dans l’ordre.</p>
+    <div style="display:grid;gap:8px">${E.map(e=>`<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;${e.ok?'background:#f1faf4':''}"><div class="row" style="justify-content:space-between;align-items:center;gap:8px"><strong>${e.ok?'✓ ':''}${esc(e.t)}</strong><span class="pill ${e.ok?'ok':'g'}">${e.ok?'Fait':'À faire'}</span></div>
+      <div class="sub" style="font-size:14px;margin-top:4px">${esc(e.etat)}</div>
+      ${!e.ok&&e.lien?`<button class="sm" data-ft="${e.lien}" style="margin-top:6px">${e.lien==='contrat'?'Préparer ou envoyer le contrat':'Ouvrir la fiche'}</button>`:''}${!e.ok&&e.chk?`<button class="sm" data-trchk="${e.chk}" style="margin-top:6px">Marquer comme confirmée</button>`:''}${e.file?`<label class="sm" style="display:inline-block;margin-top:6px;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:5px 10px">${TRMR?'Changer le PDF':'Joindre le PDF de la procuration'}<input type="file" id="trMr" accept=".pdf" hidden></label>`:''}</div>`).join('')}</div>
+    ${reste.length?`<div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap"><button class="pri" id="trGo">${NOT.some(n=>n.client_id===c.id&&/Trousse d’accueil envoyée/.test(n.texte||''))?'Relancer le client (étapes restantes)':'Envoyer la trousse d’accueil'}</button><span class="sub" style="font-size:13px">Vous verrez le courriel avant l’envoi.${!k?' Conseil : préparez d’abord le contrat pour l’inclure.':''}</span></div>`:'<p class="info" style="margin-top:14px">✓ Dossier ouvert : tout est reçu.</p>'}`;
+  $('trMr')?.addEventListener('change',e=>{TRMR=e.target.files[0]||null;fTrousse()})}
+async function trPreparer(c){const E=trEtat(c),todo=k=>E.some(e=>e.k===k&&!e.ok),o={};
+  let a=ACC.find(x=>x.client_id===c.id&&!x.user_id)||null;if(todo('portail')&&!ACC.some(x=>x.client_id===c.id&&x.user_id)){if(!a){const r=await sb.from('cc_acces').insert({client_id:c.id,courriel:c.courriel||null}).select().single();if(r.error)throw r.error;a=r.data}o.invite=`${SITE}/portail.html?invite=${a.code}`;o.code=a.code}
+  if(todo('quest')){let sv=SVC.find(x=>x.client_id===c.id&&x.service==='nouveau'&&['envoyée','en cours'].includes(x.statut));if(!sv){const r=await sb.from('cc_services').insert({client_id:c.id,service:'nouveau',titre:QL().nouveau?.nom||'Ouverture de dossier',courriel:c.courriel,contact:c.contact||null}).select().single();if(r.error)throw r.error;sv=r.data}o.quest=svcUrl(sv)}
+  const k=CTR.find(x=>x.client_id===c.id&&x.statut==='envoyé');if(k)o.contrat=true;
+  if(todo('mr69')){const mr=PUB.find(p=>p.client_id===c.id&&p.signature_requise&&!p.signe_le&&/MR-69|procuration/i.test(p.titre+' '+p.type));
+    if(mr)o.mr69=true;else if(TRMR){const path=`c/${c.id}/cabinet/${Date.now()}-${TRMR.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-120)}`;const up=await sb.storage.from('documents').upload(path,TRMR,{contentType:'application/pdf'});if(up.error)throw up.error;
+      const r=await sb.from('cc_publications').insert({client_id:c.id,titre:'Procuration Revenu Québec (MR-69)',type:'Procuration Revenu Québec (MR-69)',organisme:'Aucun paiement',fichiers:[{path,nom:TRMR.name,taille:TRMR.size}],signature_requise:true}).select('id').single();if(r.error)throw r.error;TRMR=null;o.mr69=true}}
+  if(todo('arc'))o.arc=true;return o}
+document.addEventListener('click',async e=>{const b=e.target.closest('#trGo,[data-trchk]');if(!b||!EDIT)return;const c=EDIT;
+  if(b.dataset.trchk){const chk={...(c.checklist||{}),[b.dataset.trchk]:new Date().toLocaleDateString('fr-CA')};const{error}=await sb.from('cc_clients').update({checklist:chk}).eq('id',c.id);if(error){notify(error.message,1);return}c.checklist=chk;notify('Marqué comme confirmé');fTrousse();return}
+  if(!c.courriel){notify('Ajoutez d’abord le courriel du client dans sa fiche.',1);return}
+  b.disabled=true;let o;try{o=await trPreparer(c)}catch(err){notify('Préparation impossible : '+(err.message||err),1);b.disabled=false;return}
+  const relance=/Relancer/.test(b.textContent);let d=$('trDlg');if(!d){d=document.createElement('dialog');d.id='trDlg';d.style.cssText='max-width:680px;width:calc(100% - 32px);border:0;border-radius:16px;padding:22px';document.body.appendChild(d)}
+  d.innerHTML=`<h2 style="margin:0 0 6px">${relance?'Relance':'Trousse d’accueil'} — ${esc(c.nom)}</h2><label class="f"><b>À</b><input id="trTo" type="email" value="${esc(c.courriel||'')}"></label>
+    <label class="f" style="margin-top:8px"><b>Objet</b><input id="trS" value="${relance?'Rappel : les étapes pour ouvrir votre dossier — Boujrad CPA Inc.':'Bienvenue chez Boujrad CPA Inc. — les étapes pour ouvrir votre dossier'}"></label>
+    <label class="f" style="margin-top:8px"><b>Message</b><textarea id="trT" style="min-height:360px;font-size:14px">${esc(trTexte(c,o))}</textarea></label><p class="sub" style="font-size:13px;margin:4px 0 0">La signature du cabinet est ajoutée automatiquement. Une tâche de suivi est créée dans 7 jours.</p>
+    <div class="row" style="margin-top:12px"><button class="pri" id="trSend">Envoyer</button><button id="trX">Annuler</button><span class="msg" id="trM"></span></div>`;
+  d.querySelector('#trX').onclick=()=>{d.close();b.disabled=false};d.showModal();
+  d.querySelector('#trSend').onclick=async()=>{const to=$('trTo').value.trim();if(!okMail(to)){$('trM').textContent='Courriel invalide.';return}$('trSend').disabled=true;$('trM').textContent='Envoi…';
+    try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to,subject:$('trS').value,text:$('trT').value});
+      await sb.from('cc_notes').insert({client_id:c.id,type:'courriel',texte:`${relance?'Relance de la trousse d’accueil':'Trousse d’accueil envoyée'} à ${to} : ${[o.invite&&'accès au portail',o.quest&&'questionnaire d’ouverture',o.contrat&&'contrat à signer',o.mr69&&'procuration MR-69 à signer',o.arc&&'autorisation ARC (représentant)'].filter(Boolean).join(', ')}`,auteur:who()});
+      if(o.arc)await sb.from('cc_notes').insert({client_id:c.id,type:'courriel',texte:`Demande d’autorisation comme représentant (ARC) envoyée à ${to}`,auteur:who()});
+      await sb.from('cc_taches').insert({client_id:c.id,titre:`Suivi de la trousse d’accueil — ${c.nom}`,echeance:new Date(Date.now()+7*864e5).toLocaleDateString('fr-CA'),priorite:'normale'});
+      d.close();notify(`${relance?'Relance envoyée':'Trousse d’accueil envoyée'} à ${to}`);await reopen();FT='trousse';rCli()}
+    catch(err){$('trM').textContent='Envoi impossible : '+(err.message||err);$('trSend').disabled=false}}});
 function rFiche(){const c=EDIT,neuf=!c.id;if(neuf)FT='fiche';
-  const tabs=[['fiche','Fiche'],['contrat','Contrat de services'],['factu','Facturation'],['portail','Portail et documents'],['suivi','Tâches et journal']];
+  const tabs=[['fiche','Fiche'],['trousse','Trousse d’accueil'],['contrat','Contrat de services'],['factu','Facturation'],['portail','Portail et documents'],['suivi','Tâches et journal']];
   $('tcli').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div><button class="sm" id="cCancel">← Tous les clients</button></div>${c.id?`<div class="row" style="gap:6px;align-items:center"><span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span><button class="sm" id="cDt">Demande type</button><button class="sm" id="cRep" title="Courriel au client : comment autoriser le cabinet auprès de l’ARC">Demande de représentant</button>${(c.statut||'actif')!=='inactif'?'<button class="sm danger" id="cFin">Fin de mandat</button>':''}</div>`:''}</div>
     <h2 style="margin:12px 0 4px">${neuf?'Nouveau client':esc(c.nom)}</h2>${c.id?`<nav class="tabs">${tabs.map(([k,l])=>`<button data-ft="${k}" aria-pressed="${FT===k}">${l}</button>`).join('')}</nav>`:''}<div id="fBody" style="margin-top:14px"></div></div>`;
-  ({fin:fFin,fiche:fFiche,contrat:fContrat,factu:fFact,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
+  ({fin:fFin,fiche:fFiche,trousse:fTrousse,contrat:fContrat,factu:fFact,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
 
 function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par actions',province:'QC',frequence:'trimestrielle',fin_exercice:'12-31',depuis:new Date().toLocaleDateString('fr-CA'),ouverture:new Date().toLocaleDateString('fr-CA'),tps_tvq:true,spcc_dpe:true,actif:true,contacts:[],checklist:{},documents:'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',...EDIT};
   const v=k=>esc(c[k]??''),inp=(id,l,k,t='text',ph='')=>`<label class="f"><b>${l}</b><input id="${id}" type="${t}" value="${v(k)}" placeholder="${ph}"></label>`,sel=(id,l,k,o)=>`<label class="f"><b>${l}</b><select id="${id}">${o.map(x=>{const[val,lab]=Array.isArray(x)?x:[x,x];return `<option value="${val}"${String(c[k]??'')===val?' selected':''}>${lab}</option>`}).join('')}</select></label>`;
@@ -153,7 +217,7 @@ async function saveFiche(){const c=EDIT,g=id=>$(id)?.value.trim()||null,tx=$('cT
   const sv=x=>c.id?sb.from('cc_clients').update(x).eq('id',c.id).select().single():sb.from('cc_clients').insert(x).select().single();
   let r=await sv(row);if(r.error&&/description/.test(r.error.message||'')){const{description:_,...rest}=row;r=await sv(rest);if(!r.error)notify('Fiche enregistrée, sauf la description : exécutez d’abord la mise à jour SQL (centre_dossiers.sql).',1)}
   if(r.error){$('cM').textContent=r.error.message;$('cM').className='msg err';return}
-  await load();EDIT=CLI.find(x=>x.id===r.data.id)||r.data;TAB='cli';render();$('cM').textContent=c.id?'Enregistré.':'Client créé. Prochaine étape : le contrat de services.';$('cM').className='msg ok';notify(c.id?'Fiche client enregistrée':'Client créé')}
+  await load();EDIT=CLI.find(x=>x.id===r.data.id)||r.data;TAB='cli';if(!c.id&&(row.statut||'actif')!=='prospect')FT='trousse';render();if($('cM')){$('cM').textContent=c.id?'Enregistré.':'Client créé.';$('cM').className='msg ok'}notify(c.id?'Fiche client enregistrée':'Client créé : voici sa trousse d’accueil — préparez le contrat et la procuration, puis envoyez-la.')}
 
 /* ---------- contrat de services ---------- */
 const UN=window.CONTRAT?.UNITES||{};
