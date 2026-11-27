@@ -183,21 +183,27 @@ function adepAssurer(){let a=adepAcc();if(a)return a;const pris=new Set(PLAN.map
 const VIR=/VIREMENT|TRANSFER|TRANSFERT|\bTFR\b|\bCHANGE\b|\bFX\b|PAIEMENT.{0,20}(VISA|CARTE|MASTERCARD|AMEX)|PAYMENT.{0,14}(THANK|RECEIVED|MERCI)|PAIEMENT MERCI|PAYPAL|WITHDRAWAL|RETRAIT|CONVERSION/;
 async function pairInterne(){if(!C)return 0;const L=await iaPeriodes();if(new Set(L.map(p=>p.src)).size<2)return 0;
   L.forEach(p=>{if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)p.tx=P.tx});
+  /* réparation : chaque virement apparié doit avoir exactement un côté « déjà compté » (sinon il compte deux fois) */
+  const ch=new Set();{const G=new Map();L.forEach(p=>(p.tx||[]).forEach(t=>{if(t.pair){(G.get(t.pair)||G.set(t.pair,[]).get(t.pair)).push({p,t,src:p.src})}}));
+    for(const[,X]of G){if(X.length===2){const[a,b]=X;const m=a.t.mirror?1:0+(b.t.mirror?1:0);if((a.t.mirror?1:0)+(b.t.mirror?1:0)===1)continue;
+        const keep=devOf(a.src)!==devOf(b.src)?(devOf(a.src)==='USD'?b:a):(a.t.amt<0?a:b),mir=keep===a?b:a;
+        Object.assign(keep.t,{acct:mir.src,mirror:false,st:'apparie',aConf:1});delete keep.t.mirror;Object.assign(mir.t,{acct:keep.src,mirror:true,st:'apparie'});ch.add(a.p);ch.add(b.p)}
+      else if(X.length===1){const t=X[0].t;delete t.pair;delete t.mirror;Object.assign(t,{st:'transit',acct:C.tr,why:'Virement apparié dont le pendant a disparu : à reclasser'});ch.add(X[0].p)}}}
   const ud=L.filter(p=>devOf(p.src)==='USD').flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(ud.length)await tauxAssurer(ud[0],ud[ud.length-1]);
   const est=(t,src)=>devOf(src)==='USD'?(tauxDe(t.date)?t.amt*tauxDe(t.date):null):t.amt;
   const pool=[];L.forEach(p=>(p.tx||[]).forEach(t=>{if(t.pair||t.st==='manuel'||t.st==='facture'||lk(t.date))return;pool.push({p,t,src:p.src,c:est(t,p.src),k:VIR.test(norm(t.desc))})}));
-  pool.sort((a,b)=>a.t.date.localeCompare(b.t.date));const ch=new Set();let n=0;
+  pool.sort((a,b)=>a.t.date.localeCompare(b.t.date));let n=0;const rep0=ch.size;
   for(const a of pool){if(a.t.pair||a.t.amt>=0||a.c==null)continue;
     const C_=pool.filter(b=>!b.t.pair&&b.src!==a.src&&b.t.amt>0&&b.c!=null&&dd(a.t.date,b.t.date)<=4&&(a.k||b.k)&&(devOf(a.src)===devOf(b.src)?b.t.amt===-a.t.amt:Math.abs(a.c+b.c)<=Math.abs(a.c)*0.04));
     if(!C_.length)continue;const meme=x=>devOf(x.src)===devOf(a.src)?0:1;const b=C_.sort((x,y)=>meme(x)-meme(y)||dd(a.t.date,x.t.date)-dd(a.t.date,y.t.date)||Math.abs(a.c+x.c)-Math.abs(a.c+y.c))[0];
     const keep=devOf(a.src)!==devOf(b.src)&&devOf(a.src)==='USD'?b:a,mir=keep===a?b:a,id='v'+Date.now().toString(36)+n;
-    Object.assign(keep.t,{acct:mir.src,tax:false,st:'apparie',unk:false,pair:id,why:`Virement entre vos comptes : ${mir.src} ${accName(mir.src)}, ${mir.t.date}`});
+    Object.assign(keep.t,{acct:mir.src,tax:false,st:'apparie',unk:false,pair:id,why:`Virement entre vos comptes : ${mir.src} ${accName(mir.src)}, ${mir.t.date}`,...(devOf(a.src)!==devOf(b.src)||a.t.date!==b.t.date?{aConf:1}:{})});
     Object.assign(mir.t,{acct:keep.src,tax:false,st:'apparie',unk:false,pair:id,mirror:true,why:`Déjà compté avec ${keep.src} ${accName(keep.src)} (${keep.t.date}) : virement entre vos comptes`});
     ch.add(a.p);ch.add(b.p);n++}
   for(const p of ch){p.updated=new Date().toISOString();p.todo=(p.tx||[]).filter(t=>isTr(t)&&!t.mirror).length;if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src){savePerNow();continue}
     if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
-  if(n){LED=null;audit('Virements appariés',`${n} virement(s) entre les comptes de l’entreprise`)}return n}
-let pairT=null;function pairPlus(){clearTimeout(pairT);pairT=setTimeout(async()=>{try{const n=await pairInterne();if(n){msg(`${$('msg').textContent} ${n} virement(s) entre vos comptes apparié(s) : comptés une seule fois.`.trim());if(P)P.multi?openRange():render()}}catch(e){console.warn(e)}},1200)}
+  if(n||ch.size){LED=null;audit('Virements appariés',`${n} nouveau(x) virement(s) entre les comptes de l’entreprise${rep0?`; ${rep0} période(s) réparée(s) (virement compté deux fois)`:''}`)}return n}
+let pairT=null,PAIR_OFF=false;function pairPlus(){if(PAIR_OFF)return;clearTimeout(pairT);pairT=setTimeout(async()=>{try{const n=await pairInterne();if(n){msg(`${$('msg').textContent} ${n} virement(s) entre vos comptes apparié(s) : comptés une seule fois.`.trim());if(P)P.multi?openRange():render()}}catch(e){console.warn(e)}},1200)}
 
 /* ---------- classement ---------- */
 const baseResolved=()=>BASE.map(r=>({...r,a:findAcc(CAT[r.c],true)}));
@@ -1161,7 +1167,15 @@ function stmtOfCsv(g,nom){const cB=+$('mBal').value;if(cB<0)return null;const[cD
   if(R.length<1)return null;const asc=R[0].date<=R[R.length-1].date;const F=asc?R[0]:R[R.length-1],L=asc?R[R.length-1]:R[0];
   return{src:P.src,du:F.date,au:L.date,sd:F.b-F.c,sf:L.b,nom,via:'CSV'}}
 function addStmt(st){if(!st)return;C.stmts=(C.stmts||[]).filter(x=>!(x.src===st.src&&x.du===st.du&&x.au===st.au));C.stmts.push(st);C.stmts.sort((a,b)=>a.src.localeCompare(b.src)||a.du.localeCompare(b.du))}
-function initRec(){const srcs=[...new Set([...srcAccounts().map(p=>p[0]),...(C.stmts||[]).map(s=>s.src)])];
+/* virement apparié : confirmer (touche humaine) ou défaire (les deux côtés redeviennent à classer) */
+async function pairAgir(id,defaire){const L=await iaPeriodes();for(const p of L){const T=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P.tx:p.tx;let ch=false;
+    (T||[]).forEach(t=>{if(t.pair!==id)return;ch=true;if(defaire){delete t.pair;delete t.mirror;delete t.aConf;Object.assign(t,{st:'transit',acct:C.tr,why:'Appariement défait'})}else delete t.aConf});
+    if(!ch)continue;if(T!==p.tx){savePerNow();continue}p.updated=new Date().toISOString();p.todo=(p.tx||[]).filter(t=>isTr(t)&&!t.mirror).length;
+    if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
+  audit(defaire?'Appariement défait':'Appariement confirmé',id);LED=null;runRec(true)}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-pconf],[data-pdef]');if(!b)return;e.preventDefault();b.disabled=true;pairAgir(b.dataset.pconf||b.dataset.pdef,!!b.dataset.pdef)});
+let PAIRCHK=new Set();
+function initRec(){if(C&&!PAIRCHK.has(C.id)){PAIRCHK.add(C.id);pairInterne().then(()=>{LED=null;if(tab==='rec')runRec(true)}).catch(()=>{})}const srcs=[...new Set([...srcAccounts().map(p=>p[0]),...(C.stmts||[]).map(s=>s.src)])];
   $('recSrc').innerHTML=srcs.map(a=>`<option value="${esc(a)}">${esc(a+' '+accName(a))}</option>`).join('');$('recSrc').value=C.src&&srcs.includes(C.src)?C.src:srcs[0]||'';runRec()}
 $('recGo').onclick=()=>runRec(true);$('recSrc').onchange=()=>runRec();
 /* journal de conciliation détaillé (comme Sage 50) : chaque transaction du relevé, à pointer; solde cumulé; pointées vs relevé */
@@ -1212,7 +1226,7 @@ async function runRec(force){const src=$('recSrc').value;$('recList').innerHTML=
   /* ce qui touche ce compte depuis ailleurs (autres relevés, écritures, factures) : explique un écart entre les livres et le relevé */
   let ext='';{const X=LED.filter(e=>e.src!==src&&(!last||e.date<=last.au)&&e.lines.some(l=>l[0]===src)).map(e=>({e,c:e.lines.filter(l=>l[0]===src).reduce((a,l)=>a+l[1],0)})).filter(x=>x.c);
     if(X.length){const tot=X.reduce((a,x)=>a+x.c,0);ext=`<details style="margin:6px 0"${last&&devOf(src)!=='USD'&&(balances(LED,null,last.au).get(src)||0)!==last.sf?' open':''}><summary><strong>${X.length} opération(s) d’autres comptes ou d’écritures touchent ce compte</strong> (total ${fmtN(tot)} $). Un virement entre vos comptes doit avoir son pendant ici; sinon, c’est souvent une transaction classée dans ce compte par erreur.</summary>
-      <table class="rep" style="margin-top:6px"><tr class="grp"><td>Date</td><td>Provenance</td><td>Description</td><td class="num">Montant</td></tr>${X.slice(0,200).map(({e,c})=>`<tr><td class="d">${esc(e.date)}</td><td>${e.kind==='rel'?esc(e.src+' '+accName(e.src)):e.kind==='je'?'Écriture '+esc(e.ref||''):'Facture'}</td><td>${esc(e.desc)}${e.st==='suggere'?' <span class="pill">suggérée par l’IA</span>':e.st==='apparie'?' <span class="pill ok">appariée</span>':''}</td><td class="num">${fmtN(c)}</td></tr>`).join('')}</table></details>`}}
+      <table class="rep" style="margin-top:6px"><tr class="grp"><td>Date</td><td>Provenance</td><td>Description</td><td class="num">Montant</td></tr>${X.slice(0,200).map(({e,c})=>`<tr><td class="d">${esc(e.date)}</td><td>${e.kind==='rel'?esc(e.src+' '+accName(e.src)):e.kind==='je'?'Écriture '+esc(e.ref||''):'Facture'}</td><td>${esc(e.desc)}${e.st==='suggere'?' <span class="pill">suggérée par l’IA</span>':e.aConf?` <span class="pill todo">appariée — à confirmer</span> <button class="sm pri" data-pconf="${esc(e.pair)}">Confirmer</button> <button class="sm" data-pdef="${esc(e.pair)}">Défaire</button>`:e.st==='apparie'?' <span class="pill ok">appariée</span>':''}</td><td class="num">${fmtN(c)}</td></tr>`).join('')}</table></details>`}}
   $('recSum').innerHTML=ouvChk+ext+(S.length?`<p><strong>${ok} relevé(s) sur ${S.length} concilié(s).</strong> ${book}${out?` <span class="note">${out} transaction(s) hors des périodes de relevés.</span>`:''}</p>`:'');
   $('recList').querySelectorAll('[data-fx]').forEach(b=>b.onclick=()=>{FX={st:S[+b.dataset.fx],src};$('fxFile').click()});
   $('recList').querySelectorAll('[data-recd]').forEach(b=>b.onclick=()=>recDetail(+b.dataset.recd,b.closest('tr')));
@@ -1273,7 +1287,7 @@ async function loadLedger(){
   const U=new Set(L.map(p=>p.src).filter(s=>devOf(s)==='USD'));
   if(U.size){const ds=L.filter(p=>U.has(p.src)).flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(ds.length)await tauxAssurer(ds[0],ds[ds.length-1])}
   L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);const us=U.has(p.src),r=us&&t.cad==null?tauxDe(t.date):null,cad=!us?t.amt:t.cad!=null?t.cad:r?Math.round(t.amt*r):null;
-    E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:us?`${t.desc} [${fmtN(t.amt)} US$ ${t.cad!=null?'au montant réel du virement':'× '+(r||'taux manquant')}]`:t.desc,lines:t.mirror||cad==null?[]:lines({...t,amt:cad},p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,i,amt:t.amt,cad,dev:us?'USD':'',sansTaux:cad==null,mirror:!!t.mirror,acct:t.acct,tax:!!t.tax,st:t.st,todo:isTr(t)&&!t.mirror})}));
+    E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:us?`${t.desc} [${fmtN(t.amt)} US$ ${t.cad!=null?'au montant réel du virement':'× '+(r||'taux manquant')}]`:t.desc,lines:t.mirror||cad==null?[]:lines({...t,amt:cad},p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,i,amt:t.amt,cad,pair:t.pair||'',aConf:!!t.aConf,dev:us?'USD':'',sansTaux:cad==null,mirror:!!t.mirror,acct:t.acct,tax:!!t.tax,st:t.st,todo:isTr(t)&&!t.mirror})}));
   await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv',id:i.id}));
   (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id,aje:j.type==='aje',todo:!!C.tr&&(j.lines||[]).some(l=>l.a===C.tr)}));
   E.sort((a,b)=>a.date.localeCompare(b.date));
@@ -2853,7 +2867,7 @@ Réponds uniquement en JSON : {"soldes":[{"compte":"1060","montant":1234.56,"sou
     addAccount(String(n),String(x.nom).slice(0,60));if(/\bUSD\b|US\$|DOLLARS? US/.test(norm(x.nom)))C.dev={...(C.dev||{}),[String(n)]:'USD'};x.compte=String(n);nouv.push(`${n} ${x.nom}`)}
   const ok=new Set(PLAN.map(p=>p[0]));const s={};for(const x of(j?.soldes||[])){const a=String(x.compte);const c=Math.round((+x.montant||0)*100);if(!ok.has(a)||!c)continue;s[a]=(s[a]||0)+c}
   const tot=Object.values(s).reduce((a,c)=>a+c,0);return{s,tot,rem:(nouv.length?`Compte(s) créé(s) pour l’ouverture : ${nouv.join(', ')}. `:'')+String(j?.remarques||'')}}
-async function boiteAppliquer(){const{L,crees,exProp}=BOITE;const say=t=>{$('bxMsg').textContent=t};$('bxGo').disabled=true;const res=[];
+async function boiteAppliquer(){const{L,crees,exProp}=BOITE;PAIR_OFF=true;clearTimeout(pairT);const say=t=>{$('bxMsg').textContent=t};$('bxGo').disabled=true;const res=[];
   try{if(exProp&&!curEx()){C.exDeb=exProp.deb;C.exFin=exProp.fin;syncEx();saveClient();res.push(`Exercice du ${exProp.deb} au ${exProp.fin}.`)}
     for(const c of crees.filter(c=>L.some(r=>r.acct===c.acct&&r.action==='verser'))){if(c.ancien){renommerCompte(c.acct,c.nom);res.push(`Compte renommé : ${c.acct} « ${c.ancien} » → ${c.nom}${c.dev==='USD'?' (US$)':''}.`)}else{addAccount(c.acct,c.nom);res.push(`Compte créé : ${c.acct} ${c.nom}${c.dev==='USD'?' (US$)':''}.`)}C.dev={...(C.dev||{}),[c.acct]:c.dev}}
     for(const r of L.filter(r=>r.action==='verser'&&r.acct&&r.dev==='USD'))if(devOf(r.acct)!=='USD'){C.dev={...(C.dev||{}),[r.acct]:'USD'}}
@@ -2877,7 +2891,7 @@ async function boiteAppliquer(){const{L,crees,exProp}=BOITE;const say=t=>{$('bxM
     {const P_=L.filter(r=>r.perso&&['banque','carte'].includes(r.type)&&r.action==='ignorer'&&!r.doublon);if(P_.length){C.aRegler=[...(C.aRegler||[]).filter(x=>!P_.some(r=>r.nom===x.fichier)),...P_.map(r=>({fichier:r.nom,quoi:'Compte personnel ou d’une autre entité? Relevé non versé : on le prend en compte, on le met dans les Comptes liés, ou on l’écarte?',le:new Date().toISOString().slice(0,10)}))];saveClient();res.push(`À régler : ${P_.length} relevé(s) qui semblent personnels ou d’une autre entité, non versés (voir l’Accueil).`)}}
     audit('Boîte de dépôt',`${L.length} document(s) : ${res.length} opération(s)`);LED=null;
     $('bxOut').innerHTML=`<div class="msg" style="white-space:pre-line;margin-top:8px">${esc(res.join('\n'))}</div><div class="row" style="margin-top:10px"><button class="sm pri" data-go="rec">Voir la conciliation</button><button class="sm" data-go="rev">Classer les transactions</button></div>`;BOITE=null;renderHome().catch(()=>{})}
-  catch(e){console.error(e);say('Erreur : '+(e.message||e))}finally{const b=$('bxGo');if(b)b.disabled=false}}
+  catch(e){console.error(e);say('Erreur : '+(e.message||e))}finally{PAIR_OFF=false;const b=$('bxGo');if(b)b.disabled=false}}
 dropzone($('bxDrop'),f=>boiteAnalyser(f).catch(err=>{$('bxOut').innerHTML=`<p class="msg err">${esc(err.message||err)}</p>`}));
 $('bxFile').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)boiteAnalyser(f).catch(err=>{$('bxOut').innerHTML=`<p class="msg err">${esc(err.message||err)}</p>`})};
 async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('hMeth').innerHTML=`<strong>Comment on tient ce dossier :</strong> ${esc(METH[methodeEff()])}${C.methode?'':' <em>(automatique : aucune facture de vente versée)</em>'}${comptesUSD().length?` · Comptes en dollars US : ${esc(comptesUSD().join(', '))}`:''}${C.notes?`<br>${esc(C.notes.slice(0,400))}`:''} <a href="#" data-go="set">Modifier</a>`;
@@ -2891,6 +2905,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('h
     const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.revise)?'Révisé ✓':P_.every(p=>p.statut==='importée')&&C.sage50?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
+  {const nc=L.reduce((a,p)=>a+(p.tx||[]).filter(t=>t.aConf).length,0);if(nc)T.push(`<li><i class="r"></i><div>À confirmer : ${nc} virement(s) entre vos comptes appariés automatiquement (devises différentes ou dates différentes)<small>Vérifiez-les dans la Conciliation (liste des opérations d’autres comptes) : Confirmer ou Défaire.</small></div><button class="sm pri" data-go="rec">Vérifier</button></li>`)}
   (C.aRegler||[]).forEach((x,k)=>T.push(`<li><i class="r"></i><div>À régler : ${esc(x.quoi)}<small>${esc(x.fichier)} · ${esc(x.le||'')}</small></div><button class="sm" data-aregler="${k}">Réglé</button></li>`));
   {const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb)),vieux=L.slice(0,-2).filter(x=>x.statut!=='ferme');
     if(vieux.length)add('g',`${vieux.length>1?`${vieux.length} exercices de plus de deux ans sont`:`L’exercice ${exLbl(vieux[0])} est`} encore ouvert${vieux.length>1?'s':''}`,`${vieux.map(exLbl).join(' · ')} : si la T2 est produite, c’est le temps de fermer — les chiffres déclarés seront protégés.`,'set','Fermer…');
