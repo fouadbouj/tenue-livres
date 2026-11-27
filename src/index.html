@@ -308,7 +308,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="row" style="justify-content:space-between">
         <div class="tabs" role="group" aria-label="Filtre">
           <button data-f="todo" aria-pressed="true">À classer</button>
-          <button data-f="sug" aria-pressed="false">Suggérées par l'IA</button>
+          <button data-f="sug" aria-pressed="false">Suggestions de l'IA à confirmer</button>
           <button data-f="done" aria-pressed="false">Classées</button>
           <button data-f="all" aria-pressed="false">Toutes</button>
         </div>
@@ -817,7 +817,8 @@ const moisLbl=m=>{const[y,mm]=String(m||'').split('-');return mm?`${MOISN[+mm-1]
 const isTr=t=>t.st==='transit'||(!!C&&!!C.tr&&t.acct===C.tr);
 /* À classer « maintenant » : recalculé avec les règles actuelles (le chiffre enregistré avec la période peut dater d’avant une règle). */
 /* « À classer » = jamais classée (st transit). Une transaction mise volontairement au compte transitoire est classée, mais reste « à régulariser ». */
-const aCl=t=>t.st==='transit';
+/* « à classer » : jamais classées, et suggestions de l'IA pas encore confirmées */
+const aCl=t=>t.st==='transit'||t.st==='suggere';
 const enTr=t=>t.st!=='transit'&&!!C&&!!C.tr&&t.acct===C.tr;
 const todoNow=p=>{if(!Array.isArray(p.tx))return +p.todo||0;const L=p.tx.map(t=>{const c={...t};try{classify(c,p.src)}catch(e){}return c});p.trn=L.filter(enTr).length;return p.todo=L.filter(aCl).length};
 const CAT={carb:/CARBURANT|ESSENCE|\bGAZ\b|FUEL|COMBUSTIBLE|VEHICULE/,elec:/ELECTRICITE|HYDRO|ENERGIE|CHAUFFAGE|SERVICES PUBLICS/,tel:/TELECOM|TELEPHON|INTERNET|CELLULAIRE|COMMUNICATION/,fb:/FRAIS BANC|FRAIS DE BANQUE|FRAIS DE SERVICE|BANK/,int:/INTERET|FRAIS FINANCIERS/,rep:/REPAS|REPRESENTATION|DIVERTISSEMENT/,log:/LOGICIEL|ABONNEMENT|INFORMATIQUE/,four:/FOURNITURE|PAPETERIE|FRAIS DE BUREAU/,ass:/ASSURANCE/,imm:/IMMATRICUL|PERMIS|LICENCE/,veh:/ENTRETIEN.*VEHICULE|VEHICULE|DEPENSES? (DE |D')?(VEHICULE|AUTOMOBILE)|FRAIS DE VEHICULE|AUTOMOBILE/,pub:/PUBLICITE|MARKETING|PROMOTION/};
@@ -985,6 +986,7 @@ function adepAssurer(){let a=adepAcc();if(a)return a;const pris=new Set(PLAN.map
 /* ---------- virements entre les comptes de l'entreprise (banques, cartes, PayPal; en CAD ou en USD) ----------
    Les deux côtés sont appariés : un seul est compté au grand livre, l'autre est marqué « déjà compté ». Entre devises, c'est le côté en $ CA
    qui est compté : le compte en US$ reçoit ainsi le coût réel de l'opération de change. */
+const PROCPAY=/ELAVON|\bAMEX\b|AMERICAN EXPRESS|PAYPAL|STRIPE|SQUARE|SHOPIFY|MONERIS|GLOBAL PAYMENTS|CLOVER|MRCH SVC|MERCHANT|AUTHORIZE\.NET|HELCIM|CHASE PAYMENTECH/;
 const VIR=/VIREMENT|TRANSFER|TRANSFERT|\bTFR\b|\bCHANGE\b|\bFX\b|PAIEMENT.{0,20}(VISA|CARTE|MASTERCARD|AMEX)|PAYMENT.{0,14}(THANK|RECEIVED|MERCI)|PAIEMENT MERCI|PAYPAL|WITHDRAWAL|RETRAIT|CONVERSION/;
 async function pairInterne(){if(!C)return 0;if(P&&pTimer)savePerNow();await pWriting;const L=await iaPeriodes();if(new Set(L.map(p=>p.src)).size<2)return 0;
   L.forEach(p=>{if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)p.tx=P.tx});
@@ -1018,8 +1020,10 @@ let pairT=null,PAIR_OFF=false;function pairPlus(){if(PAIR_OFF)return;clearTimeou
 const baseResolved=()=>BASE.map(r=>({...r,a:findAcc(CAT[r.c],true)}));
 function classify(t,src){
   if(lk(t.date))return;if(t.pair)return;
-  if(t.st==='manuel'||t.st==='suggere'||t.st==='facture')return;
+  if(t.st==='manuel'||t.st==='facture')return;
   const n=norm(t.desc);
+  if(t.amt>0&&C.methode==='adeposer'&&adepAcc()&&!/^2/.test(String(src||P?.src||''))&&PROCPAY.test(n)){Object.assign(t,{acct:adepAcc(),tax:false,st:'auto',why:'Méthode du dossier : encaissement du processeur de paiement, porté en réduction des transactions à déposer',unk:false});return}
+  if(t.st==='suggere')return;
   const r=[...(C.rules||[])].sort((a,b)=>spec(b.p)-spec(a.p)||(b.d||'').localeCompare(a.d||'')||b.p.length-a.p.length).find(r=>r.p&&has(n,r.p)&&(!r.d||t.date>=r.d)&&(!r.s||r.s==='les deux'||(r.s==='sortie'?t.amt<0:t.amt>0)));
   if(t.st==='apparie'){if(r&&r.a!==C.tr&&spec(r.p)>0)Object.assign(t,{acct:r.a,tax:r.t,st:'auto',why:'Règle du client : '+r.p,unk:false});return}
   if(r){Object.assign(t,{acct:r.a,tax:r.t,st:'auto',why:'Règle du client : '+r.p,unk:false});return}
