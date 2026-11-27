@@ -819,7 +819,7 @@ const isTr=t=>t.st==='transit'||(!!C&&!!C.tr&&t.acct===C.tr);
 /* « À classer » = jamais classée (st transit). Une transaction mise volontairement au compte transitoire est classée, mais reste « à régulariser ». */
 const aCl=t=>t.st==='transit';
 const enTr=t=>t.st!=='transit'&&!!C&&!!C.tr&&t.acct===C.tr;
-const todoNow=p=>{if(!Array.isArray(p.tx))return +p.todo||0;const L=p.tx.map(t=>{const c={...t};try{classify(c)}catch(e){}return c});p.trn=L.filter(enTr).length;return p.todo=L.filter(aCl).length};
+const todoNow=p=>{if(!Array.isArray(p.tx))return +p.todo||0;const L=p.tx.map(t=>{const c={...t};try{classify(c,p.src)}catch(e){}return c});p.trn=L.filter(enTr).length;return p.todo=L.filter(aCl).length};
 const CAT={carb:/CARBURANT|ESSENCE|\bGAZ\b|FUEL|COMBUSTIBLE|VEHICULE/,elec:/ELECTRICITE|HYDRO|ENERGIE|CHAUFFAGE|SERVICES PUBLICS/,tel:/TELECOM|TELEPHON|INTERNET|CELLULAIRE|COMMUNICATION/,fb:/FRAIS BANC|FRAIS DE BANQUE|FRAIS DE SERVICE|BANK/,int:/INTERET|FRAIS FINANCIERS/,rep:/REPAS|REPRESENTATION|DIVERTISSEMENT/,log:/LOGICIEL|ABONNEMENT|INFORMATIQUE/,four:/FOURNITURE|PAPETERIE|FRAIS DE BUREAU/,ass:/ASSURANCE/,imm:/IMMATRICUL|PERMIS|LICENCE/,veh:/ENTRETIEN.*VEHICULE|VEHICULE|DEPENSES? (DE |D')?(VEHICULE|AUTOMOBILE)|FRAIS DE VEHICULE|AUTOMOBILE/,pub:/PUBLICITE|MARKETING|PROMOTION/};
 const BASE=[["PETRO-CANADA","carb",1],["PETRO CANADA","carb",1],["ESSO","carb",1],["SHELL","carb",1],["ULTRAMAR","carb",1],["COUCHE-TARD","carb",1],["CREVIER","carb",1],["IRVING","carb",1],["HYDRO-QUEBEC","elec",1],["HYDRO QUEBEC","elec",1],["ENERGIR","elec",1],["VIDEOTRON","tel",1],["BELL CANADA","tel",1],["BELL MOBILITE","tel",1],["ROGERS","tel",1],["FIDO","tel",1],["TELUS","tel",1],["KOODO","tel",1],["FRAIS MENSUELS","fb",0],["FRAIS DE SERVICE","fb",0],["FRAIS BANCAIRES","fb",0],["FRAIS D'UTILISATION","fb",0],["INTERETS","int",0],["TIM HORTONS","rep",1],["MCDONALD","rep",1],["STARBUCKS","rep",1],["UBER EATS","rep",1],["ADOBE","log",1],["MICROSOFT","log",1],["GOOGLE","log",1],["INTUIT","log",1],["ZOOM","log",1],["BUREAU EN GROS","four",1],["STAPLES","four",1],["INTACT","ass",0],["DESJARDINS ASSURANCES","ass",0],["LA CAPITALE","ass",0],["BELAIR","ass",0],["SAAQ","imm",0],["CANADIAN TIRE","veh",1],["FACEBK","pub",1],["META ADS","pub",1]].map(([p,c,t])=>({p:norm(p),c,t:!!t}));
 const DEF_PLAN=`1000 ACTIF
@@ -1188,7 +1188,7 @@ const IAC=new Map();
 const iaMt=c=>(c/100).toFixed(2);
 async function iaPeriodes(){if(local)return Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);const q=await db.collection('clients').doc(C.id).collection('periodes').get();return q.docs.map(d=>d.data())}
 async function iaTx(){/* toutes les transactions reclassables : relevés (période + rang) et lignes d'écritures */
-  const out=[];(await iaPeriodes()).forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t);
+  const out=[];(await iaPeriodes()).forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);
     out.push({ref:`R:${p.mois}_${p.src}:${i}`,kind:'rel',pid:p.mois+'_'+p.src,i,date:t.date,desc:t.desc,m:t.amt,a:t.acct,tax:!!t.tax,tr:isTr(t),src:p.src})})});
   (await loadJe()).forEach(j=>(j.lines||[]).forEach((l,k)=>out.push({ref:`J:${j.id}:${k}`,kind:'je',id:j.id,k,date:j.date,desc:(j.ref?j.ref+' — ':'')+(j.desc||''),m:(l.d||0)-(l.c||0),a:l.a,tr:!!C.tr&&l.a===C.tr,src:'écriture'})));
   out.forEach(x=>IAC.set(x.ref,x));return out}
@@ -1553,7 +1553,7 @@ function mergeInto(p,list){
   let added=0,dup=0;const seen=new Map();
   for(const x of list){if(lk(x.date)){if(MSTAT)MSTAT.verr=(MSTAT.verr||0)+1;continue}const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);
     const h=p.tx.filter(t=>t.date===x.date&&t.amt===x.amt&&!voisins(t.rel,x.rel)).length;if(s<=h){dup++;continue}
-    const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
+    const t={id:++seq,...x};classify(t,p.src);p.tx.push(t);added++}
   p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
   if(added&&p.statut==='importée')p.statut='en cours';
   if(added&&p.revise){audit('Mois révisé modifié',`${moisLbl(p.mois)} · ${p.src} : ${added} transaction(s) ajoutée(s), révision retirée`);p.revise=null}
@@ -3404,7 +3404,7 @@ const ansCents=v=>{let x=String(v??'').replace(/[\s  $]/g,'');if(!x)return nu
 const ansDate=v=>{const t=String(v||'').trim();let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;m=t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`}return t};
 async function ansCandidates(){/* transactions encore au transitoire : relevés (période + rang) et écritures */
   let L=[];if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);else{const q=await db.collection('clients').doc(C.id).collection('periodes').get();L=q.docs.map(d=>d.data())}
-  const out=[];L.forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t);if(isTr(t)&&!lk(t.date))out.push({kind:'rel',pid:p.mois+'_'+p.src,mois:p.mois,src:p.src,i,date:t.date,desc:t.desc,c:Math.abs(t.amt),sortie:t.amt<0})})});
+  const out=[];L.forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);if(isTr(t)&&!lk(t.date))out.push({kind:'rel',pid:p.mois+'_'+p.src,mois:p.mois,src:p.src,i,date:t.date,desc:t.desc,c:Math.abs(t.amt),sortie:t.amt<0})})});
   (await loadJe()).forEach(j=>(j.lines||[]).forEach((l,k)=>{if(l.a===C.tr&&!lk(j.date)){const v=(l.d||0)-(l.c||0);out.push({kind:'je',id:j.id,k,date:j.date,desc:j.desc||j.ref||'',c:Math.abs(v),sortie:v>0})}}));return out}
 async function ansRead(f){const rows=/\.xlsx?$/i.test(f.name)?await readXlsx(f):parseCSV(decode(await f.arrayBuffer()));
   const h=rows.findIndex(r=>r.some(c=>/^date$/i.test(c.trim()))&&r.some(c=>/montant/i.test(c)));if(h<0)throw new Error('En-têtes introuvables : utilisez le fichier envoyé au client.');
@@ -3669,7 +3669,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('h
   if(SET.length)T.unshift(`<li style="display:block;border:0;padding:4px 0 0"><strong>Mise en place du dossier</strong></li>`,...SET,`<li style="display:block;border:0;padding:8px 0 0"><strong>Travail en cours</strong></li>`);
   /* contrôles selon le profil de l'entreprise (TPS/TVQ, employés) */
   try{const prof={tx:C.profil?.tx??FICHE?.tps_tvq,emp:C.profil?.emp??FICHE?.employeur},dans=d=>d>=x.deb&&d<=x.fin&&!lk(d);
-    if(prof.tx===false){let n=0,tot=0;L.forEach(p=>(p.tx||[]).forEach(t0=>{const t={...t0};classify(t);if(t.tax&&dans(t.date)){n++;tot+=Math.abs(t.amt)}}));
+    if(prof.tx===false){let n=0,tot=0;L.forEach(p=>(p.tx||[]).forEach(t0=>{const t={...t0};classify(t,p.src);if(t.tax&&dans(t.date)){n++;tot+=Math.abs(t.amt)}}));
       if(!LED)LED=await loadLedger();const ta=[C.tpsA,C.tvqA,C.tpsV,C.tvqV].filter(Boolean),je=LED.filter(e=>e.kind!=='rel'&&dans(e.date)&&e.lines.some(l=>ta.includes(l[0]))).length;
       if(n||je)T.unshift(`<li><i class="r"></i><div>Taxes calculées alors que le client n’est pas inscrit à la TPS/TVQ<small>${n?`${n} transaction(s) bancaire(s) traitée(s) comme taxables (${fmtN(tot)} $)`:''}${n&&je?' · ':''}${je?`${je} écriture(s) ou facture(s) touchent les comptes de taxes`:''}. Correction proposée : traiter ces transactions sans taxes.</small></div><div class="row" style="gap:6px;justify-content:flex-end">${n?`<button class="sm pri" data-fixtax>Retirer les taxes</button>`:''}<button class="sm" data-iaask="Le client n’est pas inscrit à la TPS/TVQ, mais des transactions ou des écritures utilisent les comptes de TPS/TVQ. Cherche-les et propose les corrections.">Voir avec l’assistant</button></div></li>`)}
     if(prof.emp===false){if(!LED)LED=await loadLedger();const pay=PLAN.filter(([n,t])=>!isHeader(n,t)&&(['2120','2125','2130','5100','5110','5120'].includes(n)||/SALAIRE|DAS\b|RETENUES? A LA SOURCE|CHARGES SOCIALES|VACANCES A PAYER/.test(norm(t)))).map(p=>p[0]);
@@ -3698,7 +3698,7 @@ $('tHome').addEventListener('click',async e=>{const z=e.target.closest('[data-ou
   if(z.hasAttribute('data-ouv0')){if(!confirm('Confirmer que c’est un nouveau client qui démarre : tous les soldes d’ouverture sont à zéro?'))return;C.ouv={date:curEx().deb,s:{},zero:true};syncEx();saveClient();LED=null;notify('Soldes d’ouverture à zéro (nouveau client)');renderHome();return}
   if(z.hasAttribute('data-fixtax')){if(!confirm('Le client n’est pas inscrit : les transactions bancaires de cet exercice seront traitées sans TPS/TVQ, et ses règles de classement aussi. Continuer?'))return;
     const x=curEx();let n=0;C.rules=(C.rules||[]).map(r=>({...r,t:false}));const L=await iaPeriodes();
-    for(const p of L){const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;let ch=0;(src.tx||[]).forEach(t=>{const c={...t};classify(c);if(c.tax&&t.date>=x.deb&&t.date<=x.fin&&!lk(t.date)){Object.assign(t,{acct:c.acct,st:'manuel',tax:false,why:'Sans taxes : client non inscrit à la TPS/TVQ',unk:false});n++;ch++}});
+    for(const p of L){const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;let ch=0;(src.tx||[]).forEach(t=>{const c={...t};classify(c,p.src);if(c.tax&&t.date>=x.deb&&t.date<=x.fin&&!lk(t.date)){Object.assign(t,{acct:c.acct,st:'manuel',tax:false,why:'Sans taxes : client non inscrit à la TPS/TVQ',unk:false});n++;ch++}});
       if(!ch)continue;if(src===P){savePerNow();continue}p.updated=new Date().toISOString();if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
     saveClient();LED=null;notify(`${n} transaction(s) corrigée(s) : sans TPS/TVQ`);renderHome();return}});
 $('tHome').addEventListener('click',e=>{const q=e.target.closest('[data-aregler]');if(q){const x=(C.aRegler||[])[+q.dataset.aregler];C.aRegler=(C.aRegler||[]).filter((_,k)=>k!==+q.dataset.aregler);if(x)audit('Point réglé',`${x.fichier} : ${x.quoi}`);saveClient();renderHome().catch(()=>{});return}});
