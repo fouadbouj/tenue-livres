@@ -21,9 +21,10 @@
 <main id="app" hidden>
   <h1>Gestion du cabinet</h1>
   <p class="sub">Clients, documents, impôts, demandes, échéances, facturation, paiements et tâches.</p>
+  <div id="confBan"></div>
   <div class="info" id="toast" hidden style="background:#e6f5ec;margin:0 0 12px;display:flex;gap:12px;align-items:center;justify-content:space-between"></div>
-  <nav class="tabs" id="tabs"><button data-t="cli" aria-pressed="false">Clients</button><button data-t="dem" aria-pressed="false">Documents</button><button data-t="pc" aria-pressed="false">Impôts perso</button><button data-t="dt" aria-pressed="false">Demandes</button><i class="tsep" aria-hidden="true"></i><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="fact" aria-pressed="false">Facturation</button><button data-t="pay" aria-pressed="false">Paiements</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="sauv" aria-pressed="false">Sauvegarde</button></nav>
-  <section id="tboard"></section><section id="tdem" hidden></section><section id="tcli" hidden></section><section id="ttache" hidden></section><section id="tfact" hidden></section><section id="tsauv" hidden></section><section id="tdt" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section>
+  <nav class="tabs" id="tabs"><button data-t="cli" aria-pressed="false">Clients</button><button data-t="dem" aria-pressed="false">Documents</button><button data-t="pc" aria-pressed="false">Impôts perso</button><button data-t="dt" aria-pressed="false">Demandes</button><i class="tsep" aria-hidden="true"></i><button data-t="board" aria-pressed="true">Échéancier</button><button data-t="fact" aria-pressed="false">Facturation</button><button data-t="pay" aria-pressed="false">Paiements</button><button data-t="tache" aria-pressed="false">Tâches</button><button data-t="sauv" aria-pressed="false">Sauvegarde</button><button data-t="conf" aria-pressed="false" title="Configuration du cabinet" aria-label="Configuration du cabinet">⚙</button></nav>
+  <section id="tboard"></section><section id="tdem" hidden></section><section id="tcli" hidden></section><section id="ttache" hidden></section><section id="tfact" hidden></section><section id="tsauv" hidden></section><section id="tdt" hidden></section><section id="tpay" hidden></section><section id="tpc" hidden></section><section id="tconf" hidden></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>

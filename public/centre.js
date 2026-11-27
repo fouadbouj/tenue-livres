@@ -16,10 +16,10 @@ function periodes(c,auj=new Date()){const M=+String(c.fin_exercice).slice(0,2)||
 const STP={'à envoyer':'g','envoyée':'g','reçue':'ok','apportée au bureau':'ok','annulée':''};
 
 async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4,m5]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*'),sb.from('cc_dpa_accords').select('*'),sb.from('cc_factures').select('*'),sb.from('cc_lots_dpa').select('*'),sb.from('cc_parametres').select('*'),sb.from('cc_services').select('*').order('created_at',{ascending:false})]);
-  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};REPR=(m4.data||[]).find(x=>x.cle==='representant')?.valeur||{};
+  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};REPR=(m4.data||[]).find(x=>x.cle==='representant')?.valeur||{};CONF=(m4.data||[]).find(x=>x.cle==='configuration')?.valeur||{};SAUVP=(m4.data||[]).find(x=>x.cle==='sauvegarde')?.valeur||null;
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
-function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv','dt'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,dt:rDt,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
+function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv','dt','conf'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();confBan();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,dt:rDt,conf:rConf,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
 
 /* ---------- documents à recevoir ---------- */
 function rDem(){const nm=id=>CLI.find(c=>c.id===id)?.nom||'?';
@@ -48,7 +48,7 @@ function rCli(){if(EDIT)return rFiche();
     <button class="pri" id="cNew">+ Nouveau client</button></div>
     <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Client</th><th>Type</th><th>Coordonnées</th><th>Fin d’exercice</th><th>Services</th><th>Dossier</th><th></th></tr></thead><tbody>
     ${L.map(c=>{const ck=CHK.filter(([k])=>chkAuto(c,k)||c.checklist?.[k]).length,unread=MSG.filter(m=>m.client_id===c.id&&m.auteur==='client'&&!m.lu).length,ct=CTR.filter(x=>x.client_id===c.id&&x.statut!=='annulé').sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
-      return `<tr><td><strong>${esc(c.nom)}</strong>${c.groupe?`<br><small class="sub">Groupe : ${esc(c.groupe)}</small>`:''}${c.contact?`<br><small class="sub">${esc(c.contact)}</small>`:''}</td><td>${c.type==='particulier'?'Particulier':esc(c.forme||'Entreprise')}<br><span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span></td>
+      const mq=manquants(c);return `<tr><td><strong>${esc(c.nom)}</strong>${mq.m.length||mq.fmt.length?` <span class="pill r" title="${esc([...mq.m.map(x=>CHAMPS[x]),...mq.fmt.map(([x,w])=>CHAMPS[x]+' ('+w+')')].join(', '))}">Fiche incomplète</span>`:''}${c.groupe?`<br><small class="sub">Groupe : ${esc(c.groupe)}</small>`:''}${c.contact?`<br><small class="sub">${esc(c.contact)}</small>`:''}</td><td>${c.type==='particulier'?'Particulier':esc(c.forme||'Entreprise')}<br><span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span></td>
       <td>${esc(c.courriel||'—')}${c.telephone?`<br><small>${esc(c.telephone)}</small>`:''}</td><td>${c.type==='particulier'?'—':esc(c.fin_exercice)}</td>
       <td>${[c.tps_tvq!==false&&c.type!=='particulier'?`TPS/TVQ ${esc(c.frequence)}`:'',c.employeur?'Employeur':''].filter(Boolean).join('<br>')||'—'}</td>
       <td><small>Ouverture : ${ck}/${CHK.length}</small><br>${ct?`<span class="pill ${ct.statut==='signé'?'ok':'g'}">Contrat ${esc(ct.statut)}</span>`:'<span class="pill r">Pas de contrat</span>'}${unread?` <span class="pill r">${unread} message(s)</span>`:''}</td>
@@ -123,15 +123,33 @@ function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par
     <h3>Ouverture du dossier</h3><div style="display:grid;gap:4px">${CHK.map(([k,l,auto])=>{const ok=auto?chkAuto(c,k):!!c.checklist?.[k];return `<label class="opt"><input type="checkbox" data-chk="${k}"${ok?' checked':''}${auto?' disabled':''}> <span>${l}${auto?' <small class="sub">(automatique)</small>':c.checklist?.[k]?` <small class="sub">(${dl(c.checklist[k])})</small>`:''}</span></label>`}).join('')}</div>
     <label class="f" style="margin-top:12px"><b>Description de l’entreprise</b><small class="sub" style="font-weight:400">Activités, clientèle, employés, véhicules, particularités. L’IA s’en sert pour proposer le plan comptable et classer les transactions.</small><textarea id="cDs" placeholder="Ex. firme d’ingénieurs en structure, 2 employés, un véhicule, bureau loué à Laval">${v('description')}</textarea></label>
     <label class="f" style="margin-top:12px"><b>Notes internes</b><textarea id="cNo">${v('notes')}</textarea></label>
-    <div class="row" style="margin-top:12px"><button class="pri" id="cSave">${c.id?'Enregistrer':'Créer le client'}</button>${c.id?'<button class="sm danger" id="cDel">Supprimer le client</button>':''}<span class="msg" id="cM"></span></div>`}
+    <p class="sub" style="font-size:13px;margin:12px 0 0">Obligatoires : nom, personne-ressource et courriel; pour une société : forme juridique, NEQ, numéro d’entreprise, fin d’exercice et adresse; si le client est inscrit à la TPS/TVQ : ses numéros de taxes. (Un prospect : nom et courriel ou téléphone.)</p>
+    <div class="row" style="margin-top:8px"><button class="pri" id="cSave">${c.id?'Enregistrer':'Créer le client'}</button>${c.id?'<button class="sm danger" id="cDel">Supprimer le client</button>':''}<span class="msg" id="cM"></span></div>`}
 const pRow=(p={})=>`<div class="row pers" style="gap:8px;margin-bottom:6px;align-items:flex-end">${[['nom','Nom'],['role','Rôle (actionnaire, conjoint…)'],['courriel','Courriel'],['telephone','Téléphone']].map(([k,l])=>`<label class="f" style="flex:1;min-width:150px"><b>${l}</b><input data-p="${k}" value="${esc(p[k]||'')}"></label>`).join('')}<button class="sm danger" data-pdel>Retirer</button></div>`;
+/* ---------- fiche client : champs obligatoires ---------- */
+const CHAMPS={cN:'Nom',cC:'Personne-ressource',cE:'Courriel',cTel:'Téléphone',cFo:'Forme juridique',cNeq:'NEQ',cBn:'Numéro d’entreprise (ARC)',cX:'Fin d’exercice',cAd:'Adresse',cVi:'Ville',cCp:'Code postal',cTps:'Numéro de TPS',cTvq:'Numéro de TVQ'};
+function manquants(r){const m=[],fmt=[],v=x=>String(x||'').trim(),soc=r.type!=='particulier'&&!/individuelle|personnes|Particulier/.test(r.forme||''),pros=r.statut==='prospect';
+  if(!v(r.nom))m.push('cN');
+  if(pros){if(!v(r.courriel)&&!v(r.telephone))m.push('cE')}
+  else{if(!v(r.contact))m.push('cC');if(!v(r.courriel))m.push('cE');
+    if(soc){if(!v(r.forme))m.push('cFo');if(!v(r.neq))m.push('cNeq');if(!v(r.no_entreprise))m.push('cBn');if(!/^\d\d-\d\d$/.test(v(r.fin_exercice)))m.push('cX');if(!v(r.adresse))m.push('cAd');if(!v(r.ville))m.push('cVi');if(!v(r.code_postal))m.push('cCp')}
+    if(r.tps_tvq&&r.type!=='particulier'){if(!v(r.no_tps))m.push('cTps');if(!v(r.no_tvq))m.push('cTvq')}}
+  if(v(r.courriel)&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v(r.courriel)))fmt.push(['cE','adresse invalide']);
+  if(v(r.neq)&&!/^\d{10}$/.test(v(r.neq).replace(/\s/g,'')))fmt.push(['cNeq','10 chiffres']);
+  if(v(r.no_entreprise)&&!/^\d{9}/.test(v(r.no_entreprise).replace(/\s/g,'')))fmt.push(['cBn','9 chiffres']);
+  if(v(r.no_tps)&&!/^\d{9}\s*RT\s*\d{4}$/i.test(v(r.no_tps)))fmt.push(['cTps','ex. 123456789 RT0001']);
+  if(v(r.no_tvq)&&!/^\d{10}\s*TQ\s*\d{4}$/i.test(v(r.no_tvq)))fmt.push(['cTvq','ex. 1234567890 TQ0001']);
+  if(v(r.code_postal)&&!/^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$/.test(v(r.code_postal)))fmt.push(['cCp','ex. H7G 2V9']);
+  return{m,fmt}}
 async function saveFiche(){const c=EDIT,g=id=>$(id)?.value.trim()||null,tx=$('cTx')?.checked!==false&&$('cTy').value!=='particulier',st=$('cSt').value;
   const chk={...(c.checklist||{})};document.querySelectorAll('[data-chk]:not([disabled])').forEach(x=>{if(x.checked)chk[x.dataset.chk]=chk[x.dataset.chk]||new Date().toLocaleDateString('fr-CA');else delete chk[x.dataset.chk]});
   const row={type:$('cTy').value,nom:g('cN'),forme:$('cFo').value,statut:st,groupe:g('cGr'),responsable:g('cRe'),ouverture:g('cOu'),langue:$('cLa').value,contact:g('cC'),courriel:g('cE'),telephone:g('cTel'),adresse:g('cAd'),ville:g('cVi'),province:g('cPr'),code_postal:g('cCp'),
     neq:g('cNeq'),no_entreprise:g('cBn'),no_tps:g('cTps'),no_tvq:g('cTvq'),fin_exercice:/^\d\d-\d\d$/.test($('cX')?.value||'')?$('cX').value:'12-31',spcc_dpe:!!$('cDpe')?.checked,employeur:!!$('cEmp')?.checked,tps_tvq:tx,
     frequence:$('cF')?.value||'trimestrielle',depuis:g('cD')||new Date().toLocaleDateString('fr-CA'),documents:g('cT')||c.documents||'Relevés bancaires et de cartes de crédit, factures de ventes et factures d’achats de la période.',actif:tx&&st==='actif'&&!!$('cA')?.checked,
     contacts:[...document.querySelectorAll('.pers')].map(r=>Object.fromEntries([...r.querySelectorAll('[data-p]')].map(i=>[i.dataset.p,i.value.trim()]))).filter(p=>p.nom||p.courriel),checklist:chk,notes:g('cNo'),description:g('cDs'),updated_at:new Date().toISOString()};
-  if(!row.nom){$('cM').textContent='Nom requis.';$('cM').className='msg err';return}
+  document.querySelectorAll('#fBody .manq').forEach(x=>{x.classList.remove('manq');x.style.borderColor=''});
+  {const{m,fmt}=manquants(row);const all=[...m.map(id=>[id,'obligatoire']),...fmt];if(all.length){all.forEach(([id])=>{const el=$(id);if(el){el.classList.add('manq');el.style.borderColor='#c0392b'}});
+    $('cM').innerHTML=`<strong>À compléter avant d’enregistrer :</strong> ${all.map(([id,w])=>`${esc(CHAMPS[id]||id)} (${w})`).join(' · ')}`;$('cM').className='msg err';$(all[0][0])?.focus();$('cSave').disabled=false;return}}
   const sv=x=>c.id?sb.from('cc_clients').update(x).eq('id',c.id).select().single():sb.from('cc_clients').insert(x).select().single();
   let r=await sv(row);if(r.error&&/description/.test(r.error.message||'')){const{description:_,...rest}=row;r=await sv(rest);if(!r.error)notify('Fiche enregistrée, sauf la description : exécutez d’abord la mise à jour SQL (centre_dossiers.sql).',1)}
   if(r.error){$('cM').textContent=r.error.message;$('cM').className='msg err';return}
@@ -230,6 +248,45 @@ let EM=new Date().toLocaleDateString('fr-CA').slice(0,7);
 function etatOb(o){const f=ECH.find(e=>e.client_id===o.client_id&&e.cle===o.cle);if(f)return{ok:1,txt:`Fait le ${dl(f.fait_le)}`};
   if(o.type==='TPS/TVQ'){const fin=o.cle.slice(4),p=PUB.find(p=>p.client_id===o.client_id&&p.periode_fin===fin&&p.montant>0);if(p?.paye_le)return{ok:1,txt:'Payé par le client'};if(p)return{txt:'Déclaration publiée, paiement à confirmer'};const d=DEM.find(d=>d.client_id===o.client_id&&d.fin===fin);if(d)return{txt:['reçue','apportée au bureau'].includes(d.statut)?'Documents reçus':'Documents : '+d.statut}}
   return{}}
+/* ---------- configuration du cabinet : guide pas à pas des informations obligatoires ---------- */
+const okMail=v=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v||''),okTps=v=>/^\d{9}\s*RT\s*\d{4}$/i.test(v||''),okTvq=v=>/^\d{10}\s*TQ\s*\d{4}$/i.test(v||''),okNe=v=>/^\d{9}$/.test(String(v||'').replace(/\s/g,''));
+function confEtapes(){const P=PAR||{},R=REPR||{},C_=CONF||{};
+  return[
+  {k:'cab',t:'Numéros de taxes et courriel du cabinet',oblig:true,ok:okTps(P.tps)&&okTvq(P.tvq)&&okMail(P.courriel),why:'Imprimés sur toutes vos factures; le courriel reçoit les réponses des clients.',
+    f:[['par','tps','Numéro de TPS du cabinet','123456789 RT0001',okTps,'Format : 9 chiffres, RT, 4 chiffres'],['par','tvq','Numéro de TVQ du cabinet','1234567890 TQ0001',okTvq,'Format : 10 chiffres, TQ, 4 chiffres'],['par','courriel','Courriel de facturation','admin@boujradcpa.com',okMail,'']]},
+  {k:'pay',t:'Comment vos clients vous paient',oblig:true,ok:okMail(P.interac),why:'Indiqué dans chaque courriel de facture et sur la page de paiement en ligne.',
+    f:[['par','interac','Courriel pour les virements Interac','paiement@boujradcpa.com',okMail,'Adresse inscrite au dépôt automatique de votre banque'],['par','interacNote','Précision Interac (facultatif)','Dépôt automatique : aucune question de sécurité',null,'']]},
+  {k:'rep',t:'Votre numéro de représentant (ARC)',oblig:true,ok:okNe(R.ne)||!!R.idgroupe||!!R.idrep,why:'Envoyé aux clients pour qu’ils vous autorisent dans leur compte de l’ARC (bouton « Demande de représentant »).',
+    f:[['rep','ne','Numéro d’entreprise du cabinet (9 chiffres)','123456789',okNe,''],['rep','rq','No de représentant professionnel Revenu Québec (facultatif)','',null,'']]},
+  {k:'dpa',t:'Débits préautorisés Desjardins',oblig:false,ok:!!(P.organisme&&P.nomCourt)||C_.dpa==='non',why:'Seulement si vous prélevez vos clients par débit préautorisé. Les détails viennent de votre caisse (AccèsD Affaires).',lien:['fact','par','Remplir dans Facturation › Paramètres'],non:'Je n’utilise pas le DPA'},
+  {k:'mail',t:'Courriel d’essai',oblig:true,ok:!!C_.mailTest,why:'Vérifie que les courriels partent bien de votre adresse, avec la signature du cabinet.',btn:['confMail','M’envoyer un courriel d’essai']},
+  {k:'team',t:'Votre équipe',oblig:false,ok:!!C_.equipe,why:'Invitez vos employés et choisissez leur rôle (CPA ou technicien) dans la Comptabilité › Réglages › Paramètres › Utilisateurs du cabinet.',lienExt:['index.html','Ouvrir les utilisateurs'],non:'Je travaille seul pour l’instant',fait:'C’est fait'},
+  {k:'sauv',t:'Première sauvegarde complète',oblig:true,ok:!!SAUVP,why:'Un fichier ZIP protégé, avec toutes vos données, à garder sur une clé USB. Un rappel vous le redemande chaque mois.',lien:['sauv',null,'Faire la sauvegarde']}]}
+function confBan(){const el=$('confBan');if(!el)return;const E=confEtapes().filter(e=>e.oblig),n=E.filter(e=>e.ok).length;
+  el.innerHTML=n<E.length&&TAB!=='conf'?`<div class="alert" style="margin:0 0 12px;display:flex;gap:12px;align-items:center;justify-content:space-between;background:#fbf4e4;border-color:var(--gold);color:#5c430c"><span><strong>Configuration du cabinet : ${n} étape${n>1?'s':''} sur ${E.length}.</strong> Quelques informations sont nécessaires pour vos factures, vos courriels et vos clients.</span><button class="sm pri" data-confgo="1">Continuer la configuration</button></div>`:''}
+function rConf(){sb.from('cc_parametres').select('valeur').eq('cle','sauvegarde').maybeSingle().then(({data})=>{if(!!data!==!!SAUVP){SAUVP=data?.valeur||null;if(TAB==='conf'){rConf();confBan()}}}).catch(()=>{});const L=confEtapes(),E=L.filter(e=>e.oblig),n=E.filter(e=>e.ok).length;const val=(src,k)=>esc((src==='par'?PAR:REPR)[k]||'');
+  $('tconf').innerHTML=`<div class="card"><h2 style="margin-top:0">Configuration du cabinet</h2><p class="sub">Les informations nécessaires au bon fonctionnement : factures, courriels, portail client, sauvegardes. ${n===E.length?'<strong style="color:#1d7a4f">✓ Tout ce qui est obligatoire est fait.</strong>':`${n} sur ${E.length} étapes obligatoires faites.`}</p>
+    <div style="height:8px;background:var(--soft);border-radius:8px;overflow:hidden;margin:6px 0 16px"><div style="height:100%;width:${Math.round(n/E.length*100)}%;background:var(--gold)"></div></div>
+    ${L.map((e,i)=>`<div data-step="${e.k}" style="border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0;${e.ok?'background:#f1faf4':''}">
+      <div class="row" style="justify-content:space-between;align-items:center"><strong>${e.ok?'✓':i+1+'.'} ${esc(e.t)}</strong><span class="pill ${e.ok?'ok':e.oblig?'r':''}">${e.ok?'Fait':e.oblig?'Obligatoire':'Facultatif'}</span></div>
+      <p class="sub" style="font-size:14px;margin:4px 0 8px">${esc(e.why)}</p>
+      ${e.f?`<div class="grid">${e.f.map(([src,k,l,ph,chk,h])=>`<label class="f"><b>${esc(l)}</b><input data-conf="${src}:${k}" value="${val(src,k)}" placeholder="${esc(ph)}"${chk&&val(src,k)&&!chk((src==='par'?PAR:REPR)[k])?' style="border-color:#c0392b"':''}>${h?`<small class="sub">${esc(h)}</small>`:''}</label>`).join('')}</div><div class="row" style="margin-top:8px"><button class="sm pri" data-confsave="${e.k}">Enregistrer</button><span class="msg" id="confM_${e.k}"></span></div>`:''}
+      ${e.lien?`<button class="sm${e.ok?'':' pri'}" data-conflien="${e.lien[0]}|${e.lien[1]||''}">${esc(e.lien[2])}</button> `:''}${e.lienExt?`<a class="btn sm" href="${e.lienExt[0]}" target="_blank" rel="noopener" style="display:inline-block;padding:6px 12px;border:1px solid var(--line);border-radius:8px">${esc(e.lienExt[1])} ↗</a> `:''}${e.btn?`<button class="sm${e.ok?'':' pri'}" id="${e.btn[0]}">${esc(e.btn[1])}</button><span class="msg" id="confM_mail" style="margin-left:8px"></span> `:''}${!e.ok&&e.fait?`<button class="sm" data-confflag="${e.k}:fait">${esc(e.fait)}</button> `:''}${!e.ok&&e.non?`<button class="sm" data-confflag="${e.k}:non">${esc(e.non)}</button>`:''}
+    </div>`).join('')}</div>`}
+async function confSet(k,v){CONF={...CONF,[k]:v};await sb.from('cc_parametres').upsert({cle:'configuration',valeur:CONF,updated_at:new Date().toISOString()})}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-confgo],[data-confsave],[data-conflien],[data-confflag],#confMail');if(!b)return;
+  if(b.dataset.confgo){TAB='conf';render();window.scrollTo(0,0);return}
+  if(b.dataset.conflien){const[t,sub]=b.dataset.conflien.split('|');TAB=t;if(sub)FV=sub;render();window.scrollTo(0,0);return}
+  if(b.dataset.confflag){const[k,v]=b.dataset.confflag.split(':');await confSet(k==='team'?'equipe':k,v);rConf();confBan();return}
+  if(b.id==='confMail'){const to=PAR.courriel||who();if(!okMail(to)){$('confM_mail').textContent='Inscrivez d’abord le courriel du cabinet (étape 1).';return}b.disabled=true;$('confM_mail').textContent='Envoi…';
+    try{await fn(cfg.FONCTION_COURRIEL||'tl-email',{to,subject:'Courriel d’essai — intranet Boujrad CPA',text:'Bonjour,\n\nCeci est un courriel d’essai envoyé depuis l’intranet. Si vous le recevez avec la signature du cabinet, l’envoi des courriels fonctionne.\n\nBonne journée,'});await confSet('mailTest',new Date().toISOString());notify(`Courriel d’essai envoyé à ${to} : vérifiez votre boîte de réception`);rConf();confBan()}
+    catch(err){$('confM_mail').textContent='Envoi impossible : '+(err.message||err);b.disabled=false}return}
+  if(b.dataset.confsave){const ins=b.closest('[data-step]').querySelectorAll('[data-conf]');const np={...PAR},nr={...REPR};let bad='';
+    ins.forEach(i=>{const[src,k]=i.dataset.conf.split(':');const v=i.value.trim();(src==='par'?np:nr)[k]=v});
+    const e_=confEtapes().find(x=>x.k===b.dataset.confsave);e_.f.forEach(([src,k,l,ph,chk])=>{const v=(src==='par'?np:nr)[k];if(chk&&v&&!chk(v))bad+=`${l} : format à vérifier. `});
+    if(bad){$('confM_'+e_.k).textContent=bad;$('confM_'+e_.k).className='msg err';return}
+    const ops=[];if(JSON.stringify(np)!==JSON.stringify(PAR))ops.push(sb.from('cc_parametres').upsert({cle:'facturation',valeur:np,updated_at:new Date().toISOString()}));if(JSON.stringify(nr)!==JSON.stringify(REPR))ops.push(sb.from('cc_parametres').upsert({cle:'representant',valeur:{affiche:'ne',...nr},updated_at:new Date().toISOString()}));
+    const rs=await Promise.all(ops);const er=rs.find(r=>r.error);if(er){$('confM_'+e_.k).textContent=er.error.message;return}PAR=np;REPR={affiche:'ne',...nr};notify('Enregistré');rConf();confBan()}});
 function rBoard(){const[y,m]=EM.split('-').map(Number),deb=`${EM}-01`,fin=ymd(fMois(y,m)),auj=new Date().toLocaleDateString('fr-CA');
   const ALL=CLI.flatMap(c=>obligations(c,y-1,y+1)),mois=ALL.filter(o=>o.date>=deb&&o.date<=fin).sort((a,b)=>a.date.localeCompare(b.date)),
     retard=ALL.filter(o=>o.date<deb&&o.date>=ymd(new Date(Date.UTC(y,m-7,1)))&&o.date<auj&&!etatOb(o).ok).sort((a,b)=>a.date.localeCompare(b.date));
@@ -385,7 +442,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button,a[d
 
 
 /* ---------- facturation et débits préautorisés ---------- */
-let REPR={},ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
+let CONF={},SAUVP=null,REPR={},ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
 const F=()=>window.FACTURE;
 const fmt=v=>F().money(v);
 const acOf=id=>ACCD.filter(a=>a.client_id===id).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
