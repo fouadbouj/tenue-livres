@@ -423,6 +423,17 @@ async function iaReclasser(a){const refs=[...new Set(a.refs||[])];if(!refs.lengt
     if(local){LOCAL.je[C.id+'/'+id]=d}else await(await jeCol()).doc(id).set(d)}
   LED=null;if(tab==='je')renderJe();else if(typeof render==='function')render();
   return `${n} transaction(s) reclassée(s) dans ${a.compte} ${accName(String(a.compte))}${ferme?` · ${ferme} ignorée(s) : exercice fermé`:''}`}
+/* conciliation pour l'assistant : par relevé, livres (tout ce qui touche le compte au grand livre) vs relevé */
+async function iaConciliation(o){await iaTx();if(!LED)LED=await loadLedger();const srcs=o.compte?[String(o.compte)]:[...new Set((C.stmts||[]).map(x=>x.src))];const out=[];
+  for(const src of srcs){const usd=devOf(src)==='USD',S=(C.stmts||[]).filter(x=>x.src===src).sort((a,b)=>a.du.localeCompare(b.du));
+    const items=LED.filter(e=>(e.kind==='rel'&&e.src===src&&(usd||!e.mirror))||(!usd&&!(e.kind==='rel'&&e.src===src)&&e.lines.some(l=>l[0]===src))).map(e=>{const own=e.kind==='rel'&&e.src===src;
+      return{date:e.date,amt:own?e.amt:e.lines.filter(l=>l[0]===src).reduce((a,l)=>a+l[1],0),desc:e.desc,own,ref:e.kind==='rel'?`R:${e.mois}_${e.src}:${e.i}`:e.kind==='je'?`écriture ${e.ref||''} (à modifier dans Écritures)`:'facture',de:e.kind==='rel'?e.src:e.kind}}).filter(x=>x.amt);
+    const rel=S.map((s,i)=>{let T=items.filter(t=>t.date>=s.du&&t.date<=s.au);const sh=new Set();if(S[i-1]&&S[i-1].au===s.du)sh.add(s.du);if(S[i+1]&&S[i+1].du===s.au)sh.add(s.au);
+      if(sh.size){const core=T.filter(t=>!sh.has(t.date)),B=T.filter(t=>sh.has(t.date));const tgt=s.sf-s.sd-core.reduce((a,t)=>a+t.amt,0);if(B.reduce((a,t)=>a+t.amt,0)!==tgt&&B.length<=18){for(let m=0;m<(1<<B.length);m++){let x=0;for(let k=0;k<B.length;k++)if(m>>k&1)x+=B[k].amt;if(x===tgt){T=core.concat(B.filter((_,k)=>m>>k&1));break}}}}
+      const livres=s.sd+T.reduce((a,t)=>a+t.amt,0);return{du:s.du,au:s.au,debut:iaMt(s.sd),fin_releve:iaMt(s.sf),fin_livres:iaMt(livres),ecart:iaMt(s.sf-livres),balance:livres===s.sf,...(livres!==s.sf?{operations_externes:T.filter(t=>!t.own).map(t=>({date:t.date,montant:iaMt(t.amt),desc:t.desc,ref:t.ref,provenance:t.de})).slice(0,30)}:{})}});
+    const o2=C.ouv,s0=o2&&S.find(s=>s.du===o2.date);out.push({compte:src+' '+accName(src),devise:usd?'USD':'CAD',ouverture:s0&&o2.s?{livres:iaMt(o2.s[src]||0),releve:iaMt(s0.sd)+(usd?' US$':'')}:null,
+      solde_livres_fin:S.length?iaMt(balances(LED,null,S[S.length-1].au).get(src)||0):null,releves:rel,externes_total:iaMt(items.filter(t=>!t.own).reduce((a,t)=>a+t.amt,0))})}
+  return out}
 function iaInit(){if(!window.ASSISTANT||!sampleFn||iaInit.ok)return;iaInit.ok=1;
   window.ASSISTANT.init({id:'compta',nom:'Comptabilité',ask:p=>sampleFn.json(p,{modelTier:'default'}),contexte:iaContexte,
     accueil:'Bonjour! Je peux passer des écritures, reclasser des transactions (déjà classées ou non, avec ou sans taxes), apparier des virements avec vos comptes liés, créer des règles de classement, ajouter des comptes, mettre à jour le profil du dossier (description, méthode, notes), répondre sur les soldes et ouvrir des rapports. Je vous montre toujours la modification avant de l’appliquer.',
@@ -430,6 +441,7 @@ function iaInit(){if(!window.ASSISTANT||!sampleFn||iaInit.ok)return;iaInit.ok=1;
     guide:`Tu travailles dans le logiciel de tenue de livres, sur le dossier ouvert (ou la liste des dossiers si aucun n'est ouvert).
 OUTILS (lecture, exécutés seuls) :
 - {"type":"chercher","compte":"5300","texte":"ESSO","du":"2026-01-01","au":"2026-12-31","transitoire":true,"montant":125.50} — tous les champs sont facultatifs. Renvoie les transactions avec leur ref.
+- {"type":"conciliation","compte":"1060"} — compte facultatif (sinon tous les comptes de banque, cartes et PayPal). Renvoie, par relevé : soldes, total aux livres, écart, et les opérations d'autres comptes ou d'écritures qui touchent le compte (avec ref pour les reclasser); plus le contrôle du solde d'ouverture et du solde final. Sers-t'en pour trouver une erreur de conciliation : repère le mois qui ne balance pas, puis la transaction en trop ou manquante (souvent une transaction d'un autre compte classée ici par erreur, ou un virement entre comptes non apparié).
 ACTIONS (après confirmation) :
 - {"type":"ecriture","date":"AAAA-MM-JJ","ref":"AJ-01","description":"...","ajustement":false,"lignes":[{"compte":"1060","debit":10000,"credit":0},{"compte":"2620","debit":0,"credit":10000}]} — doit balancer. "ajustement":true pour une écriture d'ajustement de fin d'exercice.
 - {"type":"reclasser","refs":["R:2026-03_bnc:4","J:abc:1"],"compte":"8521","taxable":true,"raison":"Précision du client : publicité Facebook"} — déplace des transactions (refs exactes du contexte ou d'une recherche) vers un autre compte. "taxable" facultatif (relevés seulement).
@@ -441,7 +453,7 @@ ACTIONS (après confirmation) :
 Reclasser fonctionne aussi sur des transactions DÉJÀ classées, dans n'importe quel mois (sauf un exercice fermé) : par exemple, pour enlever la TPS/TVQ (montant taxes comprises dans la dépense), cherche les transactions puis reclasser vers le même compte avec "taxable":false. Ne dis jamais que tu n'as pas accès aux transactions classées : cherche-les.
 APPARIER un virement entre deux comptes du client (compte personnel du propriétaire, autre compte de banque, carte de crédit — voir « Comptes liés ») : trouve la transaction (outil chercher avec le montant), repère dans les comptes liés le montant opposé à quelques jours près, puis reclasser vers le compte de ce compte lié avec la raison « Apparié : <nom du compte lié>, <date> ». S'il n'y a pas de correspondance, dis-le et propose le compte le plus probable (avance de l'actionnaire, etc.).
 Pour reclasser « toutes les transactions X », cherche d'abord (ou prends celles du contexte), puis propose une seule action reclasser avec toutes les refs. Si c'est récurrent, propose aussi une règle. Les montants des écritures sont en dollars. N'utilise jamais un compte de titre ou de total (numéros ronds comme 4000 ou lignes TOTAL) : seulement les comptes de détail listés.`,
-    outils:{chercher:iaChercher},
+    outils:{chercher:iaChercher,conciliation:iaConciliation},
     actions:{
       ecriture:{titre:a=>`Écriture du ${a.date||'?'}${a.ref?' — '+a.ref:''}`,
         verifier:a=>{if(!C)return'Aucun dossier ouvert.';const L=a.lignes||[];if(!/^\d{4}-\d{2}-\d{2}$/.test(a.date||''))return'Date invalide.';if(lk(a.date))return'Cette date est dans un exercice fermé.';
@@ -1175,7 +1187,12 @@ function recPill(i,tr){const T=RECD.T[i],pt=C.recPt||{},n=T.filter(t=>pt[t.k]).l
 async function runRec(force){const src=$('recSrc').value;$('recList').innerHTML='<tr><td colspan="9" class="empty">Calcul…</td></tr>';
   try{if(!LED||force)LED=await loadLedger()}catch(e){$('recList').innerHTML='<tr><td colspan="9" class="empty">Lecture impossible.</td></tr>';return}
   const S=(C.stmts||[]).filter(x=>x.src===src).sort((a,b)=>a.du.localeCompare(b.du));
-  const occ={};const tx=LED.filter(e=>e.kind==='rel'&&e.src===src).map(e=>{const b=`${e.date}|${e.amt}|${norm(e.desc).slice(0,24)}`;occ[b]=(occ[b]||0)+1;return{date:e.date,amt:e.amt,desc:e.desc,k:src+'|'+b+'|'+occ[b],mois:e.mois,i:e.i,acct:e.acct,st:e.st}});
+  /* les livres du compte = tout ce qui le touche au grand livre : ses propres transactions (sauf le côté « déjà compté » d'un virement apparié),
+     plus les transactions d'autres comptes, écritures et factures portées à ce compte. En US$ : les transactions du compte (le grand livre est en $ CA). */
+  const usd=devOf(src)==='USD',prov=e=>e.kind==='rel'?`${e.src} ${accName(e.src)}`:e.kind==='je'?`Écriture ${e.ref||''}`:'Facture';
+  const occ={};const tx=LED.filter(e=>(e.kind==='rel'&&e.src===src&&(usd||!e.mirror))||(!usd&&!(e.kind==='rel'&&e.src===src)&&e.lines.some(l=>l[0]===src))).map(e=>{const own=e.kind==='rel'&&e.src===src;
+    const amt=own?e.amt:e.lines.filter(l=>l[0]===src).reduce((a,l)=>a+l[1],0);const b=`${e.date}|${amt}|${norm(e.desc).slice(0,24)}`;occ[b]=(occ[b]||0)+1;
+    return{date:e.date,amt,desc:own?e.desc:`[${prov(e)}] ${e.desc}`,k:src+'|'+(own?'':'x|')+b+'|'+occ[b],mois:e.mois,i:e.i,acct:own?e.acct:prov(e),st:e.st,ext:!own}}).filter(t=>t.amt);
   RECD={src,S,tx,T:{}};const pt=C.recPt||{};
   let ok=0,prev=null;const rows=S.map((s,i)=>{let T=tx.filter(t=>t.date>=s.du&&t.date<=s.au),share='';
     const sh=new Set();if(S[i-1]&&S[i-1].au===s.du)sh.add(s.du);if(S[i+1]&&S[i+1].du===s.au)sh.add(s.au);

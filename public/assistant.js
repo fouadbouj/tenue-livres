@@ -74,8 +74,13 @@ async function tour(){BUSY=true;render();$('iaGo').disabled=true;
 /* ---------- mode vocal : reconnaissance continue (fr-CA) + réponses lues à voix haute ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let REC=null,VOIX=false,PARLE=false,tampon='',minuterie=null;
 const CONF=/^(oui|ok|confirme|confirmer|vas-y|vas y|go|c'est bon|parfait|approuve|applique)\b/i,ANNU=/^(non|annule|annuler|laisse faire|oublie)\b/i;
-function dire(t){if(!$('iaTts')?.checked||!window.speechSynthesis)return;const u=new SpeechSynthesisUtterance(String(t).slice(0,600));u.lang='fr-CA';
-  const v=speechSynthesis.getVoices().find(v=>/fr-CA/i.test(v.lang))||speechSynthesis.getVoices().find(v=>/^fr/i.test(v.lang));if(v)u.voice=v;
+/* voix : les voix françaises de l'appareil, les plus naturelles d'abord (Microsoft « Natural/Online », Google); le choix est retenu */
+const voixFr=()=>{const sc=v=>(/natural|online|neural/i.test(v.name)?0:/google/i.test(v.name)?1:2)*10+(/fr-CA/i.test(v.lang)?0:1);return(window.speechSynthesis?speechSynthesis.getVoices():[]).filter(v=>/^fr/i.test(v.lang)).sort((a,b)=>sc(a)-sc(b))};
+function voixChoisie(){const L=voixFr();let n='';try{n=localStorage.getItem('tlVoix')||''}catch(e){}return L.find(v=>v.name===n)||L[0]||null}
+function remplirVoix(){const sel=$('iaVoixSel');if(!sel)return;const L=voixFr(),c=voixChoisie();sel.innerHTML=L.map(v=>`<option value="${v.name.replace(/"/g,'&quot;')}"${c&&v.name===c.name?' selected':''}>${v.name.replace(/^Microsoft |^Google /,'').replace(/</g,'&lt;')}${/natural|online|neural/i.test(v.name)?' ★':''}</option>`).join('')||'<option>Voix de l’appareil</option>'}
+if(window.speechSynthesis)speechSynthesis.onvoiceschanged=remplirVoix;
+function dire(t){if(!$('iaTts')?.checked||!window.speechSynthesis)return;const u=new SpeechSynthesisUtterance(String(t).slice(0,600));u.lang='fr-CA';u.rate=1.05;
+  const v=voixChoisie();if(v){u.voice=v;u.lang=v.lang}
   PARLE=true;try{REC&&REC.abort()}catch(e){}u.onend=u.onerror=()=>{PARLE=false;if(VOIX)ecouter()};speechSynthesis.cancel();speechSynthesis.speak(u)}
 function ecouter(){if(!SR||!VOIX||PARLE||BUSY)return;try{REC.start()}catch(e){}}
 function voix(on){if(on&&!SR){LOG.push({r:'sys',t:'La reconnaissance vocale n’est pas offerte par ce navigateur : utilisez Chrome ou Edge.'});render();return}
@@ -97,10 +102,11 @@ function init(cfg){A={exemples:[],outils:{},actions:{},accueil:'Bonjour! Que pui
   if(!$('iaBtn')){const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
     document.body.insertAdjacentHTML('beforeend',`<button id="iaBtn" type="button" aria-label="Assistant IA" title="Assistant IA">${ICON}</button>
     <section id="iaPan" hidden role="dialog" aria-label="Assistant IA"><header>${ICON.replace('<svg','<svg width="20" height="20"')}<div><b>Assistant IA</b><small id="iaSub"></small></div><button type="button" id="iaNew">Nouvelle</button><button type="button" id="iaMic" title="Parler à l’assistant" aria-pressed="false">🎤 Voix</button><button type="button" id="iaMin" title="Réduire pour naviguer">▁</button><button type="button" id="iaX" aria-label="Fermer">✕</button></header>
-    <div id="iaLog"></div><div id="iaVoix"><i></i><span id="iaHeard">Je vous écoute… naviguez librement dans l’intranet et parlez-moi.</span><label><input type="checkbox" id="iaTts" checked> Réponses à voix haute</label></div><form id="iaF"><textarea id="iaIn" placeholder="Demandez quelque chose…" aria-label="Message à l’assistant"></textarea><button id="iaGo">Envoyer</button></form></section>`);
+    <div id="iaLog"></div><div id="iaVoix"><i></i><span id="iaHeard">Je vous écoute… naviguez librement dans l’intranet et parlez-moi.</span><label><input type="checkbox" id="iaTts" checked> Réponses à voix haute</label><select id="iaVoixSel" title="Voix de l’assistant (★ = voix naturelle)" style="width:auto;max-width:170px;font-size:12px;padding:2px 4px;margin-left:6px"></select></div><form id="iaF"><textarea id="iaIn" placeholder="Demandez quelque chose…" aria-label="Message à l’assistant"></textarea><button id="iaGo">Envoyer</button></form></section>`);
     $('iaBtn').onclick=()=>{const p=$('iaPan');p.hidden=!p.hidden;if(!p.hidden){render();$('iaIn').focus()}};
     $('iaX').onclick=()=>{$('iaPan').hidden=true};
     $('iaNew').onclick=()=>{if(BUSY)return;LOG=[];save();render()};
+    remplirVoix();$('iaVoixSel').onchange=e=>{try{localStorage.setItem('tlVoix',e.target.value)}catch(x){}const t=$('iaTts');if(t&&!t.checked)t.checked=true;dire('Bonjour, voici ma nouvelle voix.')};
     $('iaMic').onclick=()=>voix(!VOIX);$('iaMin').onclick=()=>$('iaPan').classList.toggle('mini');
     $('iaF').onsubmit=e=>{e.preventDefault();envoyer($('iaIn').value)};
     $('iaIn').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();envoyer($('iaIn').value)}};
