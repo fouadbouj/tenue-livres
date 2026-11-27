@@ -67,6 +67,10 @@ td select{width:100%;min-height:38px;padding:4px 6px;font-size:14px}
 .pill.ok{border-color:var(--teal);color:var(--teal)}.pill.todo{border-color:var(--claret);color:var(--claret)}
 .toast{position:sticky;bottom:12px;margin-top:12px;background:var(--ink);color:var(--bg);border-radius:10px;padding:12px 14px;display:none;gap:10px;align-items:center;flex-wrap:wrap;z-index:5}
 .toast.on{display:flex}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:var(--panel);border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(0,0,0,.18);z-index:60;overflow:auto;padding:20px 22px}
+.drawer h3{margin:0 30px 4px 0;font-size:17px;line-height:1.3}.drawer .x{position:absolute;top:14px;right:14px}
+.drawer .meta{color:var(--mute);font-size:13px;margin-bottom:14px}.drawer .amt{font-size:22px;font-weight:700;margin:6px 0 14px}
+.drawer label.f{margin-bottom:10px}.drawer table{width:100%;border-collapse:collapse;margin:8px 0}.drawer td{padding:4px 0;border-bottom:1px solid var(--line);font-size:13px}
 .toast button{border-color:var(--bg);color:var(--bg)}
 .toast button.pri{background:var(--teal);border-color:var(--teal);color:light-dark(#fff,#0b1626)}
 .note{font-size:13px;color:var(--mute)}
@@ -619,6 +623,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     </div>
   </section>
 
+  <aside class="drawer" id="txDrw" hidden aria-label="Corriger une transaction"></aside>
   <!-- Comptes liés -->
   <section id="tLinks" hidden>
     <div class="panel">
@@ -1831,8 +1836,8 @@ async function loadLedger(){
   let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);
     else{const s=await db.collection('clients').doc(C.id).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){throw e}
   const E=[];
-  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t);E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:t.desc,lines:lines(t,p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,todo:isTr(t)})}));
-  await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv'}));
+  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t);E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:t.desc,lines:lines(t,p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,i,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,todo:isTr(t)})}));
+  await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv',id:i.id}));
   (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id,aje:j.type==='aje',todo:!!C.tr&&(j.lines||[]).some(l=>l.a===C.tr)}));
   E.sort((a,b)=>a.date.localeCompare(b.date));
   return E}
@@ -1903,7 +1908,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
     accs.forEach(a=>{const rows=[];E.forEach(e=>{if((f&&e.date<f)||(t&&e.date>t))return;e.lines.forEach(([b,c])=>{if(b===a)rows.push([e,c])})});
       let sb=B0.get(a)||0;if(!rows.length&&!sb)return;
       x+=`<tr class="sec"><td colspan="6">${esc(a)} ${esc(accName(a))}</td></tr><tr class="grp"><td colspan="5">Solde d'ouverture</td><td class="num">${fmtN(sb)}</td></tr>`;let D=0,K=0;
-      rows.forEach(([e,c])=>{sb+=c;c>0?D+=c:K-=c;x+=`<tr><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td>${e.kind==='rel'?`<a data-open="${esc(e.mois+'|'+e.src+'|'+e.desc)}">${esc(e.desc)}</a>`:esc(e.desc)}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td><td class="num">${fmtN(sb)}</td></tr>`});
+      rows.forEach(([e,c])=>{sb+=c;c>0?D+=c:K-=c;x+=`<tr><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td><a href="#" data-drw="${esc(e.kind==='rel'?`R|${e.mois}_${e.src}|${e.i}`:e.kind==='je'?`J|${e.id}`:e.kind==='inv'?`I|${e.id}`:'')}" title="Corriger">${esc(e.desc)||'(sans description)'}</a></td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td><td class="num">${fmtN(sb)}</td></tr>`});
       x+=`<tr class="sub"><td colspan="3">Total ${esc(a)}</td><td class="num">${fmtN(D)}</td><td class="num">${fmtN(K)}</td><td class="num">${fmtN(sb)}</td></tr>`});
     h=`<h2>Grand livre du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="grp"><td>Date</td><td>Réf.</td><td>Description</td><td class="num">Débit</td><td class="num">Crédit</td><td class="num">Solde</td></tr>${x||'<tr><td colspan="6" class="empty">Aucune écriture.</td></tr>'}</table>`}
   if(REP==='tx')h=txSumHtml(E,f,t);
@@ -1919,7 +1924,51 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
   if(REP==='jr'){let x='';E.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t)).forEach(e=>{x+=`<tr class="grp"><td class="d">${esc(e.date)}</td><td>${esc(e.ref)}</td><td colspan="2">${esc(e.desc)}</td></tr>`;e.lines.forEach(([a,c])=>x+=`<tr><td></td><td class="ind" colspan="1">${esc(a)} ${esc(accName(a))}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`)});
     h=`<h2>Journal général du ${esc(f)} au ${esc(t)}</h2><table class="rep"><tr class="sec"><td>Date</td><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${x||'<tr><td colspan="4" class="empty">Aucune écriture.</td></tr>'}</table>`}
   $('repOut').innerHTML=warn+h;$('repMsg').textContent=`${E.length} écritures dans le dossier · ${C.nom}`}
+/* ---------- fiche de correction par-dessus les rapports ---------- */
+let DRW=null;
+const drwClose=()=>{$('txDrw').hidden=true;$('txDrw').innerHTML='';DRW=null};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&DRW)drwClose()});
+async function drwOpen(k){const[t,a,b]=k.split('|');const el=$('txDrw');el.hidden=false;el.innerHTML='<p class="note">Chargement…</p>';DRW={t,a,b};
+  const head=(titre,meta,amt)=>`<button class="sm x" id="drwX" aria-label="Fermer">✕</button><h3>${esc(titre)}</h3><div class="meta">${meta}</div>${amt!=null?`<div class="amt">${fmt(amt)}</div>`:''}`;
+  const sel=v=>`<select id="drwAcc">${OPTS}</select>`;
+  if(t==='R'){const[mois,...rest]=a.split('_'),src=rest.join('_'),i=+b;let doc;
+    if(P&&!P.multi&&P.mois===mois&&P.src===src)doc={tx:P.tx};else{try{doc=await readPeriod(mois,src)}catch(e){}}
+    const x=doc?.tx?.[i];if(!x){el.innerHTML=head('Transaction introuvable','Rouvrez le rapport.')+'';$('drwX').onclick=drwClose;return}
+    DRW.x={...x};const ferme=lk(x.date),p=keyOf(x.desc);
+    el.innerHTML=head(x.desc,`${esc(x.date)} · Relevé ${esc(src)} ${esc(accName(src))} · ${esc(moisLbl(mois))}${x.why?`<br>${esc(x.why)}`:''}`,x.amt)+
+      (ferme?'<p class="msg err">Exercice fermé : cette transaction ne peut plus être modifiée.</p>':
+      `<label class="f">Compte${sel()}</label>
+       <label class="row" style="gap:8px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="drwTax"${x.tax?' checked':''}> Taxes incluses (TPS/TVQ ventilées)</label>
+       <label class="f">Raison (facultatif)<input id="drwWhy" placeholder="ex. remboursement d’abonnement"></label>
+       ${p?`<label class="row" style="gap:8px;align-items:flex-start;margin:4px 0 12px"><input type="checkbox" id="drwRule"> <span>Retenir pour ce client : « ${esc(p)} » ira toujours dans ce compte</span></label>`:''}
+       <div class="row" style="gap:8px"><button class="pri" id="drwOk">Enregistrer</button><button id="drwGo">Voir dans le mois →</button></div><p class="msg" id="drwMsg"></p>`);
+    $('drwX').onclick=drwClose;if(ferme)return;$('drwAcc').value=x.acct;
+    $('drwGo').onclick=()=>{drwClose();goMois(mois,src,x.desc)};
+    $('drwOk').onclick=async()=>{const acc=$('drwAcc').value,tax=$('drwTax').checked;$('drwOk').disabled=true;
+      try{await iaReclasser({refs:[`R:${mois}_${src}:${i}`],compte:acc,taxable:tax,raison:$('drwWhy').value.trim()||'correction depuis le rapport'});
+        if($('drwRule')?.checked&&p){C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a:acc,t:tax});saveClient();renderRules();if(P)reclass()}
+        LED=null;await runRep();$('drwMsg').className='msg';$('drwMsg').textContent=`✓ Enregistré : ${acc} ${accName(acc)}. Le rapport est à jour.`;setTimeout(()=>{if(DRW&&DRW.b===b)drwClose()},1400)}
+      catch(e){$('drwMsg').className='msg err';$('drwMsg').textContent='Enregistrement impossible : '+(e.message||e)}$('drwOk').disabled=false}}
+  else if(t==='J'){const j=(await loadJe()).find(x=>x.id===a);if(!j){el.innerHTML=head('Écriture introuvable','');$('drwX').onclick=drwClose;return}
+    const ferme=lk(j.date);
+    el.innerHTML=head(j.desc||j.ref||'Écriture de journal',`${esc(j.date)} · Écriture de journal ${esc(j.ref||'')}${j.type==='aje'?' · AJE':''}`,null)+
+      `<table>${(j.lines||[]).map((l,k)=>`<tr><td>${ferme?esc(l.a+' '+accName(l.a)):`<select data-jl="${k}">${OPTS}</select>`}</td><td class="num" style="text-align:right;white-space:nowrap">${l.d?fmtN(l.d)+' Dt':fmtN(l.c)+' Ct'}</td></tr>`).join('')}</table>
+      ${ferme?'<p class="msg err">Exercice fermé.</p>':'<div class="row" style="gap:8px"><button class="pri" id="drwOk">Enregistrer</button><button id="drwGo">Ouvrir l’écriture complète →</button></div><p class="msg" id="drwMsg"></p>'}`;
+    $('drwX').onclick=drwClose;if(ferme)return;el.querySelectorAll('[data-jl]').forEach(s2=>s2.value=j.lines[+s2.dataset.jl].a);
+    $('drwGo').onclick=()=>{drwClose();setTab('je');navPush();setTimeout(()=>jeOpen(JE.find(x=>x.id===a)||j),300)};
+    $('drwOk').onclick=async()=>{const ch=[...el.querySelectorAll('[data-jl]')].filter(s2=>s2.value!==j.lines[+s2.dataset.jl].a);if(!ch.length){drwClose();return}
+      try{for(const s2 of ch)await iaReclasser({refs:[`J:${a}:${s2.dataset.jl}`],compte:s2.value,raison:'correction depuis le rapport'});LED=null;await runRep();$('drwMsg').textContent='✓ Enregistré. Le rapport est à jour.';setTimeout(drwClose,1400)}
+      catch(e){$('drwMsg').className='msg err';$('drwMsg').textContent='Enregistrement impossible : '+(e.message||e)}}}
+  else if(t==='I'){await loadInv();const iv=INV.find(x=>x.id===a);if(!iv){el.innerHTML=head('Facture introuvable','');$('drwX').onclick=drwClose;return}
+    el.innerHTML=head(`${iv.type==='achat'?'Facture d’achat':'Facture de vente'} ${iv.no||''} — ${iv.tiers}`,`${esc(iv.date)}${iv.desc?' · '+esc(iv.desc):''}`,iv.total)+
+      `<p class="note">Une facture se corrige dans sa fiche (compte, taxes, montant).</p><div class="row"><button class="pri" id="drwGo">Ouvrir la facture →</button></div>`;
+    $('drwX').onclick=drwClose;$('drwGo').onclick=()=>{drwClose();setTab('inv');navPush();setTimeout(()=>invOpen(iv),300)}}
+  else{el.innerHTML=head('Écriture d’ouverture','Les soldes d’ouverture se modifient dans Écritures › Soldes d’ouverture.',null);$('drwX').onclick=drwClose}}
+function goMois(m,src,desc){setTab('rev');if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
+  $('pMois').value=m;if(![...$('pSrc').options].some(x=>x.value===src))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(src)}">${esc(src)}</option>`);$('pSrc').value=src;
+  filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod();navPush()}
 $('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');if(g){e.preventDefault();REP='gl';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r==='gl'));$('repAccL').hidden=false;$('repAcc').value=g.dataset.gl;if(!$('repFrom').value)$('repFrom').value=exRange()[0];repUI();runRep();navPush();return}
+  const dw=e.target.closest('[data-drw]');if(dw){e.preventDefault();if(dw.dataset.drw)drwOpen(dw.dataset.drw);return}
   const o=e.target.closest('[data-open]');if(o){const[m,src,desc]=o.dataset.open.split('|');setTab('rev');if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
     $('pMois').value=m;if(![...$('pSrc').options].some(x=>x.value===src))$('pSrc').insertAdjacentHTML('beforeend',`<option value="${esc(src)}">${esc(src)}</option>`);$('pSrc').value=src;
     filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()}});
