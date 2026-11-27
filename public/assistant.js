@@ -61,7 +61,7 @@ ${h}`}
 async function tour(){BUSY=true;render();$('iaGo').disabled=true;
   try{for(let k=0;k<4;k++){const ctx=await A.contexte();const r=await A.ask(prompt({contexte:ctx}));
       const outils=Array.isArray(r?.outils)?r.outils:[],actions=Array.isArray(r?.actions)?r.actions:[];
-      if(outils.length&&k<3){const res=[];for(const o of outils.slice(0,3)){const f=A.outils[o?.type];res.push(f?await f(o).catch(e=>'Erreur : '+e.message):'Outil inconnu : '+o?.type)}
+      if(outils.length&&k<3){const res=[];for(const o of outils.slice(0,3)){const f=A.outils[o?.type];{const x=f?await f(o).catch(e=>'Erreur : '+e.message):'Outil inconnu : '+o?.type;res.push(`Résultat de l’outil ${o?.type} :\n`+(typeof x==='string'?x:JSON.stringify(x)))}}
         if(r.message)LOG.push({r:'sys',t:r.message});LOG.push({r:'tool',t:res.join('\n\n').slice(0,40000)});render();continue}
       if(r?.message)LOG.push({r:'ai',t:String(r.message)});
       for(const a of actions){if(!a||!A.actions[a.type])continue;if(A.actions[a.type].auto){try{const res=await A.actions[a.type].executer(a);LOG.push({r:'sys',t:res||'Fait'})}catch(e){LOG.push({r:'sys',t:'Impossible : '+e.message})}}else{try{if(A.actions[a.type].capture)a._avant=A.actions[a.type].capture(a)}catch(e){}LOG.push({r:'act',a,s:''})}}
