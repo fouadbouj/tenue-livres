@@ -202,9 +202,9 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     </table></div>
   </div>
   <details class="panel fold">
-    <summary><span><strong>Sauvegarde et transfert</strong><small>Exporter ou importer tous les dossiers (fichier JSON)</small></span></summary>
-    <p class="note">Exporte tous les dossiers (plans, règles, périodes, écritures, factures) dans un fichier JSON : sauvegarde, ou transfert vers la version site web du cabinet. L'import ajoute ou remplace les dossiers du fichier.</p>
-    <div class="row"><button id="bkExp">Exporter tous les dossiers</button><label class="f">Importer un fichier de sauvegarde<input type="file" id="bkImp" accept=".json"></label><span class="msg" id="bkMsg"></span></div>
+    <summary><span><strong>Transférer ou restaurer des dossiers (avancé)</strong><small>Pour la sauvegarde régulière, utilisez Gestion du cabinet › Sauvegarde</small></span></summary>
+    <p class="note"><strong>Votre sauvegarde officielle est dans <a href="centre.html">Gestion du cabinet › Sauvegarde</a></strong> : un seul fichier protégé par mot de passe avec tout le cabinet (clients, comptabilité, pièces jointes), avec un rappel mensuel. Cet outil-ci sert seulement à transférer des dossiers comptables d’un environnement à un autre, ou à restaurer des dossiers à partir du fichier « comptabilite-dossiers.json » de la sauvegarde. L’import ajoute ou remplace les dossiers du fichier.</p>
+    <div class="row"><button id="bkExp">Exporter les dossiers (JSON)</button><label class="f">Importer ou restaurer des dossiers (JSON)<input type="file" id="bkImp" accept=".json"></label><span class="msg" id="bkMsg"></span></div>
   </details>
 </div>
 
@@ -683,7 +683,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     </div>
     <div class="panel" id="usrPanel">
       <h2>Utilisateurs du cabinet</h2>
-      <p class="note"><strong>CPA (administrateur)</strong> : tout, y compris fermer, rouvrir ou déverrouiller un exercice, la date de verrouillage, accepter les régularisations, supprimer une écriture, une facture, une période ou un dossier, et gérer les utilisateurs. <strong>Technicien</strong> : verse les relevés, classe, passe et corrige des écritures, prépare les régularisations, produit et envoie les rapports. Ces droits valent pour tous les dossiers.</p>
+      <p class="note"><strong>Technicien</strong> : travaille de façon autonome dans tous les dossiers (relevés, classement, écritures, régularisations, rapports, exercices, envois aux clients). <strong>CPA (administrateur)</strong> : en plus, la <strong>mission de compilation</strong> (créer, remplir, terminer) et la gestion des utilisateurs. Ces deux limites sont appliquées aussi par la base de données, pas seulement à l’écran.</p>
       <div class="scroll"><table class="stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th></th></tr></thead><tbody id="usrList"></tbody></table></div>
       <div class="row" style="gap:8px;align-items:flex-end;margin-top:10px" id="usrInv"><label class="f" style="flex:1;min-width:220px">Inviter (courriel)<input type="email" id="usrMail" placeholder="employe@boujradcpa.com"></label><label class="f">Rôle<select id="usrRole"><option value="membre">Technicien</option><option value="admin">CPA (administrateur)</option></select></label><button class="sm pri" id="usrGo">Inviter</button></div>
       <p class="note" style="margin-top:6px">La personne invitée crée son compte sur app.boujradcpa.com avec ce courriel (« Créer un compte ») et reçoit automatiquement son rôle.</p>

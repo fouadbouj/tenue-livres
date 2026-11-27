@@ -7,10 +7,12 @@ document.addEventListener('portail-pret',async()=>{const{sb,esc}=window.PORTAIL|
     <p class="sub" style="margin-top:8px">Pour que nous puissions répondre à l’ARC pour vous, récupérer vos feuillets et corriger votre dossier, autorisez Boujrad CPA Inc. dans votre compte de l’ARC. Ça prend quelques minutes.</p>
     ${k?`<div class="info" style="margin:10px 0"><strong>${esc(lab[k])} à entrer :</strong> <span style="font-family:ui-monospace,monospace;font-size:17px;letter-spacing:.5px">${esc(R[k])}</span> <button type="button" class="sm" id="repCp">Copier</button><br><small>Le nom affiché par l’ARC doit être « Boujrad CPA Inc. ».</small></div>`
       :`<div class="info" style="margin:10px 0">Écrivez-nous dans vos messages pour obtenir notre identifiant de représentant.</div>`}
-    <ol style="margin:8px 0 0 18px;line-height:1.6"><li><b>Particulier :</b> Mon dossier › Profil › autoriser ou gérer les représentants › <em>Autoriser un représentant</em>.</li>
-      <li><b>Entreprise :</b> Mon dossier d’entreprise › <em>Autoriser ou gérer les représentants</em> › <em>Autoriser un représentant</em>.</li>
-      <li>Entrez l’identifiant ci-dessus, vérifiez le nom du cabinet, choisissez : <b>niveau 2</b>, <b>aucune date de fin</b> (sans limite), <b>accès en ligne</b>${''}, et pour une entreprise la portée <b>numéro d’entreprise au complet</b>. Puis confirmez.</li>
-      <li>Revenu Québec : nous vous ferons signer la procuration (formulaire MR-69); vous n’avez rien à faire de ce côté pour l’instant.</li></ol>
+    <p style="margin:8px 0 4px"><b>Le plus simple :</b> nous faisons la demande d’autorisation à l’ARC; vous n’avez qu’à la <b>confirmer</b>. Connectez-vous à votre compte de l’ARC (Mon dossier, ou Mon dossier d’entreprise), ouvrez la demande en attente de « Boujrad CPA Inc. » (niveau 2, sans date de fin, accès en ligne) et cliquez sur <b>Confirmer</b>.</p>
+    <p style="margin:8px 0 4px"><b>Pas de demande visible?</b> Ajoutez-nous vous-même :</p>
+    <ol style="margin:4px 0 0 18px;line-height:1.6"><li><b>Particulier :</b> Mon dossier › Profil › gérer les représentants › <em>Autoriser un représentant</em>. <b>Entreprise :</b> Mon dossier d’entreprise › <em>Autoriser ou gérer les représentants</em> › <em>Autoriser un représentant</em>.</li>
+      <li>Entrez l’identifiant ci-dessus et vérifiez le nom du cabinet.</li>
+      <li>Choisissez : <b>niveau 2</b>, <b>aucune date de fin</b> (sans limite), <b>accès en ligne</b>, et pour une entreprise la portée <b>numéro d’entreprise au complet</b>. Puis confirmez.</li>
+      <li>Revenu Québec : nous vous faisons signer la procuration (formulaire MR-69) dans ce portail.</li></ol>
     <p style="margin:10px 0 0"><a href="https://boujradcpa.com/guides/autoriser-representant.html" target="_blank" rel="noopener">Voir le guide complet, étape par étape →</a></p></details>`;
   const main=document.querySelector('main');(main||document.body).appendChild(box);
   box.querySelector('#repCp')?.addEventListener('click',async e=>{try{await navigator.clipboard.writeText(R[k]);e.target.textContent='Copié ✓'}catch(x){}})});

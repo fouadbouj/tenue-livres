@@ -1022,7 +1022,6 @@ function afterInv(){INV.sort((a,b)=>b.date.localeCompare(a.date));if(P&&matchInv
 $('invList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.ie){invOpen(INV.find(i=>i.id===b.dataset.ie));return}
   if(b.dataset.iu){const i=INV.find(x=>x.id===b.dataset.iu);if(i){delete i.pay;saveInv(i);renderInv()}return}
-  if(b.dataset.del?.startsWith('inv-')&&!cpaSeul(null))return;
   if(b.dataset.del?.startsWith('inv-'))confirm2(b,'',async()=>{const id=b.dataset.del.slice(4);{const iv=INV.find(x=>x.id===id);if(iv)audit('Facture supprimée',`${iv.type==='achat'?'Achat':'Vente'} ${iv.no||''} ${iv.tiers} ${iv.date} ${fmt(iv.total||0)}`)}try{if(local)delete LOCAL.inv[C.id+'/'+id];else await(await invCol()).doc(id).delete()}catch(err){}INV=INV.filter(i=>i.id!==id);if(P&&P.tx.some(t=>t.inv===id)){matchInvoices(P.tx);render();savePer()}LED=null;renderInv()})});
 async function readInvoice(f,type){let text='',imgs=null;
   if(/\.pdf$/i.test(f.name))text=(await pdfPages(f)).join('\n\n').slice(0,12000);
@@ -1461,7 +1460,7 @@ $('ajeOut').addEventListener('click',async e=>{const b=e.target.closest('button'
   const doc={date:AJEP.f,ref:'AJE',desc:String(p.titre||'Régularisation de fin d’exercice').slice(0,120),type:'aje',ex:exOf(AJEP.f),lines:p.lignes,updated:new Date().toISOString()};
   if(b.dataset.ajeno!=null){p.etat='non';ajeRender();return}
   if(b.dataset.ajemod!=null){jeOpen({...doc});ajeMemo(p);return}
-  if(!cpaSeul(null))return;b.disabled=true;try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/j'+Date.now()]=doc}else await(await jeCol()).doc().set(doc);audit('Régularisation acceptée (AJE)',`${doc.date} ${doc.desc} : ${p.lignes.map(l=>`${l.a} ${l.d?'Dt '+fmt(l.d):'Ct '+fmt(l.c)}`).join(', ')}`);LED=null;p.etat='ok';ajeMemo(p);if(typeof renderJe==='function')renderJe();ajeRender()}
+  b.disabled=true;try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/j'+Date.now()]=doc}else await(await jeCol()).doc().set(doc);audit('Régularisation acceptée (AJE)',`${doc.date} ${doc.desc} : ${p.lignes.map(l=>`${l.a} ${l.d?'Dt '+fmt(l.d):'Ct '+fmt(l.c)}`).join(', ')}`);LED=null;p.etat='ok';ajeMemo(p);if(typeof renderJe==='function')renderJe();ajeRender()}
   catch(err){b.disabled=false;alert('Enregistrement impossible : '+(err.message||err))}});
 let JEPJ=[];
 function jeOpen(j,tpl){jeEdit=j?.id||null;JEPJ=[...(j?.pj||[])];setTimeout(()=>{$('jePj').innerHTML=pjListe(JEPJ,true)},0);$('jeForm').hidden=false;$('jeErr').textContent='';$('jeDate').value=j?.date||exRange()[1]||'';$('jeRef').value=j?.ref||'';$('jeDesc').value=j?.desc||'';$('jeType').value=j?.type||'';
@@ -1487,7 +1486,6 @@ async function renderJe(){ouvShow();await loadJe();const[xd,xf]=exRange();const 
     :'<tr><td colspan="5" class="empty">Aucune écriture dans cet exercice.</td></tr>'}
 $('jeList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.je){jeOpen(JE.find(j=>j.id===b.dataset.je));return}
   if(b.dataset.del?.startsWith('je-')){if(lk(JE.find(j=>j.id===b.dataset.del.slice(3))?.date)){b.textContent='Exercice fermé';return}}
-  if(b.dataset.del?.startsWith('je-')&&!cpaSeul(null))return;
   if(b.dataset.del?.startsWith('je-'))confirm2(b,'',async()=>{const id=b.dataset.del.slice(3);{const j=JE.find(x=>x.id===id);if(j)audit('Écriture supprimée',`${j.date} ${j.ref||''} ${j.desc||''} : ${(j.lines||[]).map(x=>`${x.a} ${x.d?'Dt '+fmt(x.d):'Ct '+fmt(x.c)}`).join(', ')}`)}try{if(local)delete LOCAL.je[C.id+'/'+id];else await(await jeCol()).doc(id).delete()}catch(err){}LED=null;renderJe()})});
 
 /* ---------- comptes liés ---------- */
@@ -1601,12 +1599,12 @@ async function delPeriod(pid){if(monthLocked(pid.slice(0,7))){msg('Ce mois touch
 $('pRev').onclick=()=>{if(!P)return;if(P.revise){if(!confirm('Retirer la révision de ce mois?'))return;audit('Révision retirée',`${moisLbl(P.mois)} · ${P.src}`);P.revise=null}
   else{const ouv=P.tx.filter(aCl).length;if(ouv&&!confirm(`${ouv} transaction(s) encore à classer. Marquer le mois révisé quand même?`))return;P.revise={le:new Date().toISOString(),par:(document.getElementById('whoE')?.textContent||'').trim()};audit('Mois révisé',`${moisLbl(P.mois)} · ${P.src} ${accName(P.src)}`)}
   savePer();revUI()};
-$('pClear').onclick=e=>cpaSeul($('msg'))&&confirm2(e.currentTarget,'',async()=>{if(!P)return;clearTimeout(pTimer);pTimer=null;const pid=P.mois+'_'+P.src;
+$('pClear').onclick=e=>confirm2(e.currentTarget,'',async()=>{if(!P)return;clearTimeout(pTimer);pTimer=null;const pid=P.mois+'_'+P.src;
   try{audit('Période vidée',`${moisLbl(P.mois)} · ${P.src} ${accName(P.src)} · ${P.tx.length} transaction(s) retirée(s)`);await delPeriod(pid);P.tx=[];P.statut='en cours';AIITEMS=[];idFilter=null;render();msg(`Période ${moisLbl(P.mois)} vidée. Vous pouvez redéposer le relevé.`);setSave('Enregistré')}catch(err){msg('Effacement impossible pour le moment.',true)}
   $('pClear').textContent='Vider cette période'});
 $('plist').addEventListener('click',e=>{const b=e.target.closest('button[data-del]');if(!b)return;e.stopPropagation();
   confirm2(b,'',async()=>{try{await delPeriod(b.dataset.del);if(P&&P.mois+'_'+P.src===b.dataset.del){P.tx=[];P.statut='en cours';render()}loadPeriods()}catch(err){b.textContent='Erreur'}})},true);
-$('wipe').onclick=e=>cpaSeul($('wipeMsg'))&&confirm2(e.currentTarget,'',async()=>{if((C.ex||[]).some(x=>x.statut==='ferme')){$('wipeMsg').textContent='Des exercices sont fermés : rouvrez-les avant de tout effacer.';return}clearTimeout(pTimer);pTimer=null;$('wipeMsg').textContent='Effacement…';
+$('wipe').onclick=e=>confirm2(e.currentTarget,'',async()=>{if((C.ex||[]).some(x=>x.statut==='ferme')){$('wipeMsg').textContent='Des exercices sont fermés : rouvrez-les avant de tout effacer.';return}clearTimeout(pTimer);pTimer=null;$('wipeMsg').textContent='Effacement…';
   try{let ids=[];if(local)ids=Object.keys(LOCAL.periodes).filter(k=>k.startsWith(C.id+'/')).map(k=>k.slice(C.id.length+1));
     else{const sn=await db.collection('clients').doc(C.id).collection('periodes').get();ids=sn.docs.map(d=>d.id)}
     for(const id of ids)await delPeriod(id);
@@ -1692,7 +1690,7 @@ $('sSage').onchange=()=>{C.sage50=$('sSage').checked;sageUI();saveClient()};
 const sageUI=()=>document.body.classList.toggle('nosage',!C?.sage50);
 $('sSave').onclick=()=>{if(curEx()?.statut==='ferme'&&($('sExD').value!==C.exDeb||$('sExF').value!==C.exFin)){$('sMsg').textContent='Exercice fermé : ses dates ne peuvent pas changer.';return}C.exDeb=$('sExD').value;C.exFin=$('sExF').value;syncEx();C.nom=$('sNom').value.trim()||C.nom;C.desc=$('sDesc').value.trim();C.profil={...(C.profil||{}),tx:$('sTx').checked,emp:$('sEmp').checked};C.notes=$('sNotes').value;C.email=$('sEmail').value.trim().slice(0,200);C.dfmt=$('sDf').value;for(const[id,k]of[['sTr','tr'],['sTpsA','tpsA'],['sTvqA','tvqA'],['sTpsV','tpsV'],['sTvqV','tvqV']])C[k]=$(id).value;
   $('cName').textContent=C.nom;reclass();saveClient();fillExSel();render();if(P&&P.tx.length)savePer();$('sMsg').textContent='Enregistré.'};
-let delArm=false;$('delC').onclick=()=>{if(!cpaSeul(null))return;if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
+let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textContent='Cliquez encore pour confirmer';setTimeout(()=>{delArm=false;$('delC').textContent='Supprimer ce dossier'},5000);return}
   C.deleted=true;saveClient();const i=CLIENTS.findIndex(c=>c.id===C.id);if(i>=0)CLIENTS[i].deleted=true;$('back').click()};
 
 /* ---------- exercices ---------- */
@@ -1731,7 +1729,7 @@ function renderExList(){const L=C.ex||[];
     :'<tr><td colspan="4" class="empty">Indiquez le début et la fin de l’exercice ci-dessus, puis Enregistrer.</td></tr>';
   const e=curEx();$('yearEnd').hidden=!e||e.statut==='ferme';$('exReopen').hidden=!e||e.statut!=='ferme';renderLk();if(tab==='set')renderAudit()}
 const lkRegle=x=>{if(x.statut==='ferme'||x.deverr)return false;const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));return!!(C.lkAvant&&x.deb<C.lkAvant)};
-$('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exopen],[data-exunlock],[data-exrelock]');if(!b)return;const id=b.dataset.exopen||b.dataset.exunlock||b.dataset.exrelock;const x=(C.ex||[]).find(y=>y.id===id);if(!x)return;if(!b.dataset.exrelock&&!cpaSeul($('yeMsg')))return;
+$('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exopen],[data-exunlock],[data-exrelock]');if(!b)return;const id=b.dataset.exopen||b.dataset.exunlock||b.dataset.exrelock;const x=(C.ex||[]).find(y=>y.id===id);if(!x)return;
   if(b.dataset.exrelock){delete x.deverr;lkJournal(`Exercice ${exLbl(x)} reverrouillé`);saveClient();fillExSel();LED=null;return}
   const ferme=x.statut==='ferme';if(!confirm(`Voulez-vous vraiment ${ferme?'rouvrir':'déverrouiller'} l’exercice ${exLbl(x)}?\n\nSi la T2 de cet exercice a déjà été produite, une modification changera des chiffres déjà déclarés.${ferme?'\nAprès vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.':'\nIl restera modifiable jusqu’à ce que vous cliquiez « Reverrouiller ».'}`))return;
   if(ferme){x.statut='ouvert';delete x.fermeLe}else x.deverr=true;lkJournal(`Exercice ${exLbl(x)} ${ferme?'rouvert':'déverrouillé temporairement'}`);saveClient();fillExSel();LED=null;if(P)openPeriod()});
@@ -1749,7 +1747,7 @@ $('usrList').addEventListener('click',async e=>{const b=e.target.closest('button
   if(b.dataset.uinv){try{await window.tlAdmin.annuler(b.dataset.uinv);renderUsers()}catch(x){$('usrMsg').textContent=x.message}}});
 $('audQ').oninput=()=>renderAudit();
 $('audCsv').onclick=async()=>{if(!downloads)return;const q=x=>`"${String(x||'').replace(/"/g,'""')}"`;const csv='\ufeffQuand;Qui;Quoi;Détail\r\n'+AUDL.map(e=>[e.le,e.qui,e.quoi,e.detail].map(q).join(';')).join('\r\n');try{await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_piste_de_verification.csv`,data:new TextEncoder().encode(csv)})}catch(e){}};
-$('lkSave').onclick=()=>{if(!cpaSeul($('lkMsg')))return;const v2=false,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
+$('lkSave').onclick=()=>{const v2=false,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
   const raison='';if(moins&&!confirm('Vous réduisez la protection : des exercices déjà produits redeviendront modifiables. Continuer?')){renderLk();return}
   const avant=C.lkAvant?'avant le '+C.lkAvant:'sans date';C.lk2=v2;C.lkAvant=av;
   lkJournal(`Date de verrouillage : ${avant} → ${av?'avant le '+av:'aucune'}`);saveClient();fillExSel();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
@@ -1760,7 +1758,7 @@ function tbFor(E,x,o={}){const m=new Map(),add=(a,c)=>m.set(a,(m.get(a)||0)+c),r
   E.forEach(e=>{if(e.date>x.fin)return;if(ouv&&e.date<ouv.date)return;if(o.noAje&&e.aje&&e.date>=x.deb)return;
     e.lines.forEach(([a,c])=>add(+String(a)[0]>=4&&e.date<x.deb?re:a,c))});
   return m}
-$('yearEnd').onclick=e=>{if(!cpaSeul($('yeMsg')))return;confirm2(e.currentTarget,'',async()=>{await fermerEx(curEx());$('yearEnd').textContent='Fermer l’exercice affiché'})};
+$('yearEnd').onclick=e=>{confirm2(e.currentTarget,'',async()=>{await fermerEx(curEx());$('yearEnd').textContent='Fermer l’exercice affiché'})};
 async function fermerEx(x,garder){if(!x){$('yeMsg').textContent='Indiquez d’abord les dates de l’exercice.';return}
   if(P)savePerNow();$('yeMsg').textContent='Calcul des soldes de clôture…';
   try{LED=null;const E=await loadLedger();const todo=E.filter(t=>t.todo&&t.date>=x.deb&&t.date<=x.fin).length;
@@ -1772,11 +1770,11 @@ async function fermerEx(x,garder){if(!x){$('yeMsg').textContent='Indiquez d’ab
     saveClient();if(!garder)useEx(n.id);
     $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')}
   catch(err){$('yeMsg').textContent='Calcul impossible.'}}
-$('exReopen').onclick=e=>cpaSeul($('yeMsg'))&&confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
+$('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
   $('yeMsg').textContent=`Exercice ${exLbl(x)} rouvert. Après vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.`;$('exReopen').textContent='Rouvrir l’exercice affiché'});
 $('exNew').onclick=async()=>{const L=C.ex||[],last=L[L.length-1];if(!last){$('yeMsg').textContent='Indiquez d’abord le début et la fin du premier exercice ci-dessus.';return}
   const vieux=L.slice(0,-1).filter(x=>x.statut!=='ferme');
-  if(last.statut!=='ferme'&&estCPA()&&confirm(`Avant d’ouvrir le nouvel exercice : la T2 de l’exercice ${exLbl(last)} est-elle produite?${vieux.length?`\n\nÀ noter : ${vieux.map(exLbl).join(', ')} ${vieux.length>1?'sont':'est'} aussi encore ouvert${vieux.length>1?'s':''}. Si leur T2 est produite, fermez-les dans l’ordre (le plus ancien d’abord).`:''}\n\nOK = fermer cet exercice maintenant (ses soldes de clôture deviennent les soldes d’ouverture du nouvel exercice).\nAnnuler = le laisser ouvert pour l’instant.`)){await fermerEx(last);return}
+  if(last.statut!=='ferme'&&confirm(`Avant d’ouvrir le nouvel exercice : la T2 de l’exercice ${exLbl(last)} est-elle produite?${vieux.length?`\n\nÀ noter : ${vieux.map(exLbl).join(', ')} ${vieux.length>1?'sont':'est'} aussi encore ouvert${vieux.length>1?'s':''}. Si leur T2 est produite, fermez-les dans l’ordre (le plus ancien d’abord).`:''}\n\nOK = fermer cet exercice maintenant (ses soldes de clôture deviennent les soldes d’ouverture du nouvel exercice).\nAnnuler = le laisser ouvert pour l’instant.`)){await fermerEx(last);return}
   const d=addDays(last.fin,1);const n={id:d,deb:d,fin:finOf(d),statut:'ouvert',ouv:null};C.ex.push(n);saveClient();useEx(n.id);$('yeMsg').textContent=`Exercice ${exLbl(n)} ajouté. Fermez le précédent pour reporter ses soldes.`};
 function snapLock(){if(P)P._lk=P.tx.filter(t=>lk(t.date)).map(t=>({...t}))}
 function enforceLock(p){if(!p||!p._lk)return;const snap=new Map(p._lk.map(t=>[t.id,t])),seen=new Set(),out=[];let ch=false;
@@ -1864,7 +1862,7 @@ function newMis(x){const today=new Date().toISOString().slice(0,10);
 async function loadMis(){MIS=null;if(!C.exCur)return null;
   if(local)MIS=(LOCAL.mis||{})[C.id+'/'+C.exCur]||null;else{const s=await db.collection('clients').doc(C.id).collection('missions').doc(C.exCur).get();MIS=s.exists?s.data():null}
   if(MIS){MIS.map=MIS.map||{};MIS.ws=MIS.ws||{};MIS.qx=MIS.qx||[];MIS.ajeOk=MIS.ajeOk||{}}return MIS}
-function saveMis(){if(!MIS)return;clearTimeout(mTimer);$('misSave').textContent='Modifications en attente…';const cid=C.id,ex=C.exCur,data=JSON.parse(JSON.stringify(MIS));
+function saveMis(){if(!MIS)return;if(!estCPA()){$('misSave').textContent='Lecture seule (réservé au CPA)';return}clearTimeout(mTimer);$('misSave').textContent='Modifications en attente…';const cid=C.id,ex=C.exCur,data=JSON.parse(JSON.stringify(MIS));
   mTimer=setTimeout(async()=>{mTimer=null;data.updated=new Date().toISOString();
     try{if(local){LOCAL.mis=LOCAL.mis||{};LOCAL.mis[cid+'/'+ex]=data}else await db.collection('clients').doc(cid).collection('missions').doc(ex).set(data);$('misSave').textContent='Enregistré'}catch(e){$('misSave').textContent='Erreur d’enregistrement'}},700)}
 
@@ -2106,7 +2104,11 @@ async function efPdf(m,file){if(!downloads)throw{code:'nodl'};
   await downloads.save({filename:file.replace(/[^\w.-]+/g,'_'),data:new Uint8Array(doc.output('arraybuffer'))})}
 
 /* --- rendu de l'onglet --- */
-async function renderMis(){const x=curEx();$('misMsg').textContent='';
+/* Mission de compilation : réservée au CPA (le technicien consulte et télécharge, sans modifier) */
+function lockMis(){if(estCPA())return;const box=document.getElementById('tMis');if(!box)return;
+  box.querySelectorAll('#misBody input,#misBody textarea,#misBody select,#misBody button,#misHead button').forEach(x=>{if(!/^(misEfPdf|misWpPdf)$/.test(x.id)&&!x.dataset.ms&&!/PDF|Télécharger|Imprimer/i.test(x.textContent))x.disabled=true});
+  if(!document.getElementById('misRO'))document.getElementById('misHead')?.insertAdjacentHTML('afterbegin','<p class="msg err" id="misRO" style="margin:10px 0 0">Mission de compilation réservée au CPA : vous pouvez la consulter et télécharger les PDF, mais pas la créer ni la modifier.</p>')}
+async function renderMis(){const x=curEx();$('misMsg').textContent='';setTimeout(lockMis,0);
   if(!x){$('misSub').textContent='';$('misHead').innerHTML='<p class="note" style="margin-top:10px">Définissez d’abord l’exercice (début et fin) dans Paramètres.</p>';$('misBody').innerHTML='';return}
   $('misSub').textContent=`${C.nom} · exercice du ${dLong(x.deb)} au ${dLong(x.fin)}`;
   if(!MIS||MIS.ex!==x.id){$('misHead').innerHTML='<p class="note">Chargement…</p>';try{await loadMis()}catch(e){$('misHead').innerHTML='<p class="msg err">Lecture impossible pour le moment.</p>';return}}
@@ -2118,7 +2120,7 @@ async function renderMis(){const x=curEx();$('misMsg').textContent='';
   await renderStep()}
 function stepDone(){const M=MIS;return{acc:ACC.every((_,i)=>M.acc['q'+i])&&!!M.acc.prep,let:!!M.lettre.signee,ent:!!(M.ent.activites&&M.ent.note1),q:QS.every((_,i)=>M.quest['q'+i]?.r),
   bv:!!M.bvOk,ws:!!(M.secs||[]).length&&M.secs.every(k=>M.ws[k]?.prep),aje:!!M.ajeDone,ef:!!M.ef.revu,fis:!!M.fisc.ok,dec:!!M.decl.signee,fin:M.statut==='terminée'}}
-async function renderStep(){const el=$('misBody');let d=null;
+async function renderStep(){setTimeout(lockMis,0);const el=$('misBody');let d=null;
   if(['bv','ws','aje','ef','fis'].includes(mStep)){el.innerHTML='<div class="panel"><p class="note">Calcul…</p></div>';try{d=await misCalc()}catch(e){el.innerHTML='<div class="panel"><p class="msg err">Lecture des données impossible.</p></div>';return}}
   el.innerHTML=`<div class="panel">${stepHtml(mStep,d)}</div>`}
 function stepHtml(k,d){const M=MIS;

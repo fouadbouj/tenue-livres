@@ -57,35 +57,22 @@ function rCli(){if(EDIT)return rFiche();
 /* -- courriel : demande d'autorisation comme représentant (ARC) -- */
 function repTexte(c){const soc=societe(c),k=REPR.affiche&&REPR[REPR.affiche]?REPR.affiche:['ne','idgroupe','idrep'].find(x=>REPR[x]);
   const lab={ne:'notre numéro d’entreprise (NE)',idgroupe:'notre ID Groupe',idrep:'notre ID Rep'}[k]||'notre identifiant';const val=k?REPR[k]:'[identifiant du cabinet]';
-  const ct=(c.contact||'').split(' ')[0];
+  const ct=(c.contact||'').split(' ')[0],ou=soc?'Mon dossier d’entreprise':'Mon dossier';
   return`Bonjour${ct?' '+ct:''},
 
-Pour que nous puissions communiquer avec l’Agence du revenu du Canada (ARC) en votre nom — récupérer vos feuillets, répondre à leurs lettres et corriger votre dossier au besoin — nous vous demandons de nous autoriser comme représentant. Ça prend environ cinq minutes, et c’est vous qui devez le faire dans votre compte de l’ARC.
+Pour que nous puissions communiquer avec l’Agence du revenu du Canada (ARC) en votre nom — récupérer vos feuillets, répondre à leurs lettres et corriger votre dossier au besoin — nous avons fait une demande d’autorisation à l’ARC${soc?' pour '+c.nom.replace(/\.$/,''):''}. Il vous reste seulement à la confirmer, en deux minutes :
 
-${soc?`Pour ${c.nom} :
-1. Connectez-vous à Mon dossier d’entreprise (compte de l’ARC). Seul un propriétaire, un administrateur ou un délégataire peut le faire.
-2. Choisissez « Autoriser ou gérer les représentants », puis « Autoriser un représentant ».
-3. Entrez ${lab} : ${val}
-   Le nom affiché doit être « Boujrad CPA Inc. ».
-4. Choisissez exactement ces options :
-   - Niveau d’autorisation : NIVEAU 2 (voir et mettre à jour les renseignements)
-   - Portée : « numéro d’entreprise au complet » (impôt des sociétés, TPS/TVH, retenues sur la paie et tous les autres comptes)
-   - Date de fin : AUCUNE (laissez le champ vide, sans limite)
-   - Accès en ligne : OUI (c’est ce qui nous permet de faire les modifications en ligne)
-5. Confirmez.`:`1. Connectez-vous à Mon dossier (compte de l’ARC).
-2. Dans le menu Profil, choisissez l’option pour autoriser ou gérer vos représentants, puis « Autoriser un représentant ».
-3. Entrez ${lab} : ${val}
-   Le nom affiché doit être « Boujrad CPA Inc. ».
-4. Choisissez exactement ces options :
-   - Niveau d’autorisation : NIVEAU 2 (voir et mettre à jour les renseignements)
-   - Date de fin : AUCUNE (laissez le champ vide, sans limite)
-   - Accès en ligne : OUI (c’est ce qui nous permet de faire les modifications en ligne)
-5. Confirmez.`}
+1. Connectez-vous à votre compte de l’ARC, dans ${ou}.
+2. Une demande d’autorisation en attente s’affiche (sinon, cherchez « représentants autorisés » dans le menu ${soc?'':'Profil '}— la demande y est en attente).
+3. Vérifiez qu’il s’agit bien de « Boujrad CPA Inc. », avec le niveau 2, sans date de fin et l’accès en ligne${soc?', pour le numéro d’entreprise au complet':''}.
+4. Cliquez sur « Confirmer ».
+
+Vous ne voyez pas de demande? Vous pouvez aussi nous ajouter vous-même : ${soc?'Mon dossier d’entreprise › Autoriser ou gérer les représentants':'Mon dossier › Profil › gérer les représentants'} › Autoriser un représentant, entrez ${lab} ${val}, choisissez le NIVEAU 2, AUCUNE date de fin (sans limite) et l’accès EN LIGNE${soc?', pour le numéro d’entreprise au complet':''}, puis confirmez.
 
 Vous n’avez pas encore de compte de l’ARC? Voici comment le créer : https://boujradcpa.com/guides/compte-arc.html
-Le guide complet, avec chaque étape : https://boujradcpa.com/guides/autoriser-representant.html
+Le guide complet : https://boujradcpa.com/guides/autoriser-representant.html
 
-Pour Revenu Québec, vous n’avez rien à faire pour l’instant : nous vous ferons signer la procuration (formulaire MR-69).
+Pour Revenu Québec, nous vous faisons signer la procuration (formulaire MR-69) : vous la recevrez dans votre portail.
 
 Vous pouvez retirer cet accès en tout temps dans votre compte de l’ARC. Répondez simplement à ce courriel une fois que c’est fait, ou si vous avez la moindre question.
 
@@ -114,7 +101,7 @@ function trEtat(c){const soc=societe(c),acc=ACC.filter(a=>a.client_id===c.id),sv
    {k:'portail',t:'Accès au portail client',ok:acc.some(a=>a.user_id),etat:acc.some(a=>a.user_id)?'Compte lié':acc.length?'Code créé, en attente du client':'À créer (automatique à l’envoi)'},
    ...(soc?[{k:'quest',t:'Questionnaire d’ouverture et pièces (statuts, registres, états financiers, avis, relevés, prêts, identité)',ok:['reçue','traitée'].includes(svc?.statut),etat:svc?(svc.statut==='envoyée'?'Envoyé, pas encore ouvert':svc.statut==='en cours'?'Le client le remplit':svc.statut==='reçue'?'Reçu : à traiter (onglet Demandes)':'Traité'):'Inclus à l’envoi'}]:[]),
    {k:'contrat',t:'Contrat de services (et accord de DPA)',ok:k?.statut==='signé',etat:!k?'Pas encore préparé : préparez-le dans l’onglet « Contrat de services »':k.statut==='signé'?'Signé le '+dl(k.signe_le):k.statut==='envoyé'?'Envoyé, en attente de signature':'Brouillon : envoyez-le depuis l’onglet Contrat',lien:k?.statut==='signé'?null:'contrat'},
-   {k:'arc',t:'Autorisation ARC (le client nous ajoute comme représentant)',ok:!!c.checklist?.procARC,etat:c.checklist?.procARC?'Confirmée':arcEnv?'Instructions envoyées : cochez quand l’accès apparaît dans Représenter un client':'Instructions incluses à l’envoi',chk:'procARC'},
+   {k:'arc',t:'Autorisation ARC (vous faites la demande, le client la confirme)',ok:!!c.checklist?.procARC,etat:c.checklist?.procARC?'Confirmée par le client':c.checklist?.arcDemande?(arcEnv?'Demande soumise et client avisé : en attente de sa confirmation':'Demande soumise : le courriel lui dira de la confirmer'):'Soumettez d’abord la demande dans Représenter un client (niveau 2, sans date de fin, accès en ligne, option « le client confirmera dans Mon dossier »), puis cliquez « Demande soumise »',chk:c.checklist?.arcDemande?'procARC':'arcDemande'},
    {k:'mr69',t:'Procuration Revenu Québec (MR-69) à signer',ok:!!mr?.signe_le||!!c.checklist?.procRQ,etat:mr?.signe_le?'Signée le '+dl(mr.signe_le):mr?'Envoyée, en attente de signature':TRMR?`Prête à envoyer : ${TRMR.name}`:'Produisez-la dans Mon dossier pour les représentants professionnels, puis joignez le PDF ici',file:!mr},
    {k:'identite',t:'Identité vérifiée et conflits d’intérêts',ok:!!(c.checklist?.identite&&c.checklist?.conflits),etat:c.checklist?.identite&&c.checklist?.conflits?'Faits':'À cocher dans la fiche après vérification',lien:'fiche'}]}
 function trTexte(c,o){const ct=(c.contact||'').split(' ')[0],L=[];let n=0;const R=REPR||{},kk=R.affiche&&R[R.affiche]?R.affiche:['ne','idgroupe','idrep'].find(x=>R[x]),idv=kk?R[kk]:'[identifiant du cabinet]';
@@ -122,7 +109,7 @@ function trTexte(c,o){const ct=(c.contact||'').split(' ')[0],L=[];let n=0;const 
   if(o.quest)L.push(`${++n}. Remplissez le questionnaire d’ouverture de dossier et déposez vos documents (environ 15 minutes) :\n   ${o.quest}\n   Vous pouvez l’enregistrer et y revenir plus tard.`);
   if(o.contrat)L.push(`${++n}. Lisez et signez votre contrat de services dans le portail (onglet « Entreprise », section « À payer et documents du cabinet »).`);
   if(o.mr69)L.push(`${++n}. Signez la procuration de Revenu Québec dans le portail (bouton « Lire et signer »). Elle nous permet d’agir pour vous auprès de Revenu Québec.`);
-  if(o.arc)L.push(`${++n}. Autorisez-nous auprès de l’ARC dans votre compte (${societe(c)?'Mon dossier d’entreprise › Autoriser ou gérer les représentants':'Mon dossier › Profil › gérer les représentants'} › Autoriser un représentant) :\n   entrez ${kk==='ne'?'notre numéro d’entreprise':'notre identifiant'} ${idv}, vérifiez que « Boujrad CPA Inc. » s’affiche, choisissez le NIVEAU 2, ${societe(c)?'la portée « numéro d’entreprise au complet », ':''}AUCUNE date de fin (sans limite) et l’accès EN LIGNE, puis confirmez.\n   Guide pas à pas : https://boujradcpa.com/guides/autoriser-representant.html`);
+  if(o.arc)L.push(`${++n}. Confirmez notre demande d’autorisation auprès de l’ARC : connectez-vous à votre compte de l’ARC (${societe(c)?'Mon dossier d’entreprise':'Mon dossier'}), ouvrez la demande d’autorisation en attente de « Boujrad CPA Inc. » (niveau 2, sans date de fin, accès en ligne) et cliquez sur « Confirmer ».\n   Pas de demande visible? Ajoutez-nous vous-même avec ${kk==='ne'?'notre numéro d’entreprise':'notre identifiant'} ${idv} (niveau 2, aucune date de fin, accès en ligne${societe(c)?', numéro d’entreprise au complet':''}) — guide : https://boujradcpa.com/guides/autoriser-representant.html`);
   return`Bonjour${ct?' '+ct:''},
 
 Bienvenue chez Boujrad CPA Inc.! Merci de votre confiance.
@@ -140,7 +127,7 @@ function fTrousse(){const c=EDIT,E=trEtat(c),reste=E.filter(e=>!e.ok),k=CTR.filt
   $('fBody').innerHTML=`<p class="sub" style="margin-top:0">Tout ce qu’il faut obtenir d’un nouveau client, au même endroit. Préparez ce qui vient du cabinet (contrat, procuration MR-69), puis envoyez la trousse : le client reçoit <strong>un seul courriel</strong> avec ses étapes, dans l’ordre.</p>
     <div style="display:grid;gap:8px">${E.map(e=>`<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;${e.ok?'background:#f1faf4':''}"><div class="row" style="justify-content:space-between;align-items:center;gap:8px"><strong>${e.ok?'✓ ':''}${esc(e.t)}</strong><span class="pill ${e.ok?'ok':'g'}">${e.ok?'Fait':'À faire'}</span></div>
       <div class="sub" style="font-size:14px;margin-top:4px">${esc(e.etat)}</div>
-      ${!e.ok&&e.lien?`<button class="sm" data-ft="${e.lien}" style="margin-top:6px">${e.lien==='contrat'?'Préparer ou envoyer le contrat':'Ouvrir la fiche'}</button>`:''}${!e.ok&&e.chk?`<button class="sm" data-trchk="${e.chk}" style="margin-top:6px">Marquer comme confirmée</button>`:''}${e.file?`<label class="sm" style="display:inline-block;margin-top:6px;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:5px 10px">${TRMR?'Changer le PDF':'Joindre le PDF de la procuration'}<input type="file" id="trMr" accept=".pdf" hidden></label>`:''}</div>`).join('')}</div>
+      ${!e.ok&&e.lien?`<button class="sm" data-ft="${e.lien}" style="margin-top:6px">${e.lien==='contrat'?'Préparer ou envoyer le contrat':'Ouvrir la fiche'}</button>`:''}${!e.ok&&e.chk?`<button class="sm" data-trchk="${e.chk}" style="margin-top:6px">${e.chk==='arcDemande'?'Demande soumise dans Représenter un client':'Le client a confirmé'}</button>`:''}${e.file?`<label class="sm" style="display:inline-block;margin-top:6px;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:5px 10px">${TRMR?'Changer le PDF':'Joindre le PDF de la procuration'}<input type="file" id="trMr" accept=".pdf" hidden></label>`:''}</div>`).join('')}</div>
     ${reste.length?`<div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap"><button class="pri" id="trGo">${NOT.some(n=>n.client_id===c.id&&/Trousse d’accueil envoyée/.test(n.texte||''))?'Relancer le client (étapes restantes)':'Envoyer la trousse d’accueil'}</button><span class="sub" style="font-size:13px">Vous verrez le courriel avant l’envoi.${!k?' Conseil : préparez d’abord le contrat pour l’inclure.':''}</span></div>`:'<p class="info" style="margin-top:14px">✓ Dossier ouvert : tout est reçu.</p>'}`;
   $('trMr')?.addEventListener('change',e=>{TRMR=e.target.files[0]||null;fTrousse()})}
 async function trPreparer(c){const E=trEtat(c),todo=k=>E.some(e=>e.k===k&&!e.ok),o={};
@@ -170,7 +157,11 @@ document.addEventListener('click',async e=>{const b=e.target.closest('#trGo,[dat
     catch(err){$('trM').textContent='Envoi impossible : '+(err.message||err);$('trSend').disabled=false}}});
 function rFiche(){const c=EDIT,neuf=!c.id;if(neuf)FT='fiche';
   const tabs=[['fiche','Fiche'],['trousse','Trousse d’accueil'],['contrat','Contrat de services'],['factu','Facturation'],['portail','Portail et documents'],['suivi','Tâches et journal']];
-  $('tcli').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div><button class="sm" id="cCancel">← Tous les clients</button></div>${c.id?`<div class="row" style="gap:6px;align-items:center"><span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span><button class="sm" id="cDt">Demande type</button><button class="sm" id="cRep" title="Courriel au client : comment autoriser le cabinet auprès de l’ARC">Demande de représentant</button>${(c.statut||'actif')!=='inactif'?'<button class="sm danger" id="cFin">Fin de mandat</button>':''}</div>`:''}</div>
+  $('tcli').innerHTML=`<div class="card"><div class="row" style="justify-content:space-between"><div><button class="sm" id="cCancel">← Tous les clients</button></div>${c.id?`<div class="row" style="gap:6px;align-items:center"><span class="pill ${STC[c.statut||'actif']}">${esc(c.statut||'actif')}</span><details class="envmenu" style="position:relative"><summary class="btn sm pri" style="list-style:none;cursor:pointer;padding:6px 12px;border-radius:8px;background:var(--night);color:#fff;font-size:14px">Envoyer au client ▾</summary><div style="position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;min-width:300px;display:grid">
+  <button class="sm" data-env="trousse" style="text-align:left;border:0">🎒 Trousse d’accueil <small class="sub" style="display:block">Nouveau client : tout ce qu’il faut obtenir de lui</small></button>
+  <button class="sm" id="cDt" style="text-align:left;border:0">📋 Demande de documents ou questionnaire <small class="sub" style="display:block">Demandes types et questionnaires en ligne</small></button>
+  <button class="sm" data-env="publier" style="text-align:left;border:0">📄 Document à publier ou à faire signer <small class="sub" style="display:block">Déclaration, avis, MR-69, états financiers…</small></button>
+  <button class="sm" id="cRep" style="text-align:left;border:0">🏛 Demande de représentant (ARC) <small class="sub" style="display:block">Confirmer notre demande dans son compte</small></button></div></details>${(c.statut||'actif')!=='inactif'?'<button class="sm danger" id="cFin">Fin de mandat</button>':''}</div>`:''}</div>
     <h2 style="margin:12px 0 4px">${neuf?'Nouveau client':esc(c.nom)}</h2>${c.id?`<nav class="tabs">${tabs.map(([k,l])=>`<button data-ft="${k}" aria-pressed="${FT===k}">${l}</button>`).join('')}</nav>`:''}<div id="fBody" style="margin-top:14px"></div></div>`;
   ({fin:fFin,fiche:fFiche,trousse:fTrousse,contrat:fContrat,factu:fFact,portail:()=>{$('fBody').innerHTML=portalPanel(c).replace(/<div class="card">/g,'<div class="card" style="box-shadow:none;border:1px solid var(--line)">');if($('pTy'))syncPub(c,'type')},suivi:fSuivi})[FT]()}
 
@@ -772,7 +763,8 @@ Boujrad CPA Inc.`});await svcSet(s,{relance_le:new Date().toISOString()},`Rappel
   if(b.id==='dtSv'){const corps=$('dtT').value.replace(/^Bonjour[^,\n]*,/,'Bonjour{CONTACT},');MOV[DTM]={sujet:$('dtS').value.replace(/ — [^—]+$/,''),corps};
     const{error}=await sb.from('cc_parametres').upsert({cle:'modeles',valeur:MOV,updated_at:new Date().toISOString()});if(!error){notify('Modèle enregistré pour les prochaines demandes');DTE=false;rDt()}return}
   if(b.id==='dtRs'){if(!confirm('Revenir au texte d’origine de ce modèle?'))return;delete MOV[DTM];await sb.from('cc_parametres').upsert({cle:'modeles',valeur:MOV,updated_at:new Date().toISOString()});notify('Modèle d’origine rétabli');DTE=false;rDt();return}
-  if(b.id==='cRep'){repDlg(EDIT);return}
+  if(b.dataset.env){b.closest('details')?.removeAttribute('open');FT=b.dataset.env==='trousse'?'trousse':'portail';rCli();if(b.dataset.env==='publier')setTimeout(()=>{const t=$('pT');if(t){t.scrollIntoView({behavior:'smooth',block:'center'});t.focus()}},150);return}
+  if(b.id==='cRep'){b.closest('details')?.removeAttribute('open');repDlg(EDIT);return}
   if(b.id==='cDt'){DTC=EDIT.id;DTE=false;DTV=null;TAB='dt';render();window.scrollTo(0,0);return}});
 
 /* ---------- fin de mandat ---------- */
