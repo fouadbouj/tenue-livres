@@ -1182,8 +1182,8 @@ async function drwOpen(k){const[t,a,b]=k.split('|');const el=$('txDrw');el.hidde
       (ferme?'<p class="msg err">Exercice fermé : cette transaction ne peut plus être modifiée.</p>':
       `<label class="f">Compte${sel()}</label>
        <label class="row" style="gap:8px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="drwTax"${x.tax?' checked':''}> Taxes incluses (TPS/TVQ ventilées)</label>
-       <label class="f">Raison (facultatif)<input id="drwWhy" placeholder="ex. remboursement d’abonnement"></label>
-       ${p?`<label class="row" style="gap:8px;align-items:flex-start;margin:4px 0 12px"><input type="checkbox" id="drwRule"> <span>Retenir pour ce client : « ${esc(p)} » ira toujours dans ce compte</span></label>`:''}
+       <label class="f">Note (facultatif, affichée sous la transaction)<input id="drwWhy" placeholder="ex. remboursement d’abonnement"></label>
+       ${p?`<label class="row" style="gap:8px;align-items:flex-start;margin:4px 0 12px"><input type="checkbox" id="drwRule"> <span>Créer une règle : les prochaines transactions « ${esc(p)} » iront aussi dans ce compte.<br><small class="note">Laissez décoché pour une correction ponctuelle : seule cette transaction change.</small></span></label>`:''}
        <div class="row" style="gap:8px"><button class="pri" id="drwOk">Enregistrer</button><button id="drwGo">Voir dans le mois →</button></div><p class="msg" id="drwMsg"></p>`);
     $('drwX').onclick=drwClose;if(ferme)return;$('drwAcc').value=x.acct;
     $('drwGo').onclick=()=>{drwClose();goMois(mois,src,x.desc)};
