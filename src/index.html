@@ -986,7 +986,7 @@ function adepAssurer(){let a=adepAcc();if(a)return a;const pris=new Set(PLAN.map
    Les deux côtés sont appariés : un seul est compté au grand livre, l'autre est marqué « déjà compté ». Entre devises, c'est le côté en $ CA
    qui est compté : le compte en US$ reçoit ainsi le coût réel de l'opération de change. */
 const VIR=/VIREMENT|TRANSFER|TRANSFERT|\bTFR\b|\bCHANGE\b|\bFX\b|PAIEMENT.{0,20}(VISA|CARTE|MASTERCARD|AMEX)|PAYMENT.{0,14}(THANK|RECEIVED|MERCI)|PAIEMENT MERCI|PAYPAL|WITHDRAWAL|RETRAIT|CONVERSION/;
-async function pairInterne(){if(!C)return 0;const L=await iaPeriodes();if(new Set(L.map(p=>p.src)).size<2)return 0;
+async function pairInterne(){if(!C)return 0;if(P&&pTimer)savePerNow();await pWriting;const L=await iaPeriodes();if(new Set(L.map(p=>p.src)).size<2)return 0;
   L.forEach(p=>{if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)p.tx=P.tx});
   {const u0=L.filter(p=>devOf(p.src)==='USD').flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(u0.length)await tauxAssurer(u0[0],u0[u0.length-1])}
   /* réparation : chaque virement apparié doit avoir exactement un côté « déjà compté » (sinon il compte deux fois) */
@@ -1010,6 +1010,7 @@ async function pairInterne(){if(!C)return 0;const L=await iaPeriodes();if(new Se
     ch.add(a.p);ch.add(b.p);n++}
   for(const p of ch){p.updated=new Date().toISOString();p.todo=(p.tx||[]).filter(t=>isTr(t)&&!t.mirror).length;if(P&&!P.multi&&P.mois===p.mois&&P.src===p.src){savePerNow();continue}
     if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
+  if((n||ch.size)&&P?.multi&&!PAIR_OFF)await openRange();
   if(n||ch.size){LED=null;audit('Virements appariés',`${n} nouveau(x) virement(s) entre les comptes de l’entreprise${rep0?`; ${rep0} période(s) réparée(s) (virement compté deux fois)`:''}`)}return n}
 let pairT=null,PAIR_OFF=false;function pairPlus(){if(PAIR_OFF)return;clearTimeout(pairT);pairT=setTimeout(async()=>{try{const n=await pairInterne();if(n){msg(`${$('msg').textContent} ${n} virement(s) entre vos comptes apparié(s) : comptés une seule fois.`.trim());if(P)P.multi?openRange():render()}}catch(e){console.warn(e)}},1200)}
 
@@ -1197,7 +1198,7 @@ const IAC=new Map();
 const iaMt=c=>(c/100).toFixed(2);
 async function iaPeriodes(){if(local)return Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);const q=await db.collection('clients').doc(C.id).collection('periodes').get();return q.docs.map(d=>d.data())}
 async function iaTx(){/* toutes les transactions reclassables : relevés (période + rang) et lignes d'écritures */
-  const out=[];(await iaPeriodes()).forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);
+  const out=[];(await iaPeriodes()).forEach(p=>{const src=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);
     out.push({ref:`R:${p.mois}_${p.src}:${i}`,kind:'rel',pid:p.mois+'_'+p.src,i,date:t.date,desc:t.desc,m:t.amt,a:t.acct,tax:!!t.tax,tr:isTr(t),src:p.src})})});
   (await loadJe()).forEach(j=>(j.lines||[]).forEach((l,k)=>out.push({ref:`J:${j.id}:${k}`,kind:'je',id:j.id,k,date:j.date,desc:(j.ref?j.ref+' — ':'')+(j.desc||''),m:(l.d||0)-(l.c||0),a:l.a,tr:!!C.tr&&l.a===C.tr,src:'écriture'})));
   out.forEach(x=>IAC.set(x.ref,x));return out}
@@ -1226,17 +1227,17 @@ Règles de classement du dossier : ${(C.rules||[]).length}.
 ${(C.links||[]).length?`Comptes liés (relevés d'autres comptes versés pour apparier les virements entre comptes) :\n${C.links.map(l=>`- ${l.nom} → compte ${l.acct} ${accName(l.acct)} ; ${(l.tx||[]).length} transaction(s)${(l.tx||[]).length?' : '+(l.tx||[]).slice(-60).map(([d,a,ds])=>`${d} ${iaMt(a)}${ds?' '+String(ds).slice(0,30):''}`).join(' · '):''}`).join('\n')}`:'Aucun compte lié.'}`}
 async function iaChercher(o){const n=o.texte?norm(o.texte):'',L=(await iaTx()).filter(x=>(!o.compte||x.a===String(o.compte))&&(!n||norm(x.desc).includes(n))&&(!o.du||x.date>=o.du)&&(!o.au||x.date<=o.au)&&(!o.transitoire||x.tr)&&(o.montant==null||Math.abs(Math.abs(x.m)-Math.round(Math.abs(+o.montant)*100))<=1));
   return `Recherche ${JSON.stringify(o)} : ${L.length} résultat(s)${L.length>150?' (150 premiers)':''}\n`+L.slice(0,150).map(iaLigne).join('\n')}
-async function iaReclasser(a){const refs=[...new Set(a.refs||[])];if(!refs.length)throw new Error('aucune transaction');if(!iaCompteOk(a.compte))throw new Error('compte '+a.compte+' absent du plan');
+async function iaReclasser(a){if(P&&pTimer)savePerNow();await pWriting;const refs=[...new Set(a.refs||[])];if(!refs.length)throw new Error('aucune transaction');if(!iaCompteOk(a.compte))throw new Error('compte '+a.compte+' absent du plan');
   const why=('Reclassé : '+(a.raison||'demande à l’assistant')).slice(0,140);let n=0,ferme=0;const per=new Map(),byJe=new Map();
   refs.forEach(r=>{const[k,x,y]=r.split(':');if(k==='R')(per.get(x)||per.set(x,[]).get(x)).push(+y);else if(k==='J')(byJe.get(x)||byJe.set(x,[]).get(x)).push(+y)});
   for(const[pid,Is]of per){const set=t=>{if(lk(t.date)){ferme++;return}audit('Transaction reclassée',`${txTxt(t)} : ${t.acct} → ${a.compte} ${accName(String(a.compte))}${typeof a.taxable==='boolean'&&a.taxable!==!!t.tax?`, taxes ${a.taxable?'cochées':'décochées'}`:''} (${a.raison||'assistant'})`);Object.assign(t,{acct:String(a.compte),st:'manuel',why,unk:false});if(typeof a.taxable==='boolean')t.tax=a.taxable;n++};
-    if(P&&P.mois+'_'+P.src===pid){Is.forEach(i=>P.tx[i]&&set(P.tx[i]));if(P.revise){audit('Mois révisé modifié',`${moisLbl(P.mois)} · ${P.src} : révision retirée`);P.revise=null}savePerNow();continue}
+    if(P&&!P.multi&&P.mois+'_'+P.src===pid){Is.forEach(i=>P.tx[i]&&set(P.tx[i]));if(P.revise){audit('Mois révisé modifié',`${moisLbl(P.mois)} · ${P.src} : révision retirée`);P.revise=null}savePerNow();continue}
     let doc;if(local)doc=LOCAL.periodes[C.id+'/'+pid];else{const q=await db.collection('clients').doc(C.id).collection('periodes').doc(pid).get();doc=q.exists?q.data():null}
     if(!doc)continue;Is.forEach(i=>doc.tx[i]&&set(doc.tx[i]));if(doc.revise){audit('Mois révisé modifié',`${pid} : révision retirée`);delete doc.revise}doc.todo=doc.tx.filter(aCl).length;doc.updated=new Date().toISOString();
     if(local)LOCAL.periodes[C.id+'/'+pid]=doc;else await db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(doc)}
   for(const[id,Ks]of byJe){const j=JE.find(x=>x.id===id);if(!j)continue;if(lk(j.date)){ferme+=Ks.length;continue}const{id:_,...d}=j;Ks.forEach(k=>audit('Écriture modifiée',`${j.date} ${j.ref||''} ${j.desc||''} : ligne ${d.lines[k]?.a} → ${a.compte} (${a.raison||'assistant'})`));d.lines=d.lines.map((l,k)=>Ks.includes(k)?{...l,a:String(a.compte)}:l);d.updated=new Date().toISOString();n+=Ks.length;
     if(local){LOCAL.je[C.id+'/'+id]=d}else await(await jeCol()).doc(id).set(d)}
-  LED=null;if(tab==='je')renderJe();else if(typeof render==='function')render();
+  LED=null;if(P?.multi)await openRange();if(tab==='je')renderJe();else if(typeof render==='function')render();
   return `${n} transaction(s) reclassée(s) dans ${a.compte} ${accName(String(a.compte))}${ferme?` · ${ferme} ignorée(s) : exercice fermé`:''}`}
 /* conciliation pour l'assistant : par relevé, livres (tout ce qui touche le compte au grand livre) vs relevé */
 async function iaConciliation(o){await iaTx();if(!LED)LED=await loadLedger();const srcs=o.compte?[String(o.compte)]:[...new Set((C.stmts||[]).map(x=>x.src))];const out=[];
@@ -1980,7 +1981,7 @@ function stmtOfCsv(g,nom){const cB=+$('mBal').value;if(cB<0)return null;const[cD
   return{src:P.src,du:F.date,au:L.date,sd:F.b-F.c,sf:L.b,nom,via:'CSV'}}
 function addStmt(st){if(!st)return;C.stmts=(C.stmts||[]).filter(x=>!(x.src===st.src&&x.du===st.du&&x.au===st.au));C.stmts.push(st);C.stmts.sort((a,b)=>a.src.localeCompare(b.src)||a.du.localeCompare(b.du))}
 /* virement apparié : confirmer (touche humaine) ou défaire (les deux côtés redeviennent à classer) */
-async function pairAgir(id,defaire){const L=await iaPeriodes();for(const p of L){const T=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P.tx:p.tx;let ch=false;
+async function pairAgir(id,defaire){if(P&&pTimer)savePerNow();await pWriting;const L=await iaPeriodes();for(const p of L){const T=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P.tx:p.tx;let ch=false;
     (T||[]).forEach(t=>{if(t.pair!==id)return;ch=true;if(defaire){delete t.pair;delete t.mirror;delete t.aConf;Object.assign(t,{st:'transit',acct:C.tr,why:'Appariement défait'})}else delete t.aConf});
     if(!ch)continue;if(T!==p.tx){savePerNow();continue}p.updated=new Date().toISOString();p.todo=(p.tx||[]).filter(t=>isTr(t)&&!t.mirror).length;
     if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
@@ -2611,7 +2612,7 @@ $('pClear').onclick=e=>confirm2(e.currentTarget,'',async()=>{if(!P)return;clearT
   try{audit('Période vidée',`${moisLbl(P.mois)} · ${P.src} ${accName(P.src)} · ${P.tx.length} transaction(s) retirée(s)`);await delPeriod(pid);P.tx=[];P.statut='en cours';AIITEMS=[];idFilter=null;render();msg(`Période ${moisLbl(P.mois)} vidée. Vous pouvez redéposer le relevé.`);setSave('Enregistré')}catch(err){msg('Effacement impossible pour le moment.',true)}
   $('pClear').textContent='Vider cette période'});
 $('plist').addEventListener('click',e=>{const b=e.target.closest('button[data-del]');if(!b)return;e.stopPropagation();
-  confirm2(b,'',async()=>{try{await delPeriod(b.dataset.del);if(P&&P.mois+'_'+P.src===b.dataset.del){P.tx=[];P.statut='en cours';render()}loadPeriods()}catch(err){b.textContent='Erreur'}})},true);
+  confirm2(b,'',async()=>{try{await delPeriod(b.dataset.del);if(P&&!P.multi&&P.mois+'_'+P.src===b.dataset.del){P.tx=[];P.statut='en cours';render()}loadPeriods()}catch(err){b.textContent='Erreur'}})},true);
 $('wipe').onclick=e=>confirm2(e.currentTarget,'',async()=>{if((C.ex||[]).some(x=>x.statut==='ferme')){$('wipeMsg').textContent='Des exercices sont fermés : rouvrez-les avant de tout effacer.';return}clearTimeout(pTimer);pTimer=null;$('wipeMsg').textContent='Effacement…';
   try{let ids=[];if(local)ids=Object.keys(LOCAL.periodes).filter(k=>k.startsWith(C.id+'/')).map(k=>k.slice(C.id.length+1));
     else{const sn=await db.collection('clients').doc(C.id).collection('periodes').get();ids=sn.docs.map(d=>d.id)}
@@ -3476,7 +3477,7 @@ const ansCents=v=>{let x=String(v??'').replace(/[\s  $]/g,'');if(!x)return nu
 const ansDate=v=>{const t=String(v||'').trim();let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;m=t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`}return t};
 async function ansCandidates(){/* transactions encore au transitoire : relevés (période + rang) et écritures */
   let L=[];if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(C.id+'/')).map(([,v])=>v);else{const q=await db.collection('clients').doc(C.id).collection('periodes').get();L=q.docs.map(d=>d.data())}
-  const out=[];L.forEach(p=>{const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);if(isTr(t)&&!lk(t.date))out.push({kind:'rel',pid:p.mois+'_'+p.src,mois:p.mois,src:p.src,i,date:t.date,desc:t.desc,c:Math.abs(t.amt),sortie:t.amt<0})})});
+  const out=[];L.forEach(p=>{const src=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P:p;(src.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);if(isTr(t)&&!lk(t.date))out.push({kind:'rel',pid:p.mois+'_'+p.src,mois:p.mois,src:p.src,i,date:t.date,desc:t.desc,c:Math.abs(t.amt),sortie:t.amt<0})})});
   (await loadJe()).forEach(j=>(j.lines||[]).forEach((l,k)=>{if(l.a===C.tr&&!lk(j.date)){const v=(l.d||0)-(l.c||0);out.push({kind:'je',id:j.id,k,date:j.date,desc:j.desc||j.ref||'',c:Math.abs(v),sortie:v>0})}}));return out}
 async function ansRead(f){const rows=/\.xlsx?$/i.test(f.name)?await readXlsx(f):parseCSV(decode(await f.arrayBuffer()));
   const h=rows.findIndex(r=>r.some(c=>/^date$/i.test(c.trim()))&&r.some(c=>/montant/i.test(c)));if(h<0)throw new Error('En-têtes introuvables : utilisez le fichier envoyé au client.');
@@ -3497,15 +3498,15 @@ async function ansAi(){const L=ANS.map((a,i)=>({i,a})).filter(({a})=>a.m&&a.expl
   catch(e){$('ansMsg').textContent='Suggestion par l’IA impossible pour le moment : choisissez les comptes dans la liste.'}$('ansAi').disabled=false}
 async function ansApply(){const L=ANS.filter(a=>a.m&&a.acct);if(!L.length){$('ansMsg').textContent='Choisissez au moins un compte.';return}
   const b=$('ansApply');b.disabled=true;$('ansMsg').textContent='Reclassement…';const why=a=>('Précision du client : '+a.expl.trim()).slice(0,140);
-  try{const per=new Map();L.filter(a=>a.m.kind==='rel').forEach(a=>{(per.get(a.m.pid)||per.set(a.m.pid,[]).get(a.m.pid)).push(a)});
-    for(const[pid,As]of per){if(P&&P.mois+'_'+P.src===pid){As.forEach(a=>Object.assign(P.tx[a.m.i],{acct:a.acct,tax:!!a.tax,st:'manuel',why:why(a),unk:false}));savePerNow();continue}
+  try{if(P&&pTimer)savePerNow();await pWriting;const per=new Map();L.filter(a=>a.m.kind==='rel').forEach(a=>{(per.get(a.m.pid)||per.set(a.m.pid,[]).get(a.m.pid)).push(a)});
+    for(const[pid,As]of per){if(P&&!P.multi&&P.mois+'_'+P.src===pid){As.forEach(a=>Object.assign(P.tx[a.m.i],{acct:a.acct,tax:!!a.tax,st:'manuel',why:why(a),unk:false}));savePerNow();continue}
       let doc;if(local)doc=LOCAL.periodes[C.id+'/'+pid];else{const q=await db.collection('clients').doc(C.id).collection('periodes').doc(pid).get();doc=q.exists?q.data():null}
       if(!doc)continue;As.forEach(a=>Object.assign(doc.tx[a.m.i],{acct:a.acct,tax:!!a.tax,st:'manuel',why:why(a),unk:false}));doc.todo=doc.tx.filter(aCl).length;doc.updated=new Date().toISOString();
       if(local)LOCAL.periodes[C.id+'/'+pid]=doc;else await db.collection('clients').doc(C.id).collection('periodes').doc(pid).set(doc)}
     const byJe=new Map();L.filter(a=>a.m.kind==='je').forEach(a=>{(byJe.get(a.m.id)||byJe.set(a.m.id,[]).get(a.m.id)).push(a)});
     for(const[id,As]of byJe){const j=JE.find(x=>x.id===id);if(!j)continue;const{id:_,...d}=j;d.lines=d.lines.map((l,k)=>{const a=As.find(x=>x.m.k===k);return a?{...l,a:a.acct}:l});d.desc=(d.desc||'')+(d.desc?' · ':'')+'précisé par le client';d.updated=new Date().toISOString();
       if(local){LOCAL.je[C.id+'/'+id]=d}else await(await jeCol()).doc(id).set(d)}
-    C.demandes=[...(C.demandes||[])];const last=C.demandes.at(-1);if(last)last.repondu=new Date().toISOString();saveClient();LED=null;
+    C.demandes=[...(C.demandes||[])];const last=C.demandes.at(-1);if(last)last.repondu=new Date().toISOString();saveClient();LED=null;if(P?.multi)await openRange();
     const dl=$('ansDlg');dl.close?dl.close():dl.removeAttribute('open');notify(`${L.length} transaction(s) reclassée(s) à partir des réponses du client`);
     if(tab==='home')renderHome().catch(()=>{});else if(typeof render==='function')render()}
   catch(e){$('ansMsg').textContent='Reclassement impossible : '+(e?.message||'réessayez.');notify('Reclassement impossible',1)}b.disabled=false}
@@ -3770,10 +3771,10 @@ $('tHome').addEventListener('click',async e=>{const z=e.target.closest('[data-ou
   if(z.hasAttribute('data-iaask')){if(window.ASSISTANT?.demander)window.ASSISTANT.demander(z.dataset.iaask);else notify('L’assistant IA n’est pas disponible ici.');return}
   if(z.hasAttribute('data-ouv0')){if(!confirm('Confirmer que c’est un nouveau client qui démarre : tous les soldes d’ouverture sont à zéro?'))return;C.ouv={date:curEx().deb,s:{},zero:true};syncEx();saveClient();LED=null;notify('Soldes d’ouverture à zéro (nouveau client)');renderHome();return}
   if(z.hasAttribute('data-fixtax')){if(!confirm('Le client n’est pas inscrit : les transactions bancaires de cet exercice seront traitées sans TPS/TVQ, et ses règles de classement aussi. Continuer?'))return;
-    const x=curEx();let n=0;C.rules=(C.rules||[]).map(r=>({...r,t:false}));const L=await iaPeriodes();
-    for(const p of L){const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;let ch=0;(src.tx||[]).forEach(t=>{const c={...t};classify(c,p.src);if(c.tax&&t.date>=x.deb&&t.date<=x.fin&&!lk(t.date)){Object.assign(t,{acct:c.acct,st:'manuel',tax:false,why:'Sans taxes : client non inscrit à la TPS/TVQ',unk:false});n++;ch++}});
+    if(P&&pTimer)savePerNow();await pWriting;const x=curEx();let n=0;C.rules=(C.rules||[]).map(r=>({...r,t:false}));const L=await iaPeriodes();
+    for(const p of L){const src=(P&&!P.multi&&P.mois===p.mois&&P.src===p.src)?P:p;let ch=0;(src.tx||[]).forEach(t=>{const c={...t};classify(c,p.src);if(c.tax&&t.date>=x.deb&&t.date<=x.fin&&!lk(t.date)){Object.assign(t,{acct:c.acct,st:'manuel',tax:false,why:'Sans taxes : client non inscrit à la TPS/TVQ',unk:false});n++;ch++}});
       if(!ch)continue;if(src===P){savePerNow();continue}p.updated=new Date().toISOString();if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
-    saveClient();LED=null;notify(`${n} transaction(s) corrigée(s) : sans TPS/TVQ`);renderHome();return}});
+    saveClient();LED=null;if(P?.multi)await openRange();notify(`${n} transaction(s) corrigée(s) : sans TPS/TVQ`);renderHome();return}});
 $('tHome').addEventListener('click',e=>{const q=e.target.closest('[data-aregler]');if(q){const x=(C.aRegler||[])[+q.dataset.aregler];C.aRegler=(C.aRegler||[]).filter((_,k)=>k!==+q.dataset.aregler);if(x)audit('Point réglé',`${x.fichier} : ${x.quoi}`);saveClient();renderHome().catch(()=>{});return}});
 $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;
   let m=b.dataset.mo,src=b.dataset.src;const g=b.dataset.go||'';if(g.startsWith('mo:')){[,m,src]=g.split(':')}else if(g){setTab(g);return}
