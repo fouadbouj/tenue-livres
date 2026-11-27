@@ -182,7 +182,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],gifiIa:c.gifiIa||{},immoOk:c.immoOk||{},verifTx:c.verifTx||{},attente:c.attente||[],attenteSt:c.attenteSt||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],lk2:!!c.lk2,lkAvant:c.lkAvant||'',lkLog:c.lkLog||[],gifiIa:c.gifiIa||{},immoOk:c.immoOk||{},verifTx:c.verifTx||{},attente:c.attente||[],attenteSt:c.attenteSt||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){LED=null;const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -649,7 +649,7 @@ const voisins=(a,b)=>{if(!a||!b||a===b)return false;const[ad,aa]=a.split('_'),[b
 let MSTAT=null,REPORT=[];
 function mergeInto(p,list){
   let added=0,dup=0;const seen=new Map();
-  for(const x of list){const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);
+  for(const x of list){if(lk(x.date)){if(MSTAT)MSTAT.verr=(MSTAT.verr||0)+1;continue}const k=x.date+'|'+x.amt;const s=(seen.get(k)||0)+1;seen.set(k,s);
     const h=p.tx.filter(t=>t.date===x.date&&t.amt===x.amt&&!voisins(t.rel,x.rel)).length;if(s<=h){dup++;continue}
     const t={id:++seq,...x};classify(t);p.tx.push(t);added++}
   p.tx.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
@@ -723,7 +723,7 @@ async function handle(files){
   const pdfs=files.filter(f=>/\.pdf$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name));const lignes=[];let err=false;
   for(const f of pdfs){REPORT=[];MSTAT={lu:0,added:0,dup:0,cote:0};
     try{await readStatementPdf(f);const r=REPORT[0];const m=MSTAT;
-      if(r)lignes.push(`${f.name}${r.du?` (du ${r.du} au ${r.au})`:''} : ${r.n} lues${r.ok?' ✓ soldes concordants':' ⚠ soldes non vérifiés'} · ${m.added} ajoutée(s) · ${m.dup} doublon(s) ignoré(s)${m.cote?` · ${m.cote} mise(s) de côté (hors exercice)`:''}`)}
+      if(r)lignes.push(`${f.name}${r.du?` (du ${r.du} au ${r.au})`:''} : ${r.n} lues${r.ok?' ✓ soldes concordants':' ⚠ soldes non vérifiés'} · ${m.added} ajoutée(s) · ${m.dup} doublon(s) ignoré(s)${m.cote?` · ${m.cote} mise(s) de côté (hors exercice)`:''}${m.verr?` · ${m.verr} refusée(s) : dates protégées`:''}`)}
     catch(e){console.error(e);err=true;lignes.push(`${f.name} : lecture impossible (${e.message||e}). Réessayez, ou exportez le relevé en CSV.`)}
     MSTAT=null}
   if(pdfs.length>1||lignes.length&&pdfs.length){$('msg').style.whiteSpace='pre-line';msg((pdfs.length>1?'Relevés versés :\n':'')+lignes.join('\n')+(pdfs.length===1&&!err?'\n'+$('msg').textContent:''),err)}
@@ -1561,7 +1561,12 @@ let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textCo
 
 /* ---------- exercices ---------- */
 let MIS=null,mStep='acc',mSec='',mTimer=null;
-const lk=d=>!!d&&!!C&&(C.ex||[]).some(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin);
+const lk=d=>{if(!d||!C)return false;if((C.ex||[]).some(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin))return true;if(C.lkAvant&&d<C.lkAvant)return true;
+  if(C.lk2){const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));if(L.length>2&&d<L[L.length-2].deb)return true}return false};
+const lkPourquoi=d=>{const x=(C.ex||[]).find(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin);return x?`exercice ${exLbl(x)} fermé`:C.lkAvant&&d<C.lkAvant?`dates protégées avant le ${C.lkAvant}`:'exercice de plus de deux ans (protection Sage 50)'};
+function lkJournal(quoi){const qui=(document.getElementById('whoE')?.textContent||'').trim();C.lkLog=[...(C.lkLog||[]),{le:new Date().toISOString(),qui,quoi}].slice(-50)}
+function renderLk(){if(!C)return;$('lk2').checked=!!C.lk2;$('lkAv').value=C.lkAvant||'';const L=C.lkLog||[];
+  $('lkLog').innerHTML=L.length?'<strong>Historique</strong><br>'+L.slice().reverse().slice(0,12).map(x=>`${esc(new Date(x.le).toLocaleString('fr-CA',{dateStyle:'medium',timeStyle:'short'}))}${x.qui?' · '+esc(x.qui):''} : ${esc(x.quoi)}`).join('<br>'):''}
 const monthLocked=m=>!!C&&(C.ex||[]).some(x=>x.statut==='ferme'&&x.deb.slice(0,7)<=m&&x.fin.slice(0,7)>=m);
 const curEx=()=>(C?.ex||[]).find(x=>x.id===C.exCur)||null;
 const exOf=d=>(C?.ex||[]).find(x=>d>=x.deb&&d<=x.fin)?.id||'';
@@ -1588,7 +1593,11 @@ function fillExSel(){const L=C.ex||[];
 function renderExList(){const L=C.ex||[];
   $('exList').innerHTML=L.length?L.map(x=>`<tr${x.id===C.exCur?' class="sel"':''}><td><strong>${esc(exLbl(x))}</strong></td><td>${x.statut==='ferme'?`<span class="pill">Fermé le ${esc((x.fermeLe||'').slice(0,10))}</span>`:'<span class="pill ok">Ouvert</span>'}</td><td>${x.ouv?`${Object.keys(x.ouv.s||{}).length} comptes au ${esc(x.ouv.date)}`:'—'}</td><td>${x.id===C.exCur?'<span class="note">Affiché</span>':`<button class="sm" data-exgo="${esc(x.id)}">Afficher</button>`}</td></tr>`).join('')
     :'<tr><td colspan="4" class="empty">Indiquez le début et la fin de l’exercice ci-dessus, puis Enregistrer.</td></tr>';
-  const e=curEx();$('yearEnd').hidden=!e||e.statut==='ferme';$('exReopen').hidden=!e||e.statut!=='ferme'}
+  const e=curEx();$('yearEnd').hidden=!e||e.statut==='ferme';$('exReopen').hidden=!e||e.statut!=='ferme';renderLk()}
+$('lkSave').onclick=()=>{const v2=$('lk2').checked,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
+  let raison='';if(moins){raison=prompt('Vous réduisez la protection. Raison (sera notée dans l’historique) :')||'';if(!raison.trim()){$('lkMsg').textContent='Annulé : une raison est requise.';renderLk();return}}
+  const avant=`${C.lk2?'2 derniers exercices':'sans règle Sage'}, ${C.lkAvant?'avant le '+C.lkAvant:'sans date'}`;C.lk2=v2;C.lkAvant=av;
+  lkJournal(`Protection : ${avant} → ${v2?'2 derniers exercices':'sans règle Sage'}, ${av?'avant le '+av:'sans date'}${raison?' — raison : '+raison:''}`);saveClient();renderLk();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
 $('exSel').onchange=()=>{if(P)savePerNow();useEx($('exSel').value)};
 $('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exgo]');if(b){if(P)savePerNow();useEx(b.dataset.exgo)}});
 function tbFor(E,x,o={}){const m=new Map(),add=(a,c)=>m.set(a,(m.get(a)||0)+c),re=reAcct(),ouv=x.ouv;
@@ -1600,7 +1609,7 @@ $('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{const x=curEx();if
   if(P)savePerNow();$('yeMsg').textContent='Calcul des soldes de clôture…';
   try{LED=null;const E=await loadLedger();const todo=E.filter(t=>t.todo&&t.date>=x.deb&&t.date<=x.fin).length;
     const B=tbFor(E,x),re=reAcct(),s={};B.forEach((c,a)=>{if(!c)return;const k=(+String(a)[0]>=4||isDiv(a))?re:a;s[k]=(s[k]||0)+c});Object.keys(s).forEach(k=>{if(!s[k])delete s[k]});
-    x.statut='ferme';x.fermeLe=new Date().toISOString();x.cloture={date:x.fin,s};
+    x.statut='ferme';x.fermeLe=new Date().toISOString();x.cloture={date:x.fin,s};lkJournal(`Exercice ${exLbl(x)} fermé`);
     const nd=addDays(x.fin,1);let n=C.ex.find(y=>y.deb===nd);
     if(!n){n={id:nd,deb:nd,fin:finOf(nd),statut:'ouvert',ouv:null};C.ex.push(n);C.ex.sort((a,b)=>a.deb.localeCompare(b.deb))}
     const upd=n.statut!=='ferme';if(upd)n.ouv={date:nd,s};
@@ -1608,7 +1617,7 @@ $('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{const x=curEx();if
     $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')}
   catch(err){$('yeMsg').textContent='Calcul impossible.'}
   $('yearEnd').textContent='Fermer l’exercice affiché'});
-$('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
+$('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;const raison=prompt(`Rouvrir l’exercice ${exLbl(x)} : raison (notée dans l’historique)`)||'';if(!raison.trim()){$('yeMsg').textContent='Réouverture annulée : une raison est requise.';return}lkJournal(`Exercice ${exLbl(x)} rouvert — raison : ${raison}`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
   $('yeMsg').textContent=`Exercice ${exLbl(x)} rouvert. Après vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.`;$('exReopen').textContent='Rouvrir l’exercice affiché'});
 $('exNew').onclick=()=>{const L=C.ex||[],last=L[L.length-1];if(!last){$('yeMsg').textContent='Indiquez d’abord le début et la fin du premier exercice ci-dessus.';return}
   const d=addDays(last.fin,1);const n={id:d,deb:d,fin:finOf(d),statut:'ouvert',ouv:null};C.ex.push(n);saveClient();useEx(n.id);$('yeMsg').textContent=`Exercice ${exLbl(n)} ajouté. Fermez le précédent pour reporter ses soldes.`};

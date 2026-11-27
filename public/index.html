@@ -666,6 +666,11 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <p class="note">Fermer un exercice le verrouille : ses transactions, écritures, factures et soldes d'ouverture deviennent en lecture seule, et ses soldes de clôture deviennent les soldes d'ouverture figés de l'exercice suivant (le bénéfice net passe aux bénéfices non répartis). Vous pouvez le rouvrir au besoin, puis le refermer pour mettre à jour l'exercice suivant.</p>
       <div class="scroll"><table class="stack" style="margin-top:8px"><thead><tr><th>Exercice</th><th>Statut</th><th>Soldes d'ouverture</th><th></th></tr></thead><tbody id="exList"></tbody></table></div>
       <div class="row" style="margin-top:10px"><button id="yearEnd" class="pri">Fermer l'exercice affiché</button><button id="exReopen" hidden>Rouvrir l'exercice affiché</button><button id="exNew" class="sm">Ajouter un exercice</button><span class="msg" id="yeMsg"></span></div>
+      <h3 style="margin:16px 0 6px;font-size:15px">Protection des exercices</h3>
+      <label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" id="lk2"> <span>Comme Sage 50 : seuls les <strong>deux derniers exercices</strong> (l’exercice courant et le précédent) sont modifiables. Les plus anciens sont en lecture seule, même s’ils n’ont pas été fermés.</span></label>
+      <div class="row" style="gap:8px;align-items:flex-end;margin-top:8px"><label class="f" style="max-width:260px">Aucune modification datée avant le<input type="date" id="lkAv"></label><button class="sm" id="lkSave">Enregistrer la protection</button><span class="msg" id="lkMsg"></span></div>
+      <p class="note" style="margin-top:6px">Les dates protégées ne peuvent plus recevoir de transactions, d’écritures ni de reclassements, ni par le versement d’un relevé ni par l’assistant. Rouvrir ou déverrouiller demande une raison, et c’est noté dans l’historique ci-dessous.</p>
+      <div id="lkLog" class="note"></div>
     </div>
     <div class="panel">
       <h2>Recommencer à zéro</h2>
