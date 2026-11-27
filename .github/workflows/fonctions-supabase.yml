@@ -21,6 +21,8 @@ jobs:
         run: npx --yes supabase@latest --version
       - name: Assistant IA (clé Anthropic gardée sur le serveur, connexion requise)
         run: npx --yes supabase@latest functions deploy ai --project-ref "$PROJET" --use-api --yes
+      - name: Guides de l'équipe (membres connectés seulement)
+        run: npx --yes supabase@latest functions deploy guide --project-ref "$PROJET" --use-api --yes
       - name: Envoi de courriels depuis l'intranet (connexion requise)
         run: npx --yes supabase@latest functions deploy tl-email --project-ref "$PROJET" --use-api --yes
       # cc-avis et cc-rappels vérifient elles-mêmes l'appelant (membre connecté, client du portail ou secret des tâches programmées)

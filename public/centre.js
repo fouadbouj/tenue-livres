@@ -6,6 +6,7 @@ const SITE=cfg.APP_URL||location.origin,dl=x=>x?new Date((x.length===10?x+'T12:0
 let SVC=[],ACC=[],PUB=[],MSG=[],CLI=[],DEM=[],PCS=[],TAB=location.hash==='#paiements'?'pay':location.hash==='#services'?'dt':'board',PAYF='',NEWPAY=new Set(),EDIT=null,FILT='ouvertes',PCY='';
 const notify=(m,err)=>{let t=document.getElementById('ntf');if(!t){t=document.createElement('div');t.id='ntf';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=(err?'':'✓ ')+m;t.className=(err?'err ':'')+'on';clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),4200)};
 window.CCsb=sb;window.CCnotify=(m,e)=>notify(m,e);
+window.tlGuideFn=n=>sb.functions.invoke('guide',{body:{nom:n}});
 const fn=async(name,body)=>{const{data,error}=await sb.functions.invoke(name,{body});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
 
 /* périodes terminées (même logique que la fonction cc-rappels) */
