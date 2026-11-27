@@ -2647,10 +2647,13 @@ async function boiteDeplier(files){const out=[];
   return out}
 const BANQUES=[[/BANQUE ROYALE|\bRBC\b|ROYAL BANK/,'RBC'],[/DESJARDINS/,'Desjardins'],[/BANQUE NATIONALE|NATIONAL BANK|\bBNC\b/,'BNC'],[/\bBMO\b|BANQUE DE MONTREAL|BANK OF MONTREAL/,'BMO'],[/\bTD\b|TORONTO-DOMINION|CANADA TRUST/,'TD'],[/SCOTIA/,'Scotia'],[/\bCIBC\b/,'CIBC'],[/TANGERINE/,'Tangerine'],[/AMERICAN EXPRESS|\bAMEX\b/,'Amex']];
 const banqueDe=t=>(BANQUES.find(([re])=>re.test(t))||[0,''])[1];
+/* mots distinctifs du nom du dossier (sans INC, LTEE…) pour reconnaître un relevé de l'entreprise */
+const motsNom=()=>norm(C?.nom||'').split(/[^A-Z0-9]+/).filter(w=>w.length>=4&&!/^(INC|INCORPOREE|LTEE|LIMITEE|CORP|COMPAGNIE|SOCIETE|GROUPE|ENTREPRISES?|SERVICES?)$/.test(w));
 async function boiteReconnaitre(f){const nm=f.name,ch=norm(f._chemin||nm);const r={f,nom:nm,chemin:f._chemin||nm,type:'autre',action:'ignorer',note:'',doute:false,dev:'CAD',der:'',banque:''};
-  try{if(/\.pdf$/i.test(nm)){const pages=await pdfPages(f);const t1=norm(pages[0]||''),t5=norm(pages.slice(0,6).join('\n'));r.pages=pages.length;r.banque=banqueDe(t1);
+  try{try{const h=await crypto.subtle.digest('SHA-256',await f.arrayBuffer());r.hash=[...new Uint8Array(h)].slice(0,12).map(b=>b.toString(16).padStart(2,'0')).join('')}catch(e){}if(/\.pdf$/i.test(nm)){const pages=await pdfPages(f);const t1=norm(pages[0]||''),t5=norm(pages.slice(0,6).join('\n'));r.pages=pages.length;r.banque=banqueDe(t1);
       const usd=/FONDS EN USD|EN DOLLARS US|DOLLARS AMERICAINS|\bUS DOLLARS?\b|\(USD\)/.test(t1);if(usd)r.dev='USD';
       const carte=t1.match(/\d{4} ?\d{2}\*{2} ?\*{4} ?(\d{4})|\*{4} ?(\d{4})/);const cpt=t1.match(/NUMERO DE COMPTE:?\s*([\d -]{7,})|ACCOUNT NUMBER:?\s*([\d -]{7,})/);
+      const mots=motsNom(),entreprise=!mots.length||mots.some(w=>t1.includes(w));r.perso=!entreprise||/COMPTE PERSONNEL|PARTICULIERS|PERSONAL (CHEQUING|ACCOUNT|BANKING)/.test(t1);
       if(/SOLDE DE COMPTE PRECEDENT|SOLDE PRECEDENT|PREVIOUS (ACCOUNT )?BALANCE|NOUVEAU SOLDE/.test(t1)&&carte){Object.assign(r,{type:'carte',der:carte[1]||carte[2],action:'verser'})}
       else if(/SOLDE D'OUVERTURE|OPENING BALANCE|RELEVE DE COMPTE|DETAILS DES OPERATIONS|ACCOUNT STATEMENT/.test(t1)&&!/PAYPAL/.test(t1)){Object.assign(r,{type:'banque',der:cpt?(cpt[1]||cpt[2]).replace(/\D/g,'').slice(-4):'',action:'verser'});if(!r.der){r.doute=true;r.note='Numéro de compte introuvable : choisissez le compte.'}}
       else if(/PAYPAL/.test(t1)){Object.assign(r,{type:'paypal-pdf',note:'Rapport PayPal en PDF : le CSV du même rapport est versé à sa place (il donne chaque ligne).'})}
@@ -2689,6 +2692,11 @@ function boiteCompte(r,crees){const carte=/carte/.test(r.type);if(r.type==='payp
 function boiteNumero(carte,pris){const R=carte?[2141,2149]:[1061,1099];for(let n=R[0];n<=R[1];n++)if(!pris.has(String(n)))return String(n);return carte?'2199':'1099'}
 async function boiteAnalyser(files){const box=$('bxOut');box.innerHTML='<p class="note">Ouverture du paquet…</p>';
   const F=await boiteDeplier(files);const L=[];for(const[k,f]of F.entries()){box.innerHTML=`<p class="note">Lecture de ${esc(f.name)} (${k+1}/${F.length})…</p>`;L.push(await boiteReconnaitre(f))}
+  /* doublons : fichier identique (même contenu, peu importe le nom), ou même rapport en CSV et en Excel */
+  const copie=x=>/COPIE|COPY|\(\d+\)\.\w+$| \d\.\w+$/.test(norm(x.nom));const vu=new Map();for(const r of L){if(!r.hash)continue;let o=vu.get(r.hash);if(!o){vu.set(r.hash,r);continue}let d=r;if(copie(o)&&!copie(r)){vu.set(r.hash,r);d=o;o=r}Object.assign(d,{action:'ignorer',doublon:true,note:`Doublon exact de « ${o.nom} » : écarté.`})}
+  const cmd=L.filter(r=>r.type==='commandes'&&r.ventes&&!r.doublon);cmd.forEach((r,i)=>{const o=cmd.slice(0,i).find(x=>x.ventes.n===r.ventes.n&&JSON.stringify(x.ventes.M)===JSON.stringify(r.ventes.M));if(o){r.action='ignorer';r.doublon=true;r.note=`Même rapport de commandes que « ${o.nom} » (autre format) : écarté.`}});
+  /* comptes personnels : on ne verse rien sans décision */
+  L.filter(r=>r.perso&&['banque','carte'].includes(r.type)&&!r.doublon).forEach(r=>{r.action='ignorer';r.doute=true;r.note=`À RÉGLER — compte personnel ou d’une autre entité? Le nom de l’entreprise (${C.nom}) n’apparaît pas sur ce relevé. Est-ce qu’on le prend en compte (dépenses d’entreprise payées par l’actionnaire → avances), le met dans les Comptes liés pour apparier les virements, ou l’écarte? Choisissez « Verser » seulement si c’est bien un compte de l’entreprise.`});
   /* comptes : existants, ou à créer (un seul par compte même s'il y a plusieurs relevés) */
   const pris=new Set(PLAN.map(p=>p[0])),crees=[];
   /* compte générique existant à reprendre (et renommer) plutôt que d'en créer un : même nature, même devise, sans numéro de compte dans le nom; d'abord celui qui a un solde d'ouverture */
@@ -2712,7 +2720,7 @@ function boiteAfficher(){if(!BOITE)return;const{L,crees,exProp}=BOITE;const box=
   const ord=['banque','carte','paypal','banque-csv','carte-csv','etats','paypal-pdf','reglements','commandes','courriel','document','erreur','autre'];
   const R0=L.map((r,i)=>({r,i})).sort((a,b)=>ord.indexOf(a.r.type)-ord.indexOf(b.r.type)||String(a.r.acct||'').localeCompare(String(b.r.acct||''))||a.r.nom.localeCompare(b.r.nom));
   /* les relevés d'un même compte sur une seule ligne */
-  const R=[];R0.forEach(x=>{const k=['banque','carte'].includes(x.r.type)&&x.r.acct?x.r.type+'|'+x.r.acct:null;const g=k&&R.find(y=>y.k===k);if(g){g.ix.push(x.i);return}R.push({...x,k,ix:[x.i]})});
+  const R=[],Rx=[];R0.forEach(x=>{if(x.r.action==='ignorer'&&!x.r.doute&&!['banque','carte','paypal','banque-csv','carte-csv','commandes','etats'].includes(x.r.type)){Rx.push(x);return}const k=['banque','carte'].includes(x.r.type)&&x.r.acct?x.r.type+'|'+x.r.acct:null;const g=k&&R.find(y=>y.k===k);if(g){g.ix.push(x.i);return}R.push({...x,k,ix:[x.i]})});
   const nb=L.filter(r=>r.action!=='ignorer').length;
   box.innerHTML=`<p style="margin:8px 0"><strong>${L.length} document(s) reconnu(s).</strong> ${nb} à verser ou à utiliser, ${L.length-nb} gardé(s) pour référence. Vérifiez les lignes en jaune, puis appliquez.</p>
   ${exProp?`<p class="msg" style="margin:6px 0">Exercice proposé : du ${exProp.deb} au ${exProp.fin} (d’après les états financiers de l’an dernier).</p>`:''}
@@ -2723,6 +2731,8 @@ function boiteAfficher(){if(!BOITE)return;const{L,crees,exProp}=BOITE;const box=
     <td>${['banque','carte','paypal','banque-csv','carte-csv'].includes(r.type)?`<select data-bxa="${ix.join(',')}" style="width:auto;max-width:220px">${opts(r.acct)}</select>`:''}</td>
     <td><select data-bxx="${ix.join(',')}" style="width:auto">${[['verser','Verser'],['ouverture','Soldes d’ouverture'],['ventes','Ventes du mois → à déposer'],['frais','Frais du mois'],['ignorer','Garder pour référence']].filter(([v])=>v!=='ouverture'||r.type==='etats').filter(([v])=>v!=='ventes'||(r.type==='commandes'&&r.ventes)).filter(([v])=>v!=='frais'||r.frais).filter(([v])=>v!=='verser'||!['etats','commandes','reglements','courriel','document','erreur','autre','paypal-pdf'].includes(r.type)).map(([v,t])=>`<option value="${v}"${r.action===v?' selected':''}>${t}</option>`).join('')}</select></td>
     <td class="note" style="max-width:360px">${esc(r.note||'')}</td></tr>`).join('')}</table></div>
+  ${Rx.length?`<details style="margin-top:8px"><summary class="note">${Rx.length} document(s) sans utilité pour la comptabilité, écartés (rapports de contrôle, courriels, doublons…)</summary><ul class="note" style="margin:6px 0 0 18px">${Rx.map(({r})=>`<li>${esc(r.nom)} — ${esc(TYPES_BX[r.type]||r.type)}${r.note?' : '+esc(r.note):''}</li>`).join('')}</ul></details>`:''}
+  ${L.some(r=>r.perso&&['banque','carte'].includes(r.type)&&!r.doublon)?`<p class="msg err" style="margin:8px 0">À régler : ${L.filter(r=>r.perso&&['banque','carte'].includes(r.type)&&!r.doublon).length} relevé(s) qui semblent personnels ou d’une autre entité (en jaune). Rien n’en sera versé sans votre choix.</p>`:''}
   <div class="row" style="margin-top:10px"><button class="pri" id="bxGo">Appliquer : créer les comptes et tout verser</button><button id="bxX">Annuler</button><span class="msg" id="bxMsg"></span></div>`;
   box.querySelectorAll('[data-bxa]').forEach(s=>s.onchange=()=>{s.dataset.bxa.split(',').forEach(j=>{const r=L[+j];r.acct=s.value;r.doute=!s.value});boiteAfficher()});
   box.querySelectorAll('[data-bxx]').forEach(s=>s.onchange=()=>{s.dataset.bxx.split(',').forEach(j=>{L[+j].action=s.value})});
@@ -2810,6 +2820,7 @@ async function boiteAppliquer(){const{L,crees,exProp}=BOITE;const say=t=>{$('bxM
       const v=await ventesMensuelles(r);res.push(`Ventes du mois depuis « ${r.nom} » → ${adepAcc()} ${accName(adepAcc())} :`,...v.map(x=>'  '+x))}
     {const vus=new Set();for(const r of L.filter(r=>r.action==='frais'&&r.frais)){say('Frais des processeurs…');const k=r.proc+(r.frais.regle?'-regle':'');const v=await fraisMensuels(r);if(r.frais.regle&&vus.has(k))continue;vus.add(k);res.push(`Frais ${r.proc} (${r.nom}) :`,...v.map(x=>'  '+x))}}
     say('Appariement des virements entre vos comptes…');const n=await pairInterne();if(n)res.push(`${n} virement(s) entre vos comptes apparié(s) (comptés une seule fois).`);
+    {const P_=L.filter(r=>r.perso&&['banque','carte'].includes(r.type)&&r.action==='ignorer'&&!r.doublon);if(P_.length){C.aRegler=[...(C.aRegler||[]).filter(x=>!P_.some(r=>r.nom===x.fichier)),...P_.map(r=>({fichier:r.nom,quoi:'Compte personnel ou d’une autre entité? Relevé non versé : on le prend en compte, on le met dans les Comptes liés, ou on l’écarte?',le:new Date().toISOString().slice(0,10)}))];saveClient();res.push(`À régler : ${P_.length} relevé(s) qui semblent personnels ou d’une autre entité, non versés (voir l’Accueil).`)}}
     audit('Boîte de dépôt',`${L.length} document(s) : ${res.length} opération(s)`);LED=null;
     $('bxOut').innerHTML=`<div class="msg" style="white-space:pre-line;margin-top:8px">${esc(res.join('\n'))}</div><div class="row" style="margin-top:10px"><button class="sm pri" data-go="rec">Voir la conciliation</button><button class="sm" data-go="rev">Classer les transactions</button></div>`;BOITE=null;renderHome().catch(()=>{})}
   catch(e){console.error(e);say('Erreur : '+(e.message||e))}finally{const b=$('bxGo');if(b)b.disabled=false}}
@@ -2826,6 +2837,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('h
     const sa=(C.sansAct||[]).includes(m),cls=!P_.length?(fut?'fut':sa?'o':''):t?'r':'o',st=!P_.length?(fut?'À venir':sa?'Aucune activité':'Aucun relevé'):t?`${t} à classer`:P_.every(p=>p.revise)?'Révisé ✓':P_.every(p=>p.statut==='importée')&&C.sage50?'Importé dans Sage':'Classé';
     return `<button class="mo ${cls}" data-mo="${m}" data-src="${esc(P_[0]?.src||'')}"><b>${esc(moisLbl(m))}</b><span>${st}</span>${n?`<small>${n} transaction${n>1?'s':''}</small>`:''}</button>`}).join('');
   const T=[];const add=(c,t,s,go,lbl)=>T.push(`<li><i class="${c}"></i><div>${t}${s?`<small>${s}</small>`:''}</div>${go?`<button class="sm${c==='r'?' pri':''}" data-go="${go}">${lbl}</button>`:''}</li>`);
+  (C.aRegler||[]).forEach((x,k)=>T.push(`<li><i class="r"></i><div>À régler : ${esc(x.quoi)}<small>${esc(x.fichier)} · ${esc(x.le||'')}</small></div><button class="sm" data-aregler="${k}">Réglé</button></li>`));
   {const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb)),vieux=L.slice(0,-2).filter(x=>x.statut!=='ferme');
     if(vieux.length)add('g',`${vieux.length>1?`${vieux.length} exercices de plus de deux ans sont`:`L’exercice ${exLbl(vieux[0])} est`} encore ouvert${vieux.length>1?'s':''}`,`${vieux.map(exLbl).join(' · ')} : si la T2 est produite, c’est le temps de fermer — les chiffres déclarés seront protégés.`,'set','Fermer…');
     const prec=L.length>=2?L[L.length-2]:null;if(prec&&prec.statut!=='ferme'&&!vieux.includes(prec)&&new Date()>new Date(addDays(prec.fin,180)+'T12:00'))add('g',`Exercice ${exLbl(prec)} encore ouvert`,'Plus de six mois après sa fin : si la T2 est produite, fermez-le pour protéger les chiffres déclarés.','set','Fermer…')}
@@ -2874,6 +2886,7 @@ $('tHome').addEventListener('click',async e=>{const z=e.target.closest('[data-ou
     for(const p of L){const src=(P&&P.mois===p.mois&&P.src===p.src)?P:p;let ch=0;(src.tx||[]).forEach(t=>{const c={...t};classify(c);if(c.tax&&t.date>=x.deb&&t.date<=x.fin&&!lk(t.date)){Object.assign(t,{acct:c.acct,st:'manuel',tax:false,why:'Sans taxes : client non inscrit à la TPS/TVQ',unk:false});n++;ch++}});
       if(!ch)continue;if(src===P){savePerNow();continue}p.updated=new Date().toISOString();if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
     saveClient();LED=null;notify(`${n} transaction(s) corrigée(s) : sans TPS/TVQ`);renderHome();return}});
+$('tHome').addEventListener('click',e=>{const q=e.target.closest('[data-aregler]');if(q){const x=(C.aRegler||[])[+q.dataset.aregler];C.aRegler=(C.aRegler||[]).filter((_,k)=>k!==+q.dataset.aregler);if(x)audit('Point réglé',`${x.fichier} : ${x.quoi}`);saveClient();renderHome().catch(()=>{});return}});
 $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[data-go]');if(!b)return;
   let m=b.dataset.mo,src=b.dataset.src;const g=b.dataset.go||'';if(g.startsWith('mo:')){[,m,src]=g.split(':')}else if(g){setTab(g);return}
   if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}
