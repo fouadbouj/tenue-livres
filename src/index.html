@@ -1006,7 +1006,7 @@ let pairT=null;function pairPlus(){clearTimeout(pairT);pairT=setTimeout(async()=
 
 /* ---------- classement ---------- */
 const baseResolved=()=>BASE.map(r=>({...r,a:findAcc(CAT[r.c],true)}));
-function classify(t){
+function classify(t,src){
   if(lk(t.date))return;if(t.pair)return;
   if(t.st==='manuel'||t.st==='suggere'||t.st==='facture')return;
   const n=norm(t.desc);
@@ -1015,7 +1015,7 @@ function classify(t){
   if(r){Object.assign(t,{acct:r.a,tax:r.t,st:'auto',why:'Règle du client : '+r.p,unk:false});return}
   const b=baseResolved().filter(r=>r.a).sort((a,b)=>b.p.length-a.p.length).find(r=>n.includes(r.p));
   if(b){Object.assign(t,{acct:b.a,tax:b.t,st:'auto',why:'Règle de base : '+b.p,unk:false});return}
-  if(t.amt>0&&C.methode==='adeposer'&&adepAcc()&&!/^2/.test(String(t.src||C.src||''))&&!VIR.test(n)){Object.assign(t,{acct:adepAcc(),tax:false,st:'auto',why:'Méthode du dossier : dépôt porté en réduction des transactions à déposer',unk:false});return}
+  if(t.amt>0&&C.methode==='adeposer'&&adepAcc()&&!/^2/.test(String(src||P?.src||''))&&!VIR.test(n)&&!/GOUV|REVENU QUEBEC|\bRQ\b|\bARC\b|\bCRA\b|RECEIVER GENERAL|RECEVEUR GENERAL|\bTPS\b|\bTVQ\b|\bGST\b|INTERET|INTEREST|\bPRET\b|LOAN|CONTREPASSE|REVERSAL|REMBOURSEMENT|REFUND/.test(n)){Object.assign(t,{acct:adepAcc(),tax:false,st:'auto',why:'Méthode du dossier : dépôt porté en réduction des transactions à déposer',unk:false});return}
   t.acct=C.tr;t.tax=false;t.st='transit';
   if(AMBIG.test(n)){t.why='Sans détail : à réviser';t.unk=false}else{t.why='Fournisseur inconnu';t.unk=true}
 }
@@ -2023,7 +2023,7 @@ async function loadLedger(){
   const E=[];
   const U=new Set(L.map(p=>p.src).filter(s=>devOf(s)==='USD'));
   if(U.size){const ds=L.filter(p=>U.has(p.src)).flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(ds.length)await tauxAssurer(ds[0],ds[ds.length-1])}
-  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t);const us=U.has(p.src),r=us&&t.cad==null?tauxDe(t.date):null,cad=!us?t.amt:t.cad!=null?t.cad:r?Math.round(t.amt*r):null;
+  L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);const us=U.has(p.src),r=us&&t.cad==null?tauxDe(t.date):null,cad=!us?t.amt:t.cad!=null?t.cad:r?Math.round(t.amt*r):null;
     E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:us?`${t.desc} [${fmtN(t.amt)} US$ ${t.cad!=null?'au montant réel du virement':'× '+(r||'taux manquant')}]`:t.desc,lines:t.mirror||cad==null?[]:lines({...t,amt:cad},p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,i,amt:t.amt,cad,dev:us?'USD':'',sansTaux:cad==null,mirror:!!t.mirror,acct:t.acct,tax:!!t.tax,st:t.st,todo:isTr(t)&&!t.mirror})}));
   await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv',id:i.id}));
   (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id,aje:j.type==='aje',todo:!!C.tr&&(j.lines||[]).some(l=>l.a===C.tr)}));
@@ -3463,7 +3463,9 @@ async function boiteReconnaitre(f){const nm=f.name,ch=norm(f._chemin||nm);const 
       else if(h.includes('TYPE DE COMPTE')&&h.some(x=>/NUMERO DU COMPTE|ACCOUNT NUMBER/.test(x))){const ia=h.findIndex(x=>/NUMERO DU COMPTE|ACCOUNT NUMBER/.test(x)),it=h.indexOf('TYPE DE COMPTE');const ex=rows[1]||[];
         const iu=h.findIndex(x=>/USD/.test(x)),icd=h.findIndex(x=>/CAD/.test(x));const usd=iu>=0&&rows.slice(1).some(x=>x[iu])&&!(icd>=0&&rows.slice(1).some(x=>x[icd]));
         Object.assign(r,{type:/VISA|MASTERCARD|CARTE|CREDIT/.test(norm(ex[it]))?'carte-csv':'banque-csv',der:String(ex[ia]||'').replace(/\D/g,'').slice(-4),dev:usd?'USD':'CAD',banque:'RBC',action:'verser'})}
-      else if(/ORDER|COMMANDE/.test(h.join(' '))&&/SKU|PRODUCT|PRODUIT/.test(h.join(' '))){r.type='commandes';r.note=`Commandes de la boutique (${rows.length-1} lignes) : ${methodeEff()==='caisse'?'en comptabilité de caisse, ce sont les dépôts qui comptent comme revenus; les commandes servent seulement au contrôle.':'à inscrire comme ventes si la méthode du dossier l’exige.'}`}
+      else if(/ORDER|COMMANDE/.test(h.join(' '))&&/SKU|PRODUCT|PRODUIT|TOTAL/.test(h.join(' '))){r.type='commandes';r.ventes=commandesParMois(rows);const v=r.ventes;
+        r.note=v?`${v.n} commande(s) payée(s), ${v.resume}. ${methodeEff()==='adeposer'?'Ventes du mois inscrites dans « Transactions à déposer ».':'Choisissez « Ventes du mois » pour inscrire les ventes par mois dans « Transactions à déposer » (les dépôts viendront les réduire).'}`:`Commandes de la boutique (${rows.length-1} lignes) : colonnes de total ou de date introuvables.`;
+        if(v&&methodeEff()==='adeposer')r.action='ventes'}
       else if(/AMERICAN EXPRESS|ELAVON|PAYMENT STATEMENT|SALES REPORT|PAYMENT REPORT|SETTLEMENT|CONSOLIDATION/.test(top+' '+ch)){r.type='reglements';r.note='Rapport du processeur de paiement : les versements sont déjà dans le relevé bancaire (revenus en comptabilité de caisse). Sert au contrôle.'}
       else{const g=guess(rows);if(g.date>=0&&(g.amt>=0||g.out>=0)){Object.assign(r,{type:'banque-csv',action:'verser',doute:true,note:'Export bancaire sans numéro de compte : choisissez le compte.'})}else{r.type='document';r.note='Tableau non reconnu.';r.doute=true}}}
     else{r.type='document';r.note='Format non pris en charge ici.'}}
@@ -3502,12 +3504,46 @@ function boiteAfficher(){if(!BOITE)return;const{L,crees,exProp}=BOITE;const box=
   <div style="overflow:auto"><table class="rep"><tr class="grp"><td>Document</td><td>Reconnu comme</td><td>Compte</td><td>Action</td><td>Note</td></tr>
   ${R.map(({r,i,ix})=>`<tr${ix.some(j=>L[j].doute)?' style="background:#fff6d6"':''}><td style="max-width:260px;word-break:break-word">${ix.length>1?`<strong>${ix.length} relevés</strong><div class="why">${esc(L[ix[0]].nom)} … ${esc(L[ix[ix.length-1]].nom)}</div>`:esc(r.nom)}<div class="why">${esc(r.chemin.split('/').slice(0,-1).join(' / '))}</div></td><td>${esc(TYPES_BX[r.type]||r.type)}${r.dev==='USD'?' · US$':''}</td>
     <td>${['banque','carte','paypal','banque-csv','carte-csv'].includes(r.type)?`<select data-bxa="${ix.join(',')}" style="width:auto;max-width:220px">${opts(r.acct)}</select>`:''}</td>
-    <td><select data-bxx="${ix.join(',')}" style="width:auto">${[['verser','Verser'],['ouverture','Soldes d’ouverture'],['ignorer','Garder pour référence']].filter(([v])=>v!=='ouverture'||r.type==='etats').filter(([v])=>v!=='verser'||r.type!=='etats').map(([v,t])=>`<option value="${v}"${r.action===v?' selected':''}>${t}</option>`).join('')}</select></td>
+    <td><select data-bxx="${ix.join(',')}" style="width:auto">${[['verser','Verser'],['ouverture','Soldes d’ouverture'],['ventes','Ventes du mois → à déposer'],['ignorer','Garder pour référence']].filter(([v])=>v!=='ouverture'||r.type==='etats').filter(([v])=>v!=='ventes'||(r.type==='commandes'&&r.ventes)).filter(([v])=>v!=='verser'||!['etats','commandes'].includes(r.type)).map(([v,t])=>`<option value="${v}"${r.action===v?' selected':''}>${t}</option>`).join('')}</select></td>
     <td class="note" style="max-width:360px">${esc(r.note||'')}</td></tr>`).join('')}</table></div>
   <div class="row" style="margin-top:10px"><button class="pri" id="bxGo">Appliquer : créer les comptes et tout verser</button><button id="bxX">Annuler</button><span class="msg" id="bxMsg"></span></div>`;
   box.querySelectorAll('[data-bxa]').forEach(s=>s.onchange=()=>{s.dataset.bxa.split(',').forEach(j=>{const r=L[+j];r.acct=s.value;r.doute=!s.value});boiteAfficher()});
   box.querySelectorAll('[data-bxx]').forEach(s=>s.onchange=()=>{s.dataset.bxx.split(',').forEach(j=>{L[+j].action=s.value})});
   $('bxX').onclick=()=>{BOITE=null;box.innerHTML=''};$('bxGo').onclick=boiteAppliquer}
+/* Rapport de commandes (WooCommerce, Shopify…) : une commande par numéro, payées seulement; totaux par mois, Canada / hors Canada, par devise. */
+function commandesParMois(rows){const h=(rows[0]||[]).map(norm);const ix=(...re)=>{for(const x of re){const k=h.findIndex(c=>x.test(c));if(k>=0)return k}return-1};
+  const I={id:ix(/^ORDER (NAME|NUMBER|ID|#)$/,/^(NAME|NUMERO|N° DE COMMANDE|COMMANDE)$/,/ORDER/),d:ix(/^ORDER DATE$/,/^DATE( DE (LA )?COMMANDE)?$/,/CREATED AT|PAID AT|DATE/),t:ix(/^ORDER TOTAL$/,/^TOTAL$/,/TOTAL/),
+    cur:ix(/ORDER CURRENCY|^CURRENCY$|DEVISE/),pays:ix(/SHIPPING COUNTRY|PAYS DE LIVRAISON|^COUNTRY$|PAYS/),prov:ix(/SHIPPING (STATE|PROVINCE)|PROVINCE/),st:ix(/^(ORDER )?STATUS$|STATUT/),paid:ix(/DATE PAID|PAID AT|FINANCIAL STATUS/)};
+  if(I.d<0||I.t<0)return null;const vus=new Set(),M={};let n=0;const pays={};
+  for(const r of rows.slice(1)){const id=I.id>=0?String(r[I.id]||'').trim():'';if(id&&vus.has(id))continue;if(id)vus.add(id);
+    if(I.st>=0&&/CANCEL|ANNUL|REFUND|REMBOURS|FAILED|ECHOU|PENDING|ATTENTE|DRAFT/.test(norm(r[I.st])))continue;if(I.paid>=0&&!String(r[I.paid]||'').trim())continue;
+    const date=toISO(String(r[I.d]||'').trim(),'YMD')||toISO(String(r[I.d]||'').trim(),'DMY');const c=toCents(r[I.t]);if(!date||!c)continue;
+    const dev=I.cur>=0&&String(r[I.cur]||'').trim()?String(r[I.cur]).trim().toUpperCase():'CAD',p=I.pays>=0?String(r[I.pays]||'').trim().toUpperCase():'',ca=/^(CA|CAN|CANADA)$/.test(p);
+    const m=date.slice(0,7);M[m]=M[m]||{};const k=(ca?'ca':'intl')+'|'+dev;M[m][k]=(M[m][k]||0)+c;n++;pays[p||'?']=(pays[p||'?']||0)+1;
+    if(ca&&I.prov>=0){const q=String(r[I.prov]||'').trim().toUpperCase()||'?';M[m]['prov|'+q]=(M[m]['prov|'+q]||0)+c}}
+  if(!n)return null;const tot={};Object.values(M).forEach(x=>Object.entries(x).forEach(([k,v])=>{if(!k.startsWith('prov'))tot[k]=(tot[k]||0)+v}));
+  const T=(z,d)=>tot[z+'|'+d]||0,devs=[...new Set(Object.keys(tot).map(k=>k.split('|')[1]))];
+  const resume=devs.map(d=>`hors Canada ${fmtN(T('intl',d))} ${d==='USD'?'US$':'$'} · Canada ${fmtN(T('ca',d))||'0,00'} ${d==='USD'?'US$':'$'}`).join(' ; ')+` (pays : ${Object.entries(pays).sort((a,b)=>b[1]-a[1]).map(([p,k])=>`${p} ${k}`).join(', ')})`;
+  return{M,n,resume,devs}}
+async function jeEcrire(doc){await loadJe();const old=JE.find(j=>j.ref===doc.ref&&j.auto===doc.auto);
+  if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/'+(old?.id||'j'+Date.now()+Math.random().toString(36).slice(2,5))]=doc}else{const col=await jeCol();await(old?col.doc(old.id):col.doc()).set(doc)}LED=null;return!!old}
+function compteLibre(de,a){const pris=new Set(PLAN.map(p=>p[0]));for(let n=de;n<=a;n++)if(!pris.has(String(n)))return String(n);return String(a)}
+/* ventes du mois → Transactions à déposer : Dt à déposer / Ct ventes (hors Canada : détaxées; Canada : taxes à séparer selon la province, cas par cas) */
+async function ventesMensuelles(r){const V=r.ventes;const ad=adepAssurer();const res=[];
+  const vi=findAcc(/VENTES?.*(EXPORT|INTERNATION|HORS CANADA|ETRANGER)/)||(()=>{const n=compteLibre(4010,4099);addAccount(n,'Ventes — exportations hors Canada (détaxées)');return n})();
+  let vc=null;const caAcc=()=>vc||(vc=findAcc(/VENTES?.*CANADA(?!.*HORS)/)||(()=>{const n=compteLibre(4010,4099);addAccount(n,'Ventes — Canada (taxables)');return n})());
+  const x=curEx();for(const m of Object.keys(V.M).sort()){const fin=`${m}-${String(new Date(+m.slice(0,4),+m.slice(5,7),0).getDate()).padStart(2,'0')}`;
+    if(x&&(fin<x.deb||m+'-01'>x.fin)){res.push(`${m} : hors de l’exercice, ignoré.`);continue}if(lk(fin)){res.push(`${m} : exercice fermé ou protégé, ignoré.`);continue}
+    const lignes=[],det=[];let ok=true;
+    for(const[k,c]of Object.entries(V.M[m])){const[z,dev]=k.split('|');if(z==='prov')continue;let cad=c,tx='';
+      if(dev!=='CAD'){if(dev!=='USD'){res.push(`${m} : devise ${dev} non prise en charge.`);ok=false;break}await tauxAssurer(m+'-01',fin);const L=Object.entries(C.taux||{}).filter(([d])=>d.slice(0,7)===m).map(([,v])=>v);
+        if(!L.length){res.push(`${m} : taux de change introuvable.`);ok=false;break}const moy=+(L.reduce((a,b)=>a+b,0)/L.length).toFixed(4);cad=Math.round(c*moy);tx=` (${fmtN(c)} US$ × ${moy}, taux moyen du mois)`}
+      lignes.push({a:z==='ca'?caAcc():vi,d:0,c:cad});det.push(`${z==='ca'?'Canada':'hors Canada'} ${fmtN(cad)} $${tx}`)}
+    if(!ok||!lignes.length)continue;const tot=lignes.reduce((a,l)=>a+l.c,0);lignes.unshift({a:ad,d:tot,c:0});
+    const doc={date:x&&fin>x.fin?x.fin:fin,ref:`VENTES ${m}`,desc:`Ventes de ${moisLbl(m)} selon le rapport de commandes : ${det.join(' · ')}`.slice(0,240),type:'normal',auto:'ventes-commandes',ex:exOf(fin),lines:lignes,updated:new Date().toISOString()};
+    const remp=await jeEcrire(doc);res.push(`${moisLbl(m)} : ${fmtN(tot)} $ CA${remp?' (écriture remplacée)':''}.`);
+    const prov=Object.entries(V.M[m]).filter(([k])=>k.startsWith('prov|'));if(prov.length)res.push(`   Canada par province : ${prov.map(([k,v])=>`${k.slice(5)} ${fmtN(v)}`).join(', ')} : taxes à séparer selon la province de livraison.`)}
+  audit('Ventes du mois',`${r.nom} : ${res.length} mois → ${ad} ${accName(ad)}`);return res}
 async function boiteOuverture(r,date){if(!sampleFn)throw new Error('la lecture de la balance demande l’IA');
   const pages=(await pdfPages(r.f));const T=r.tbp.map(i=>pages[i]).join('\n\n').slice(0,24000);
   const det=PLAN.filter(([n,t])=>!isHeader(n,t)&&+String(n)[0]<=3).map(p=>p.join(' ')).join('\n');
@@ -3535,6 +3571,8 @@ async function boiteAppliquer(){const{L,crees,exProp}=BOITE;const say=t=>{$('bxM
       for(const r of R.filter(r=>/-csv$/.test(r.type))){const g=guess(r.rows);let list=autoMap(g);if(/carte/.test(r.type)){const pay=list.filter(x=>/PAYMENT|PAIEMENT|MERCI/.test(norm(x.desc)));if(pay.length&&pay.filter(x=>x.amt<0).length>pay.length/2)list=list.map(x=>({...x,amt:-x.amt}))}
         MSTAT={lu:0,added:0,dup:0,cote:0};if(list.length)await importAny(list);res.push(`${acct} : ${r.nom} — ${MSTAT.added} ajoutée(s), ${MSTAT.dup} doublon(s).`);MSTAT=null}}
     if(P&&pTimer)savePerNow();await pWriting;
+    for(const r of L.filter(r=>r.action==='ventes'&&r.ventes)){say('Ventes du mois…');if(C.methode!=='adeposer'){C.methode='adeposer';saveClient();res.push('Méthode du dossier : ventes dans « Transactions à déposer » (les dépôts les réduisent).')}
+      const v=await ventesMensuelles(r);res.push(`Ventes du mois depuis « ${r.nom} » → ${adepAcc()} ${accName(adepAcc())} :`,...v.map(x=>'  '+x))}
     say('Appariement des virements entre vos comptes…');const n=await pairInterne();if(n)res.push(`${n} virement(s) entre vos comptes apparié(s) (comptés une seule fois).`);
     audit('Boîte de dépôt',`${L.length} document(s) : ${res.length} opération(s)`);LED=null;
     $('bxOut').innerHTML=`<div class="msg" style="white-space:pre-line;margin-top:8px">${esc(res.join('\n'))}</div><div class="row" style="margin-top:10px"><button class="sm pri" data-go="rec">Voir la conciliation</button><button class="sm" data-go="rev">Classer les transactions</button></div>`;BOITE=null;renderHome().catch(()=>{})}
