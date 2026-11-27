@@ -675,8 +675,8 @@ async function importAny(list){const b=exBornes();let hors=[];if(MSTAT)MSTAT.lu+
         L.forEach(x=>{const k=x.date+'|'+x.amt,n=(seen.get(k)||0)+1;seen.set(k,n);const h=tx.filter(t=>t.date===x.date&&t.amt===x.amt&&!voisins(t.rel,x.rel)).length;if(n<=h){if(MSTAT)MSTAT.dup++}else neufs.push(x)})}
       hors=neufs}
     if(hors.length){const k=x=>x.src+'|'+x.date+'|'+x.amt;const have=new Map();(C.attente||[]).forEach(x=>have.set(k(x),(have.get(k(x))||0)+1));const seen=new Map();
-      if(MSTAT)MSTAT.cote+=hors.length;
-      C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src,...(x.rel?{rel:x.rel}:{})})).filter(x=>{const n=(seen.get(k(x))||0)+1;seen.set(k(x),n);return n>(have.get(k(x))||0)})];saveClient()}}
+      const avant=(C.attente||[]).length;
+      C.attente=[...(C.attente||[]),...hors.map(x=>({date:x.date,desc:x.desc,amt:x.amt,src:P.src,...(x.rel?{rel:x.rel}:{})})).filter(x=>{const n=(seen.get(k(x))||0)+1;seen.set(k(x),n);return n>(have.get(k(x))||0)})];const nv=C.attente.length-avant;if(MSTAT){MSTAT.cote+=nv;MSTAT.dup+=hors.length-nv};saveClient()}}
   list=list.concat(relAttente(P.src));
   if(list.length)await importAny0(list);else msg('');LED=null;
   if(hors.length){const[xd,xf]=b,ap=hors.filter(x=>x.date>xf).length,av=hors.length-ap;
