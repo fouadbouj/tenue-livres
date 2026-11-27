@@ -619,7 +619,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
         <label class="f" id="repCmpL" hidden>Comparatif<select id="repCmp"><option value="0">Aucun</option><option value="1" selected>1 an</option><option value="2">2 ans</option><option value="3">3 ans</option></select></label>
         <label class="f" id="repAccL" hidden>Compte<select id="repAcc"><option value="">Tous les comptes</option></select></label>
         <button id="repGo" class="pri">Afficher</button>
-        <button id="repPdf" class="sm pri">PDF</button>
+        <button id="repPdf" class="sm pri">PDF</button><button id="repSend" class="sm">Envoyer au client</button>
         <button id="repCsv" class="sm">Excel (CSV)</button>
         <button id="repCp" class="sm">Copier</button>
       </div>
@@ -672,7 +672,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div class="scroll"><table class="stack" style="margin-top:8px"><thead><tr><th>Exercice</th><th>Statut</th><th>Soldes d'ouverture</th><th></th></tr></thead><tbody id="exList"></tbody></table></div>
       <div class="row" style="margin-top:10px"><button id="yearEnd" class="pri">Fermer l'exercice affiché</button><button id="exReopen" hidden>Rouvrir l'exercice affiché</button><button id="exNew" class="sm">Ajouter un exercice</button><span class="msg" id="yeMsg"></span></div>
       <h3 style="margin:16px 0 6px;font-size:15px">Protection des exercices</h3>
-      <label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" id="lk2"> <span>Comme Sage 50 : seuls les <strong>deux derniers exercices</strong> (l’exercice courant et le précédent) sont modifiables. Les plus anciens sont en lecture seule, même s’ils n’ont pas été fermés.</span></label>
+      
       <div class="row" style="gap:8px;align-items:flex-end;margin-top:8px"><label class="f" style="max-width:260px">Aucune modification datée avant le<input type="date" id="lkAv"></label><button class="sm" id="lkSave">Enregistrer la protection</button><span class="msg" id="lkMsg"></span></div>
       <p class="note" style="margin-top:6px">Les dates protégées ne peuvent plus recevoir de transactions, d’écritures ni de reclassements, ni par le versement d’un relevé ni par l’assistant. Ce n’est jamais une porte fermée : « Rouvrir… » ou « Déverrouiller… » sur la ligne de l’exercice, avec une simple confirmation, et c’est noté dans l’historique ci-dessous. « Reverrouiller » le protège de nouveau.</p>
       <div id="lkLog" class="note"></div>
@@ -717,6 +717,18 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <button type="button" id="ansClose" class="sm">Fermer</button>
     </div>
   </div>
+</dialog>
+<dialog id="repSendDlg" aria-labelledby="rsT">
+  <form method="dialog" class="mailbox">
+    <h2 id="rsT">Envoyer le rapport au client (PDF)</h2>
+    <label class="f">À<input id="rsTo" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
+    <label class="f" style="margin-top:8px">Objet<input id="rsSub"></label>
+    <label class="f" style="margin-top:8px">Message<textarea id="rsBody" style="min-height:200px;font-size:14px"></textarea></label>
+    <p class="note" style="margin:4px 0 0">La signature du cabinet est ajoutée automatiquement.</p>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px"><input type="checkbox" id="rsKeep" checked style="width:auto;margin:0"> Garder ce courriel dans le dossier</label>
+    <div class="row" style="margin-top:12px"><button type="button" class="pri" id="rsGo">Envoyer</button><button type="button" id="rsClose" class="sm">Annuler</button></div>
+    <p class="msg" id="rsMsg"></p>
+  </form>
 </dialog>
 <dialog id="mailDlg" aria-labelledby="mailT">
   <form method="dialog" class="mailbox">

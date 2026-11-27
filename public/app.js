@@ -1217,8 +1217,8 @@ $('repOut').addEventListener('click',e=>{const g=e.target.closest('[data-gl]');i
     filter='all';document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.f==='all'));$('q').value=desc;openPeriod()}});
 function repRows(){return[...$('repOut').querySelectorAll('tr')].map(r=>[...r.cells].map(c=>c.textContent.trim()))}
 const REPN={bs:'Bilan',is:'Etat des resultats',tb:'Balance de verification',gl:'Grand livre',jr:'Journal general',tx:'TPS-TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',gifi:'IGRF'};
-$('repPdf').onclick=async()=>{if(!downloads){$('repMsg').textContent='Téléchargement indisponible dans cette vue.';return}$('repMsg').textContent='Préparation du PDF…';
-  try{if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+async function repPdfBytes(){
+  {if(!window.jspdf)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
     const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'letter'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
     const cl=t=>String(t||'').replace(/[   ]/g,' ').replace(/[✓✗→]/g,'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
     let y=42;doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(cl(C.nom),40,y);y+=14;doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(110);doc.text(`Produit le ${new Date().toLocaleDateString('fr-CA')} · Intranet Boujrad CPA Inc.`,40,y);doc.setTextColor(0);y+=18;
@@ -1231,8 +1231,26 @@ $('repPdf').onclick=async()=>{if(!downloads){$('repMsg').textContent='Téléchar
         didDrawCell:d=>{const k=el.rows[d.row.index]?.className||'';if(/tot/.test(k)){doc.setDrawColor(0);doc.setLineWidth(.8);doc.line(d.cell.x,d.cell.y,d.cell.x+d.cell.width,d.cell.y);doc.line(d.cell.x,d.cell.y+d.cell.height-1,d.cell.x+d.cell.width,d.cell.y+d.cell.height-1);doc.line(d.cell.x,d.cell.y+d.cell.height+1,d.cell.x+d.cell.width,d.cell.y+d.cell.height+1)}else if(/sub/.test(k)){doc.setDrawColor(0);doc.setLineWidth(.5);doc.line(d.cell.x,d.cell.y,d.cell.x+d.cell.width,d.cell.y)}}});
       y=doc.lastAutoTable.finalY+14});
     const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(130);doc.text(`Page ${i} de ${n}`,W-40,H-22,{align:'right'})}
-    await downloads.save({filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${REPN[REP]||REP}_${$('repTo').value}.pdf`.replace(/\s+/g,'_'),data:new Uint8Array(doc.output('arraybuffer'))});$('repMsg').textContent='PDF enregistré.'}
-  catch(e){$('repMsg').textContent=e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.'}};
+    return{data:new Uint8Array(doc.output('arraybuffer')),filename:`${C.nom.replace(/[^\w-]+/g,'_')}_${REPN[REP]||REP}_${$('repTo').value||$('repFrom').value||new Date().toISOString().slice(0,10)}.pdf`.replace(/\s+/g,'_')}}}
+$('repPdf').onclick=async()=>{if(!downloads){$('repMsg').textContent='Téléchargement indisponible dans cette vue.';return}$('repMsg').textContent='Préparation du PDF…';
+  try{const r=await repPdfBytes();await downloads.save(r);$('repMsg').textContent='PDF enregistré.'}catch(e){$('repMsg').textContent=e?.code==='declined'?'Téléchargement annulé.':'Création du PDF impossible.'}};
+/* Envoyer le rapport affiché au client, en PDF */
+const REPT={bs:'Bilan',is:'État des résultats',tb:'Balance de vérification',gl:'Grand livre',jr:'Journal général',tx:'Sommaire TPS/TVQ',txd:'Détail TPS/TVQ',ap:'Comptes fournisseurs',ar:'Comptes clients',das:'Sommaire des DAS',gifi:'Codes IGRF'};
+const REPL={bs:'le bilan',is:'l’état des résultats',tb:'la balance de vérification',gl:'le grand livre',jr:'le journal général',tx:'le sommaire TPS/TVQ',txd:'le détail TPS/TVQ',ap:'les comptes fournisseurs',ar:'les comptes clients',das:'le sommaire des DAS',gifi:'les codes IGRF'};
+$('repSend').onclick=async()=>{if(!window.tlSendEmail){$('repMsg').textContent='Envoi de courriel indisponible ici.';return}
+  const f=$('repFrom').value,t=$('repTo').value,acc=REP==='gl'&&$('repAcc').value?` — compte ${$('repAcc').value} ${accName($('repAcc').value)}`:'';
+  const per=f&&t?`du ${dLong(f)} au ${dLong(t)}`:t?`au ${dLong(t)}`:'';const quoi=(REPL[REP]||'le rapport')+acc;
+  $('rsTo').value=C.email||'';if(!C.email&&window.tlFindEmail)window.tlFindEmail(C.nom).then(e=>{if(e&&!$('rsTo').value)$('rsTo').value=e}).catch(()=>{});
+  $('rsSub').value=`${C.nom} — ${REPT[REP]||'Rapport'}${acc} ${per}`.trim();
+  $('rsBody').value=`Bonjour,\n\nVous trouverez ci-joint ${quoi} ${per}, en PDF.\n\n${REP==='gl'?'Si certaines transactions devraient être classées dans un autre compte, indiquez-le-nous simplement en répondant à ce courriel (date, montant et le bon compte), et nous ferons la correction.\n\n':''}N’hésitez pas à nous écrire si vous avez des questions.\n\nCordialement,`;
+  $('rsMsg').textContent=`Pièce jointe : PDF de ${quoi} (tel qu’affiché à l’écran).`;const d=$('repSendDlg');try{d.showModal()}catch(e){d.setAttribute('open','')}};
+$('rsClose').onclick=()=>{const d=$('repSendDlg');d.close?d.close():d.removeAttribute('open')};
+$('rsGo').onclick=async()=>{const to=$('rsTo').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)){$('rsMsg').textContent='Entrez une adresse courriel valide.';return}
+  const b=$('rsGo');b.disabled=true;$('rsMsg').textContent='Préparation du PDF…';
+  try{const r=await repPdfBytes();$('rsMsg').textContent='Envoi…';await window.tlSendEmail({to,subject:$('rsSub').value,text:$('rsBody').value,attachments:[{filename:r.filename,contentType:'application/pdf',content:b64(r.data)}]});
+    if($('rsKeep').checked&&to!==C.email){C.email=to.slice(0,200);saveClient()}
+    const d=$('repSendDlg');d.close?d.close():d.removeAttribute('open');$('repMsg').textContent=`✓ ${REPN[REP]||'Rapport'} envoyé à ${to} en PDF.`}
+  catch(e){$('rsMsg').textContent='Envoi impossible : '+(e instanceof Event?'l’outil PDF n’a pas pu se charger (connexion Internet?). Réessayez.':(e.message||e))}b.disabled=false};
 $('repCp').onclick=async()=>{try{await navigator.clipboard.writeText(repRows().map(r=>r.join('\t')).join('\r\n'));$('repMsg').textContent='Copié : collez dans Excel.'}catch(e){$('repMsg').textContent='Copie refusée.'}};
 $('repCsv').onclick=async()=>{const csv='﻿'+repRows().map(r=>r.map(c=>`"${c.replace(/"/g,'""')}"`).join(';')).join('\r\n');
   if(!downloads){try{await navigator.clipboard.writeText(csv);$('repMsg').textContent='Téléchargement indisponible ici : copié à la place.'}catch(e){}return}
@@ -1618,10 +1636,10 @@ let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textCo
 /* ---------- exercices ---------- */
 let MIS=null,mStep='acc',mSec='',mTimer=null;
 const lk=d=>{if(!d||!C)return false;if((C.ex||[]).some(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin))return true;if((C.ex||[]).some(x=>x.deverr&&d>=x.deb&&d<=x.fin))return false;if(C.lkAvant&&d<C.lkAvant)return true;
-  if(C.lk2){const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));if(L.length>2&&d<L[L.length-2].deb)return true}return false};
-const lkPourquoi=d=>{const x=(C.ex||[]).find(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin);return x?`exercice ${exLbl(x)} fermé`:C.lkAvant&&d<C.lkAvant?`dates protégées avant le ${C.lkAvant}`:'exercice de plus de deux ans (protection Sage 50)'};
+  return false};
+const lkPourquoi=d=>{const x=(C.ex||[]).find(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin);return x?`exercice ${exLbl(x)} fermé`:C.lkAvant&&d<C.lkAvant?`dates protégées avant le ${C.lkAvant}`:'dates protégées'};
 function lkJournal(quoi){const qui=(document.getElementById('whoE')?.textContent||'').trim();C.lkLog=[...(C.lkLog||[]),{le:new Date().toISOString(),qui,quoi}].slice(-50)}
-function renderLk(){if(!C)return;$('lk2').checked=!!C.lk2;$('lkAv').value=C.lkAvant||'';const L=C.lkLog||[];
+function renderLk(){if(!C)return;C.lk2=false;$('lkAv').value=C.lkAvant||'';const L=C.lkLog||[];
   $('lkLog').innerHTML=L.length?'<strong>Historique</strong><br>'+L.slice().reverse().slice(0,12).map(x=>`${esc(new Date(x.le).toLocaleString('fr-CA',{dateStyle:'medium',timeStyle:'short'}))}${x.qui?' · '+esc(x.qui):''} : ${esc(x.quoi)}`).join('<br>'):''}
 const monthLocked=m=>!!C&&(C.ex||[]).some(x=>x.statut==='ferme'&&x.deb.slice(0,7)<=m&&x.fin.slice(0,7)>=m);
 const curEx=()=>(C?.ex||[]).find(x=>x.id===C.exCur)||null;
@@ -1650,15 +1668,15 @@ function renderExList(){const L=C.ex||[];
   $('exList').innerHTML=L.length?L.map(x=>`<tr${x.id===C.exCur?' class="sel"':''}><td><strong>${esc(exLbl(x))}</strong></td><td>${x.statut==='ferme'?`<span class="pill">Fermé le ${esc((x.fermeLe||'').slice(0,10))}</span>`:x.deverr?'<span class="pill todo">Déverrouillé temporairement</span>':lkRegle(x)?'<span class="pill">Protégé</span>':'<span class="pill ok">Ouvert</span>'}</td><td>${x.ouv?`${Object.keys(x.ouv.s||{}).length} comptes au ${esc(x.ouv.date)}`:'—'}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${x.id===C.exCur?'<span class="note">Affiché</span>':`<button class="sm" data-exgo="${esc(x.id)}">Afficher</button>`}${x.statut==='ferme'?`<button class="sm" data-exopen="${esc(x.id)}">Rouvrir…</button>`:x.deverr?`<button class="sm" data-exrelock="${esc(x.id)}">Reverrouiller</button>`:lkRegle(x)?`<button class="sm" data-exunlock="${esc(x.id)}">Déverrouiller…</button>`:''}</div></td></tr>`).join('')
     :'<tr><td colspan="4" class="empty">Indiquez le début et la fin de l’exercice ci-dessus, puis Enregistrer.</td></tr>';
   const e=curEx();$('yearEnd').hidden=!e||e.statut==='ferme';$('exReopen').hidden=!e||e.statut!=='ferme';renderLk()}
-const lkRegle=x=>{if(x.statut==='ferme'||x.deverr)return false;const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));return(C.lkAvant&&x.deb<C.lkAvant)||(C.lk2&&L.length>2&&x.deb<L[L.length-2].deb)};
+const lkRegle=x=>{if(x.statut==='ferme'||x.deverr)return false;const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));return!!(C.lkAvant&&x.deb<C.lkAvant)};
 $('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exopen],[data-exunlock],[data-exrelock]');if(!b)return;const id=b.dataset.exopen||b.dataset.exunlock||b.dataset.exrelock;const x=(C.ex||[]).find(y=>y.id===id);if(!x)return;
   if(b.dataset.exrelock){delete x.deverr;lkJournal(`Exercice ${exLbl(x)} reverrouillé`);saveClient();fillExSel();LED=null;return}
   const ferme=x.statut==='ferme';if(!confirm(`Voulez-vous vraiment ${ferme?'rouvrir':'déverrouiller'} l’exercice ${exLbl(x)}?\n\nSi la T2 de cet exercice a déjà été produite, une modification changera des chiffres déjà déclarés.${ferme?'\nAprès vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.':'\nIl restera modifiable jusqu’à ce que vous cliquiez « Reverrouiller ».'}`))return;
   if(ferme){x.statut='ouvert';delete x.fermeLe}else x.deverr=true;lkJournal(`Exercice ${exLbl(x)} ${ferme?'rouvert':'déverrouillé temporairement'}`);saveClient();fillExSel();LED=null;if(P)openPeriod()});
-$('lkSave').onclick=()=>{const v2=$('lk2').checked,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
+$('lkSave').onclick=()=>{const v2=false,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
   const raison='';if(moins&&!confirm('Vous réduisez la protection : des exercices déjà produits redeviendront modifiables. Continuer?')){renderLk();return}
-  const avant=`${C.lk2?'2 derniers exercices':'sans règle Sage'}, ${C.lkAvant?'avant le '+C.lkAvant:'sans date'}`;C.lk2=v2;C.lkAvant=av;
-  lkJournal(`Protection : ${avant} → ${v2?'2 derniers exercices':'sans règle Sage'}, ${av?'avant le '+av:'sans date'}${raison?' — raison : '+raison:''}`);saveClient();fillExSel();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
+  const avant=C.lkAvant?'avant le '+C.lkAvant:'sans date';C.lk2=v2;C.lkAvant=av;
+  lkJournal(`Date de verrouillage : ${avant} → ${av?'avant le '+av:'aucune'}`);saveClient();fillExSel();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
 $('exSel').onchange=()=>{if(P)savePerNow();useEx($('exSel').value)};
 $('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exgo]');if(b){if(P)savePerNow();useEx(b.dataset.exgo)}});
 function tbFor(E,x,o={}){const m=new Map(),add=(a,c)=>m.set(a,(m.get(a)||0)+c),re=reAcct(),ouv=x.ouv;
