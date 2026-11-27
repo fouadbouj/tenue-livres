@@ -191,7 +191,7 @@ let pTimer=null,pWriting=Promise.resolve();
 function flushMulti(p=P){p.parts.forEach(part=>{const tx=p.tx.filter(t=>t._m===part.mois);if(!tx.length&&!part.exists)return;part.exists=true;savePerFlush({...part,tx,chk:P.chk})});
   const last=p.parts.filter(x=>x.exists).map(x=>x.mois).sort().pop();if(last&&(C.last||'')<last){C.last=last;saveClient()}
   pWriting.then(()=>setSave(local?'Enregistré (session seulement)':'Enregistré'))}
-function savePer(){if(!P)return;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
+function savePer(){if(!P)return;LED=null;clearTimeout(pTimer);setSave('Modifications en attente…');pTimer=setTimeout(()=>{
   pTimer=null;enforceLock(P);if(P.multi){flushMulti();return}
   const snap={mois:P.mois,src:P.src,statut:P.statut||'en cours',exported:P.exported||'',chk:P.chk||{},verif:P.verif||{},tx:P.tx.map(t=>({date:t.date,desc:t.desc,amt:t.amt,acct:t.acct,tax:!!t.tax,st:t.st,why:t.why||'',unk:!!t.unk,inv:t.inv||'',...(t.rel?{rel:t.rel}:{})})),n:P.tx.length,todo:P.tx.filter(aCl).length,updated:new Date().toISOString()};
   const pid=P.mois+'_'+P.src;
@@ -562,10 +562,10 @@ function addAccount(no,nm){if(!Array.isArray(C.sage))C.sage=PLAN.map(p=>p[0]);
   const L=PLAN.concat([[no,nm]]).sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true}));C.plan=L.map(p=>p.join(' ')).join('\n');
   setPlan();fillSelects();renderSettings();renderRules();$('planTxt').value=C.plan;saveClient();render()}
 function afterManual(t,a){
-  if(!P.tx.some(x=>x.st==='transit')&&!P.tx.some(x=>x.st==='suggere')){render();savePer();const un=usedNew();showToast(`<span>Tout est classé.</span><button class="sm pri" data-a="f">Terminer la période</button>`,{f:openFinish});return}
+  if(!P.tx.some(x=>x.st==='transit')&&!P.tx.some(x=>x.st==='suggere')){render();savePer();const un=usedNew();showToast(`<span>✓ Enregistré dans ${esc(a)} ${esc(accName(a))}. Tout est classé.</span><button class="sm pri" data-a="f">Terminer la période</button>`,{f:openFinish});return}
   const p=keyOf(t.desc);const others=P.tx.filter(x=>x!==t&&x.st!=='manuel'&&has(norm(x.desc),p));
-  render();savePer();if(a===C.tr||!p)return;
-  showToast(`<span>Retenir pour ce client : « ${esc(p)} » → ${esc(a)} ${esc(accName(a))}${others.length?`, et l'appliquer aux ${others.length} autres semblables`:''} ?</span><button class="sm pri" data-a="y">Retenir la règle</button><button class="sm" data-a="n">Juste celle-ci</button>`,
+  render();savePer();const ok=`<span>✓ Enregistré : ${esc(t.desc.slice(0,40))} → ${esc(a)} ${esc(accName(a))}.</span>`;if(a===C.tr||!p){showToast(ok,{});return}
+  showToast(`${ok}<span>Retenir pour ce client : « ${esc(p)} » → ${esc(a)} ${esc(accName(a))}${others.length?`, et l'appliquer aux ${others.length} autres semblables`:''} ?</span><button class="sm pri" data-a="y">Retenir la règle</button><button class="sm" data-a="n">Juste celle-ci</button>`,
     {y:()=>{C.rules=(C.rules||[]).filter(r=>r.p!==p);C.rules.push({p,a,t:!!t.tax});others.forEach(x=>{if(x.st==='suggere')x.st='transit'});reclass();saveClient();renderRules();render();savePer()}});
 }
 document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filter=b.dataset.f;document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
