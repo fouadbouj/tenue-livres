@@ -1617,7 +1617,7 @@ let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textCo
 
 /* ---------- exercices ---------- */
 let MIS=null,mStep='acc',mSec='',mTimer=null;
-const lk=d=>{if(!d||!C)return false;if((C.ex||[]).some(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin))return true;if(C.lkAvant&&d<C.lkAvant)return true;
+const lk=d=>{if(!d||!C)return false;if((C.ex||[]).some(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin))return true;if((C.ex||[]).some(x=>x.deverr&&d>=x.deb&&d<=x.fin))return false;if(C.lkAvant&&d<C.lkAvant)return true;
   if(C.lk2){const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));if(L.length>2&&d<L[L.length-2].deb)return true}return false};
 const lkPourquoi=d=>{const x=(C.ex||[]).find(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin);return x?`exercice ${exLbl(x)} fermé`:C.lkAvant&&d<C.lkAvant?`dates protégées avant le ${C.lkAvant}`:'exercice de plus de deux ans (protection Sage 50)'};
 function lkJournal(quoi){const qui=(document.getElementById('whoE')?.textContent||'').trim();C.lkLog=[...(C.lkLog||[]),{le:new Date().toISOString(),qui,quoi}].slice(-50)}
@@ -1647,13 +1647,18 @@ function fillExSel(){const L=C.ex||[];
   $('exSel').innerHTML=L.length?L.map(x=>`<option value="${esc(x.id)}">${esc(exLbl(x))}${x.statut==='ferme'?' · fermé':''}</option>`).join(''):'<option value="">À définir dans Paramètres</option>';$('exSel').value=C.exCur||'';
   const e=curEx();$('exPill').hidden=!e;$('exPill').textContent=e?(e.statut==='ferme'?'Fermé : lecture seule':'Ouvert'):'';$('exPill').className='pill'+(e&&e.statut!=='ferme'?' ok':'');renderExList()}
 function renderExList(){const L=C.ex||[];
-  $('exList').innerHTML=L.length?L.map(x=>`<tr${x.id===C.exCur?' class="sel"':''}><td><strong>${esc(exLbl(x))}</strong></td><td>${x.statut==='ferme'?`<span class="pill">Fermé le ${esc((x.fermeLe||'').slice(0,10))}</span>`:'<span class="pill ok">Ouvert</span>'}</td><td>${x.ouv?`${Object.keys(x.ouv.s||{}).length} comptes au ${esc(x.ouv.date)}`:'—'}</td><td>${x.id===C.exCur?'<span class="note">Affiché</span>':`<button class="sm" data-exgo="${esc(x.id)}">Afficher</button>`}</td></tr>`).join('')
+  $('exList').innerHTML=L.length?L.map(x=>`<tr${x.id===C.exCur?' class="sel"':''}><td><strong>${esc(exLbl(x))}</strong></td><td>${x.statut==='ferme'?`<span class="pill">Fermé le ${esc((x.fermeLe||'').slice(0,10))}</span>`:x.deverr?'<span class="pill todo">Déverrouillé temporairement</span>':lkRegle(x)?'<span class="pill">Protégé</span>':'<span class="pill ok">Ouvert</span>'}</td><td>${x.ouv?`${Object.keys(x.ouv.s||{}).length} comptes au ${esc(x.ouv.date)}`:'—'}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${x.id===C.exCur?'<span class="note">Affiché</span>':`<button class="sm" data-exgo="${esc(x.id)}">Afficher</button>`}${x.statut==='ferme'?`<button class="sm" data-exopen="${esc(x.id)}">Rouvrir…</button>`:x.deverr?`<button class="sm" data-exrelock="${esc(x.id)}">Reverrouiller</button>`:lkRegle(x)?`<button class="sm" data-exunlock="${esc(x.id)}">Déverrouiller…</button>`:''}</div></td></tr>`).join('')
     :'<tr><td colspan="4" class="empty">Indiquez le début et la fin de l’exercice ci-dessus, puis Enregistrer.</td></tr>';
   const e=curEx();$('yearEnd').hidden=!e||e.statut==='ferme';$('exReopen').hidden=!e||e.statut!=='ferme';renderLk()}
+const lkRegle=x=>{if(x.statut==='ferme'||x.deverr)return false;const L=[...(C.ex||[])].sort((a,b)=>a.deb.localeCompare(b.deb));return(C.lkAvant&&x.deb<C.lkAvant)||(C.lk2&&L.length>2&&x.deb<L[L.length-2].deb)};
+$('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exopen],[data-exunlock],[data-exrelock]');if(!b)return;const id=b.dataset.exopen||b.dataset.exunlock||b.dataset.exrelock;const x=(C.ex||[]).find(y=>y.id===id);if(!x)return;
+  if(b.dataset.exrelock){delete x.deverr;lkJournal(`Exercice ${exLbl(x)} reverrouillé`);saveClient();fillExSel();LED=null;return}
+  const ferme=x.statut==='ferme';if(!confirm(`Voulez-vous vraiment ${ferme?'rouvrir':'déverrouiller'} l’exercice ${exLbl(x)}?\n\nSi la T2 de cet exercice a déjà été produite, une modification changera des chiffres déjà déclarés.${ferme?'\nAprès vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.':'\nIl restera modifiable jusqu’à ce que vous cliquiez « Reverrouiller ».'}`))return;
+  if(ferme){x.statut='ouvert';delete x.fermeLe}else x.deverr=true;lkJournal(`Exercice ${exLbl(x)} ${ferme?'rouvert':'déverrouillé temporairement'}`);saveClient();fillExSel();LED=null;if(P)openPeriod()});
 $('lkSave').onclick=()=>{const v2=$('lk2').checked,av=$('lkAv').value||'';const moins=(!v2&&C.lk2)||(av!==(C.lkAvant||'')&&(!av||(C.lkAvant&&av<C.lkAvant)));
-  let raison='';if(moins){raison=prompt('Vous réduisez la protection. Raison (sera notée dans l’historique) :')||'';if(!raison.trim()){$('lkMsg').textContent='Annulé : une raison est requise.';renderLk();return}}
+  const raison='';if(moins&&!confirm('Vous réduisez la protection : des exercices déjà produits redeviendront modifiables. Continuer?')){renderLk();return}
   const avant=`${C.lk2?'2 derniers exercices':'sans règle Sage'}, ${C.lkAvant?'avant le '+C.lkAvant:'sans date'}`;C.lk2=v2;C.lkAvant=av;
-  lkJournal(`Protection : ${avant} → ${v2?'2 derniers exercices':'sans règle Sage'}, ${av?'avant le '+av:'sans date'}${raison?' — raison : '+raison:''}`);saveClient();renderLk();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
+  lkJournal(`Protection : ${avant} → ${v2?'2 derniers exercices':'sans règle Sage'}, ${av?'avant le '+av:'sans date'}${raison?' — raison : '+raison:''}`);saveClient();fillExSel();LED=null;if(P)openPeriod();$('lkMsg').textContent='✓ Protection enregistrée.'};
 $('exSel').onchange=()=>{if(P)savePerNow();useEx($('exSel').value)};
 $('exList').addEventListener('click',e=>{const b=e.target.closest('[data-exgo]');if(b){if(P)savePerNow();useEx(b.dataset.exgo)}});
 function tbFor(E,x,o={}){const m=new Map(),add=(a,c)=>m.set(a,(m.get(a)||0)+c),re=reAcct(),ouv=x.ouv;
@@ -1673,7 +1678,7 @@ $('yearEnd').onclick=e=>confirm2(e.currentTarget,'',async()=>{const x=curEx();if
     $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')}
   catch(err){$('yeMsg').textContent='Calcul impossible.'}
   $('yearEnd').textContent='Fermer l’exercice affiché'});
-$('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;const raison=prompt(`Rouvrir l’exercice ${exLbl(x)} : raison (notée dans l’historique)`)||'';if(!raison.trim()){$('yeMsg').textContent='Réouverture annulée : une raison est requise.';return}lkJournal(`Exercice ${exLbl(x)} rouvert — raison : ${raison}`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
+$('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
   $('yeMsg').textContent=`Exercice ${exLbl(x)} rouvert. Après vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.`;$('exReopen').textContent='Rouvrir l’exercice affiché'});
 $('exNew').onclick=()=>{const L=C.ex||[],last=L[L.length-1];if(!last){$('yeMsg').textContent='Indiquez d’abord le début et la fin du premier exercice ci-dessus.';return}
   const d=addDays(last.fin,1);const n={id:d,deb:d,fin:finOf(d),statut:'ouvert',ouv:null};C.ex.push(n);saveClient();useEx(n.id);$('yeMsg').textContent=`Exercice ${exLbl(n)} ajouté. Fermez le précédent pour reporter ses soldes.`};
