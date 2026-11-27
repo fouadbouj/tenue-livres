@@ -1033,7 +1033,7 @@ let pairT=null,PAIR_OFF=false;function pairPlus(){if(PAIR_OFF)return;clearTimeou
 const baseResolved=()=>BASE.map(r=>({...r,a:findAcc(CAT[r.c],true)}));
 function classify(t,src){
   if(lk(t.date))return;if(t.pair)return;
-  if(t.st==='manuel'||t.st==='facture')return;
+  if(t.st==='manuel'||t.st==='facture'||t.st==='ia')return;
   const n=norm(t.desc);
   if(t.amt>0&&C.methode==='adeposer'&&adepAcc()&&!/^2/.test(String(src||P?.src||''))&&PROCPAY.test(n)){Object.assign(t,{acct:adepAcc(),tax:false,st:'auto',why:'Méthode du dossier : encaissement du processeur de paiement, porté en réduction des transactions à déposer',unk:false});return}
   if(t.st==='suggere')return;
@@ -1801,11 +1801,21 @@ dropzone($('drop'),handle);
 
 /* ---------- IA : fournisseurs inconnus ---------- */
 async function aiSuggest(txs){
-  const descs=[...new Set(txs.filter(t=>t.st==='transit'&&t.unk).map(t=>t.desc))].slice(0,150);if(!descs.length)return 0;
-  const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${iaProfil()?`\n${iaProfil()}\n`:''}${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}\nPour chaque description de transaction bancaire ci-dessous, donne le compte de dépense ou de revenu le plus probable dans CE plan (numéro exact). Si c'est un nom de personne, un virement ou trop vague pour savoir, mets null. taxable = true si la dépense porte normalement TPS/TVQ au Québec.\n${descs.map((k,i)=>i+'. '+k).join('\n')}\n\nRéponds uniquement avec un tableau JSON : [{"i":0,"compte":"5310","taxable":true}]`,{modelTier:'default'});
-  const ok=new Set(PLAN.map(p=>p[0]));let n=0;
-  (Array.isArray(r)?r:[]).forEach(x=>{const d=descs[x.i];const a=x.compte==null?null:String(x.compte);if(d==null||!a||!ok.has(a)||a===C.tr)return;
-    txs.filter(t=>t.desc===d&&t.st==='transit').forEach(t=>{Object.assign(t,{acct:a,tax:!!x.taxable,st:'suggere',why:'Suggéré par l’IA : à vérifier',unk:false});n++})});
+  /* une ligne par description + sens (entrée/sortie), avec la devise du compte : l'IA classe d'office ce qui est certain (fournisseur connu à un seul usage), propose le reste */
+  const cand=txs.filter(t=>t.st==='transit'&&!lk(t.date)&&!t.pair);const keyD=t=>t.desc+'|'+(t.amt<0?'s':'e');const vus=new Map();cand.forEach(t=>{if(!vus.has(keyD(t)))vus.set(keyD(t),t)});
+  const L=[...vus.values()].slice(0,150);if(!L.length)return 0;const dv=devOf(P?.src||C.src||'');
+  const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${iaProfil()?`\n${iaProfil()}\n`:''}${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}
+Pour chaque transaction bancaire ci-dessous (description · sens · montant${dv==='USD'?' · compte en dollars US':''}), donne le compte le plus probable dans CE plan (numéro exact de détail).
+- "certitude":"certaine" SEULEMENT si le fournisseur est connu et n'a qu'un usage possible pour une entreprise, dans le bon sens (ex. Wix, WordPress, Mailchimp, Omnisend, Adobe, OpenAI/ChatGPT, Anthropic/Claude, Google Workspace, Microsoft 365, Shopify (abonnement), Canva, Zoom, Twilio → logiciels et abonnements; Facebook/Meta ads, Google Ads, TikTok ads → publicité; Bell, Vidéotron, Rogers, Fido → télécommunications; Hydro-Québec → électricité; frais de la banque → frais bancaires). Sinon "probable".
+- null si c'est un nom de personne, un virement, un retrait, un dépôt non identifié, ou trop vague.
+- Une entrée d'argent n'est pas une dépense : un dépôt est un revenu, un remboursement, un apport ou un virement (jamais un compte de charge sans raison).
+- taxable = true seulement si la dépense porte la TPS/TVQ (fournisseur canadien qui facture les taxes); fournisseurs étrangers et montants en dollars US : false.
+${L.map((t,i)=>`${i}. ${t.desc} · ${t.amt<0?'sortie':'entrée'} · ${(Math.abs(t.amt)/100).toFixed(2)}`).join('\n')}
+
+Réponds uniquement avec un tableau JSON : [{"i":0,"compte":"5360","taxable":false,"certitude":"certaine","fournisseur":"Wix (sites web)"}]`,{modelTier:'default'});
+  const ok=new Set(PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p[0]));let n=0;
+  (Array.isArray(r)?r:[]).forEach(x=>{const t0=L[x.i];const a=x.compte==null?null:String(x.compte);if(!t0||!a||!ok.has(a)||a===C.tr)return;const sur=x.certitude==='certaine';
+    cand.filter(t=>keyD(t)===keyD(t0)&&t.st==='transit').forEach(t=>{Object.assign(t,{acct:a,tax:!!x.taxable,st:sur?'ia':'suggere',why:sur?`Classé par l’IA : fournisseur connu${x.fournisseur?' ('+String(x.fournisseur).slice(0,60)+')':''}`:'Suggéré par l’IA : à vérifier',unk:false});n++})});
   return n}
 async function askAI(auto){
   if(!P.tx.some(t=>t.st==='transit'&&t.unk))return;
@@ -1935,7 +1945,7 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
   const opt=a=>`<option value="">— Choisir le compte —</option>`+PLAN.filter(([x,t])=>!isHeader(x,t)).map(([x,t])=>`<option value="${esc(x)}"${x===a?' selected':''}>${esc(x+' '+t)}</option>`).join('');
   box.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
       <span class="note">Les groupes avec un compte proposé sont en haut : vérifiez le compte, puis « Classer ». Les autres : choisissez le compte. « Règle » retient le classement pour les prochains relevés.</span>
-      ${sampleFn&&G.some(g=>!g.prop)?`<button class="sm" id="gIA">Proposer un compte avec l’IA (${G.filter(g=>!g.prop).length} groupe(s) sans proposition)</button>`:''}</div>
+      ${sampleFn?`<button class="sm pri" id="gIA" title="Les fournisseurs connus à un seul usage (Wix, Adobe, Mailchimp…) sont classés d’office; les autres reçoivent une proposition à vérifier">✦ Classer avec l’IA</button>`:''}</div>
     ${G.map((g,i)=>`<div class="grp" data-g="${i}"><div class="gh">
       <div style="min-width:0"><div class="gn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(g.tx[0].desc)}">${esc(g.tx.length===1?g.tx[0].desc:g.nom)}</div><div class="gs">${g.tx.length} ${g.sens}${g.tx.length>1?'s':''} · ${esc(g.d1)}${g.d2!==g.d1?' → '+esc(g.d2):''}</div></div>
       <div class="num" style="font-weight:600;white-space:nowrap">${fmt(g.tot)}</div>
@@ -1951,7 +1961,11 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
     const p=keyOf(T[0]?.desc||'');if(regle&&p&&p.length>=3){C.rules=(C.rules||[]).filter(r=>!(r.p===p&&(r.s||'les deux')===(g.sens==='sortie'?'sortie':'entree')));C.rules.push({p,a,t:tax,s:g.sens==='sortie'?'sortie':'entree'});saveClient();renderRules()}
     savePer();render();showToast(`<span>✓ ${T.length} transaction(s) « ${esc(g.nom)} » classée(s) dans ${esc(a)} ${esc(accName(a))}${regle?' · règle retenue':''}.</span>`)});
   box.querySelectorAll('[data-gx]').forEach(c=>c.onchange=()=>{const id=+c.dataset.gx;if(c.checked)GEXCL.delete(id);else GEXCL.add(id)});
-  if($('gIA'))$('gIA').onclick=async()=>{$('gIA').disabled=true;$('gIA').textContent='L’IA cherche…';try{await askAI(false)}catch(e){}render()}}
+  if($('gIA'))$('gIA').onclick=async()=>{$('gIA').disabled=true;$('gIA').textContent='L’IA classe…';
+    const prev=P.tx.filter(t=>t.st==='suggere'&&!lk(t.date)).map(t=>[t,t.acct,t.tax,t.why]);prev.forEach(([t])=>Object.assign(t,{st:'transit',unk:true}));const avant=P.tx.filter(aCl).length;
+    try{await aiSuggest(P.tx)}catch(e){console.warn(e)}prev.forEach(([t,a,x,w])=>{if(t.st==='transit')Object.assign(t,{st:'suggere',acct:a,tax:x,why:w,unk:false})});
+    const nIA=P.tx.filter(t=>t.st==='ia').length;audit('Classement par l’IA',`${avant-P.tx.filter(aCl).length} transaction(s) classée(s) d’office (fournisseurs connus)`);savePer();render();
+    showToast(`<span>✦ ${avant-P.tx.filter(aCl).length} transaction(s) de fournisseurs connus classée(s) d’office. Le reste a une proposition à vérifier.</span>`)}}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-gv]');if(!b)return;GV=b.dataset.gv;render()});
 $('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}if(!revOk())return;
   const sel=P.tx.filter(t=>SEL.has(t.id));audit('Classement en lot',`${sel.length} transaction(s) → ${a} ${accName(a)}${tx!==''?(tx==='1'?', taxes cochées':', taxes décochées'):''} : ${sel.slice(0,6).map(txTxt).join(' · ')}${sel.length>6?' …':''}`);sel.forEach(t=>{Object.assign(t,{acct:a,st:'manuel',why:'Classé en lot',unk:false});if(tx!=='')t.tax=tx==='1'});
