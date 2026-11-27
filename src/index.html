@@ -570,6 +570,11 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <textarea id="ouvTxt" spellcheck="false" style="min-height:160px;margin-top:10px" placeholder="1060 12 345,67&#10;2640 -10 000,00&#10;3560 -2 345,67"></textarea>
       <div class="row" style="margin-top:8px"><button class="pri" id="ouvSave">Enregistrer les soldes</button><span class="msg" id="ouvMsg"></span></div>
     </div>
+    <div class="panel" id="ajePanel">
+      <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Régularisations de fin d’exercice</h2><button class="pri sm" id="ajeGo">Proposer les régularisations</button></div>
+      <p class="note">L’IA passe le dossier en revue comme un comptable de fin d’année : prêts (capital et intérêts), amortissement, charges payées d’avance, frais courus, revenus à recevoir ou reportés, taxes, salaires, impôts, transitoire et avances de l’actionnaire. Elle se sert aussi des relevés d’après la fin d’exercice. Chaque proposition vient avec son explication et son calcul : vous l’acceptez, la modifiez ou la rejetez. Rien n’est passé sans vous. Les régularisations acceptées sont retenues et reproposées l’an prochain.</p>
+      <div id="ajeOut"></div>
+    </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Écritures de journal</h2><div class="row"><button id="jeNew" class="pri sm">Nouvelle écriture</button><button id="jePaie" class="sm">Paie de l'actionnaire</button></div></div>
       <p class="note">Ajustements, amortissement, fin d'année, paie de l'actionnaire. Elles entrent dans le grand livre et les rapports avec les transactions bancaires. Les ajustements de fin d’exercice (AJE) sont repris dans la mission de compilation.</p>
@@ -944,7 +949,7 @@ const reclass=()=>{if(P)P.tx.forEach(classify)};
 const keyOf=d=>{const n=norm(d).replace(/[#*]/g,' ').replace(/\b\d[\d-]*\b/g,' ').replace(/\s+/g,' ').trim();if(AMBIG.test(n))return n;const STOP=/^(DE|DU|DES|LA|LE|LES|ET|D|L|THE|OF|INC|LTEE|LTD)$/;return n.split(' ').filter(w=>w.length>1&&!STOP.test(w)).slice(0,2).join(' ')||n};
 
 /* ---------- base de données ---------- */
-const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],lk2:!!c.lk2,lkAvant:c.lkAvant||'',lkLog:c.lkLog||[],gifiIa:c.gifiIa||{},immoOk:c.immoOk||{},verifTx:c.verifTx||{},attente:c.attente||[],attenteSt:c.attenteSt||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
+const cleanClient=c=>({nom:c.nom,plan:c.plan,tr:c.tr,tpsA:c.tpsA,tvqA:c.tvqA,tpsV:c.tpsV,tvqV:c.tvqV,dfmt:c.dfmt||'yy',notes:c.notes||'',desc:c.desc||'',profil:c.profil||null,ign:c.ign||{},sansAct:c.sansAct||[],chkOff:c.chkOff||[],ajeMemo:c.ajeMemo||[],lk2:!!c.lk2,lkAvant:c.lkAvant||'',lkLog:c.lkLog||[],gifiIa:c.gifiIa||{},immoOk:c.immoOk||{},verifTx:c.verifTx||{},attente:c.attente||[],attenteSt:c.attenteSt||[],rules:c.rules||[],gifi:c.gifi||{},cf:c.cf||'',cc:c.cc||'',stmts:(c.stmts||[]).slice(-600),exDeb:c.exDeb||'',exFin:c.exFin||'',ouv:c.ouv||null,ex:c.ex||[],exCur:c.exCur||'',emp:c.emp||[],paie:c.paie||{},email:c.email||'',demandes:c.demandes||[],links:(c.links||[]).map(l=>({id:l.id,nom:l.nom,acct:l.acct,tx:(l.tx||[]).slice(-4000)})),chat:(c.chat||[]).slice(-20),sage:Array.isArray(c.sage)?c.sage:null,src:c.src||'',last:c.last||'',deleted:!!c.deleted,updated:new Date().toISOString()});
 let cWriting=Promise.resolve();
 function saveClient(){LED=null;const data=cleanClient(C);setSave('Enregistrement…');
   if(local){LOCAL.clients[C.id]=data;setSave('Enregistré (session seulement)');renderList();return}
@@ -2099,6 +2104,62 @@ let jeEdit=null;
 function jeRow(a='',d='',c=''){return `<tr><td><select class="jeA" aria-label="Compte"><option value=""></option>${OPTS.replace(`value="${esc(a)}"`,`value="${esc(a)}" selected`)}</select></td><td><input class="jeD" inputmode="decimal" value="${esc(d)}" style="width:120px;text-align:right"></td><td><input class="jeC" inputmode="decimal" value="${esc(c)}" style="width:120px;text-align:right"></td><td><button type="button" class="sm" data-x>×</button></td></tr>`}
 function jeBal(){let D=0,K=0;$('jeLines').querySelectorAll('tr').forEach(r=>{D+=cents(r.querySelector('.jeD').value);K+=cents(r.querySelector('.jeC').value)});
   $('jeBal').textContent=`Débits ${fmtN(D)||'0,00'} · Crédits ${fmtN(K)||'0,00'}${D===K?' ✓':` · écart ${fmtN(D-K)}`}`;$('jeBal').className=D===K&&D?'ok-b':'bad-b';return D===K&&D>0}
+/* ---------- régularisations de fin d'exercice proposées par l'IA ---------- */
+let AJEP=null;
+async function ajeDossier(){const x=curEx();const[d,f]=x?[x.deb,x.fin]:exRange();if(!d||!f)throw new Error('Indiquez d’abord les dates de l’exercice dans Paramètres.');
+  LED=null;LED=await loadLedger();const B=balances(LED,null,f),I=balances(LED,d,f);
+  const det=PLAN.filter(([n,t])=>!isHeader(n,t));const sol=det.map(([a,t])=>{const c=+String(a)[0]>=4?(I.get(a)||0):(B.get(a)||0);return c?`${a} ${t} : ${iaMt(c)}`:''}).filter(Boolean);
+  const tx=LED.filter(e=>e.kind==='rel');const dans=tx.filter(e=>e.date>=d&&e.date<=f);
+  const fin60=addDays(f,-60),apres=[...tx.filter(e=>e.date>f&&e.date<=addDays(f,120)),...(C.attente||[]).filter(e=>e.date>f).map(e=>({date:e.date,desc:e.desc,amt:e.amt,acct:'(mis de côté)'}))];
+  const L=(e)=>`${e.date} | ${e.desc} | ${iaMt(e.amt??0)} | ${e.acct||''}${/^\d/.test(e.acct||'')?' '+accName(e.acct):''}`;
+  const gros=dans.filter(e=>Math.abs(e.amt)>=50000&&+String(e.acct)[0]>=5).map(L);
+  const fin=dans.filter(e=>e.date>=fin60&&+String(e.acct)[0]>=4).map(L);
+  const pret=det.filter(([a,t])=>/PRET|EMPRUNT|FINANCEMENT|HYPOTH|CREDIT.?BAIL|LOCATION.?FINAN|MARGE/.test(norm(t))).map(([a,t])=>a);
+  const pretTx=dans.filter(e=>pret.includes(e.acct)||/LEAS|FINANCEMENT|PRET|LOAN|HYPOTH/.test(norm(e.desc))).map(L);
+  const je=(await loadJe()).filter(j=>j.date>=d&&j.date<=f).map(j=>`${j.date} ${j.ref||''} ${j.desc||''}${j.type==='aje'?' (AJE)':''} : ${(j.lines||[]).map(l=>`${l.a} ${l.d?'Dt '+iaMt(l.d):'Ct '+iaMt(l.c)}`).join(', ')}`);
+  const memo=(C.ajeMemo||[]).filter(m=>m.ex!==f).slice(-30).map(m=>`${m.ex} : ${m.titre} — ${m.desc} (${m.lignes})`);
+  return{d,f,txt:`Dossier : ${C.nom}. ${iaProfil()}${C.notes?' Notes du cabinet : '+C.notes:''}
+Exercice du ${d} au ${f}. Compte transitoire : ${C.tr||'—'}. Compte de taxes : TPS ${C.tpsA||'?'}/${C.tpsV||'?'}, TVQ ${C.tvqA||'?'}/${C.tvqV||'?'}.
+Plan comptable (comptes de détail) :\n${det.map(p=>p.join(' ')).join('\n')}
+
+Soldes au ${f} (bilan : solde cumulé; résultats : depuis le début de l'exercice; débit +, crédit −) :\n${sol.join('\n')}
+
+Dépenses de 500 $ et plus dans l'exercice :\n${gros.slice(0,150).join('\n')||'aucune'}
+Revenus et dépenses des 60 derniers jours de l'exercice :\n${fin.slice(0,150).join('\n')||'aucun'}
+Paiements de prêts, crédit-bail ou financement dans l'exercice :\n${pretTx.slice(0,60).join('\n')||'aucun'}
+Transactions bancaires APRÈS la fin d'exercice (pour frais courus, revenus à recevoir, factures de l'exercice payées après) :\n${apres.slice(0,150).map(L).join('\n')||'aucune'}
+Écritures de journal déjà passées dans l'exercice :\n${je.join('\n')||'aucune'}
+Régularisations acceptées les années précédentes (à reproposer si elles s'appliquent encore, avec les montants de cette année) :\n${memo.join('\n')||'aucune'}`}}
+async function ajeProposer(){const out=$('ajeOut');if(!sampleFn){out.innerHTML='<p class="msg err">L’IA n’est pas disponible ici.</p>';return}
+  $('ajeGo').disabled=true;out.innerHTML='<p class="note">L’IA passe le dossier en revue… (environ une minute)</p>';
+  try{const D=await ajeDossier();
+    const r=await sampleFn.json(`Tu es CPA au Québec et tu prépares les régularisations (écritures d'ajustement) de fin d'exercice d'un client, pour une mission de compilation. Données du dossier :\n\n${D.txt}\n\n
+Passe en revue, en t'appuyant uniquement sur ces données : prêts et crédit-bail (séparer capital et intérêts des paiements, intérêts courus), amortissement/DPA des immobilisations (demi-taux l'année d'acquisition), charges payées d'avance (assurances, abonnements annuels), frais courus (honoraires comptables de fin d'année, factures de l'exercice payées après la fin), revenus à recevoir (ex. RAMQ d'après la fin qui concernent l'exercice) ou reportés, TPS/TVQ (solde à payer ou à recevoir cohérent; aucune si le client n'est pas inscrit), salaires et DAS à payer, impôts sur le revenu estimés, compte transitoire et avances de l'actionnaire, comptes anormaux (solde du mauvais côté).
+Ne propose une écriture que si les données la justifient; quand il manque une pièce (relevé de prêt, facture, registre des immobilisations), dis-le dans "a_demander" plutôt que d'inventer un montant. Utilise seulement des comptes de détail du plan (numéros exacts). Chaque écriture doit balancer, datée du ${D.f}.
+Réponds uniquement en JSON : {"propositions":[{"titre":"Frais courus — honoraires comptables","explication":"pourquoi, en 1-3 phrases","calcul":"comment le montant est obtenu","confiance":"haute|moyenne|basse","pieces":["pièce à conserver"],"lignes":[{"compte":"6xxx","debit":1500,"credit":0},{"compte":"2xxx","debit":0,"credit":1500}]}],"a_demander":["document à obtenir du client et pourquoi"],"commentaire":"vue d'ensemble en 2 phrases"}`,{modelTier:'complex'});
+    const ok=new Set(PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p[0]));
+    const props=(Array.isArray(r?.propositions)?r.propositions:[]).map(p=>{const lignes=(p.lignes||[]).map(l=>({a:String(l.compte),d:Math.round((+l.debit||0)*100),c:Math.round((+l.credit||0)*100)})).filter(l=>l.d||l.c);
+      const dt=lignes.reduce((s,l)=>s+l.d,0),ct=lignes.reduce((s,l)=>s+l.c,0);const bad=lignes.find(l=>!ok.has(l.a));
+      return{...p,lignes,err:!lignes.length?'aucune ligne':dt!==ct?`ne balance pas (${fmtN(dt)} / ${fmtN(ct)})`:bad?`compte ${bad.a} absent du plan ou compte de titre`:lk(D.f)?'exercice fermé ou protégé':'',etat:''}});
+    AJEP={f:D.f,props,dem:Array.isArray(r?.a_demander)?r.a_demander:[],com:String(r?.commentaire||'')};ajeRender()}
+  catch(e){out.innerHTML=`<p class="msg err">Revue impossible : ${esc(e.message||e)}</p>`}$('ajeGo').disabled=false}
+function ajeRender(){const out=$('ajeOut');if(!AJEP){out.innerHTML='';return}const{props,dem,com}=AJEP;const cf={haute:'ok',moyenne:'',basse:'todo'};
+  out.innerHTML=(com?`<p style="margin:10px 0">${esc(com)}</p>`:'')+(props.length?props.map((p,i)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0${p.etat?';opacity:.6':''}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px"><strong>${esc(p.titre||'Régularisation')}</strong><span class="pill ${cf[p.confiance]??''}">Confiance ${esc(p.confiance||'?')}</span></div>
+    <p style="margin:6px 0">${esc(p.explication||'')}</p>${p.calcul?`<p class="note" style="margin:4px 0">Calcul : ${esc(p.calcul)}</p>`:''}
+    <table class="rep" style="margin:8px 0"><tr class="grp"><td>Compte</td><td class="num">Débit</td><td class="num">Crédit</td></tr>${p.lignes.map(l=>`<tr><td>${esc(l.a)} ${esc(accName(l.a))}</td><td class="num">${l.d?fmtN(l.d):''}</td><td class="num">${l.c?fmtN(l.c):''}</td></tr>`).join('')}</table>
+    ${(p.pieces||[]).length?`<p class="note" style="margin:4px 0">Pièces : ${(p.pieces||[]).map(esc).join(' · ')}</p>`:''}
+    ${p.etat?`<p class="note"><strong>${p.etat==='ok'?'✓ Passée au journal (AJE)':'Rejetée'}</strong></p>`:p.err?`<p class="msg err">À corriger avant de passer : ${esc(p.err)}</p><div class="row" style="gap:6px"><button class="sm" data-ajemod="${i}">Modifier</button><button class="sm" data-ajeno="${i}">Rejeter</button></div>`
+      :`<div class="row" style="gap:6px"><button class="sm pri" data-ajeok="${i}">Accepter</button><button class="sm" data-ajemod="${i}">Modifier</button><button class="sm" data-ajeno="${i}">Rejeter</button></div>`}</div>`).join(''):'<p class="note">Aucune régularisation proposée à partir des données actuelles.</p>')+
+    (dem.length?`<div style="margin-top:12px"><strong>À obtenir du client</strong><ul style="margin:6px 0 0 18px">${dem.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:'')}
+function ajeMemo(p){C.ajeMemo=[...(C.ajeMemo||[]).filter(m=>!(m.ex===AJEP.f&&m.titre===p.titre)),{ex:AJEP.f,titre:String(p.titre||'').slice(0,80),desc:String(p.explication||'').slice(0,200),lignes:p.lignes.map(l=>`${l.a} ${l.d?'Dt':'Ct'} ${iaMt(l.d||l.c)}`).join(', ')}].slice(-80);saveClient()}
+$('ajeGo').onclick=ajeProposer;
+$('ajeOut').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||!AJEP)return;const i=+(b.dataset.ajeok??b.dataset.ajemod??b.dataset.ajeno);const p=AJEP.props[i];if(!p)return;
+  const doc={date:AJEP.f,ref:'AJE',desc:String(p.titre||'Régularisation de fin d’exercice').slice(0,120),type:'aje',ex:exOf(AJEP.f),lines:p.lignes,updated:new Date().toISOString()};
+  if(b.dataset.ajeno!=null){p.etat='non';ajeRender();return}
+  if(b.dataset.ajemod!=null){jeOpen({...doc});ajeMemo(p);return}
+  b.disabled=true;try{if(local){LOCAL.je=LOCAL.je||{};LOCAL.je[C.id+'/j'+Date.now()]=doc}else await(await jeCol()).doc().set(doc);LED=null;p.etat='ok';ajeMemo(p);if(typeof renderJe==='function')renderJe();ajeRender()}
+  catch(err){b.disabled=false;alert('Enregistrement impossible : '+(err.message||err))}});
 function jeOpen(j,tpl){jeEdit=j?.id||null;$('jeForm').hidden=false;$('jeErr').textContent='';$('jeDate').value=j?.date||exRange()[1]||'';$('jeRef').value=j?.ref||'';$('jeDesc').value=j?.desc||'';$('jeType').value=j?.type||'';
   const L=j?.lines?.length?j.lines:(tpl||[{},{}]);$('jeLines').innerHTML=L.map(l=>jeRow(l.a,l.d?(l.d/100).toFixed(2):'',l.c?(l.c/100).toFixed(2):'')).join('');jeBal();$('jeForm').scrollIntoView({behavior:'smooth',block:'nearest'})}
 $('jeNew').onclick=()=>jeOpen();

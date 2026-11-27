@@ -571,6 +571,11 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <textarea id="ouvTxt" spellcheck="false" style="min-height:160px;margin-top:10px" placeholder="1060 12 345,67&#10;2640 -10 000,00&#10;3560 -2 345,67"></textarea>
       <div class="row" style="margin-top:8px"><button class="pri" id="ouvSave">Enregistrer les soldes</button><span class="msg" id="ouvMsg"></span></div>
     </div>
+    <div class="panel" id="ajePanel">
+      <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Régularisations de fin d’exercice</h2><button class="pri sm" id="ajeGo">Proposer les régularisations</button></div>
+      <p class="note">L’IA passe le dossier en revue comme un comptable de fin d’année : prêts (capital et intérêts), amortissement, charges payées d’avance, frais courus, revenus à recevoir ou reportés, taxes, salaires, impôts, transitoire et avances de l’actionnaire. Elle se sert aussi des relevés d’après la fin d’exercice. Chaque proposition vient avec son explication et son calcul : vous l’acceptez, la modifiez ou la rejetez. Rien n’est passé sans vous. Les régularisations acceptées sont retenues et reproposées l’an prochain.</p>
+      <div id="ajeOut"></div>
+    </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Écritures de journal</h2><div class="row"><button id="jeNew" class="pri sm">Nouvelle écriture</button><button id="jePaie" class="sm">Paie de l'actionnaire</button></div></div>
       <p class="note">Ajustements, amortissement, fin d'année, paie de l'actionnaire. Elles entrent dans le grand livre et les rapports avec les transactions bancaires. Les ajustements de fin d’exercice (AJE) sont repris dans la mission de compilation.</p>
