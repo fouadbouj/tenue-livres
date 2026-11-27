@@ -212,7 +212,6 @@ async function renderAudit(){const box=$('audList');if(!box||!C)return;box.inner
 let AUDL=[];
 /* ---------- droits : CPA (administrateur) et technicien (membre) ---------- */
 const estCPA=()=>!window.tlRole||window.tlRole==='admin';
-function cpaSeul(el){if(estCPA())return true;const m='Réservé au CPA (administrateur du cabinet). Demandez à un CPA de le faire.';if(el){el.textContent=m;el.className=(el.className||'').replace(/\bmsg\b.*/,'msg')+' err'}else alert(m);return false}
 /* ---------- pièces jointes (factures, reçus…) sur les transactions et les écritures ---------- */
 const pjNom=f=>String(f.name||'piece').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_').slice(-100);
 async function pjEnvoyer(files,say){if(!window.tlFichiers)throw new Error('pièces jointes indisponibles dans cette vue');const out=[];
@@ -738,7 +737,7 @@ async function importAny0(list){
   if(P.multi){const L=list.map(x=>({...x,_m:x.date.slice(0,7)}));L.forEach(x=>{if(!P.parts.some(p=>p.mois===x._m))P.parts.push({mois:x._m,src:P.src,statut:'en cours',exported:'',exists:false})});
     P.parts.sort((a,b)=>a.mois.localeCompare(b.mois));const{added,dup}=mergeInto(P,L);P.parts.forEach(p=>{if(p.statut==='importée'&&L.some(x=>x._m===p.mois))p.statut='en cours'});
     msg(`${added} transaction(s) ajoutée(s)${dup?`, ${dup} doublon(s) ignoré(s)`:''}.`);autoMatch();AIITEMS=[];render();savePer();
-    if(sampleFn&&P.tx.some(t=>t.st==='transit'&&t.unk))await askAI(true);return}
+    if(sampleFn&&P.tx.some(t=>t.st==='transit'&&t.unk))try{await askAI(true)}catch(e){console.warn(e)}return}
   const by=new Map();list.forEach(x=>{const m=x.date.slice(0,7);by.set(m,[...(by.get(m)||[]),x])});
   const months=[...by.keys()].sort();
   if(months.length===1&&months[0]===P.mois)return addTx(list);
@@ -747,18 +746,18 @@ async function importAny0(list){
   for(const m of months){let p=cur.mois===m?cur:null;
     if(!p){p={mois:m,src,tx:[],statut:'en cours'};try{const d=await readPeriod(m,src);if(d){p.statut=d.statut;p.exported=d.exported;p.tx=(d.tx||[]).map(t=>({...t,id:++seq}));p.tx.forEach(classify)}}catch(e){}}
     const r=mergeInto(p,by.get(m));added+=r.added;dup+=r.dup;ps.push(p)}
-  let n=0;if(sampleFn&&ps.some(p=>p.tx.some(t=>t.st==='transit'&&t.unk))){msg(`${added} transactions réparties sur ${months.length} mois. L'IA classe les fournisseurs inconnus…`);n=await aiSuggest(ps.flatMap(p=>p.tx))}
+  let n=0,iaPanne=false;if(sampleFn&&ps.some(p=>p.tx.some(t=>t.st==='transit'&&t.unk))){msg(`${added} transactions réparties sur ${months.length} mois. L'IA classe les fournisseurs inconnus…`);try{n=await aiSuggest(ps.flatMap(p=>p.tx))}catch(e){console.warn(e);iaPanne=true}}
   ps.forEach(p=>savePerFlush(p));
   const last=months[months.length-1];if((C.last||'')<last){C.last=last;saveClient()}
   await pWriting;
   $('pMois').value=months[0];await openPeriod();
-  msg(`${added} transaction(s) ${months.length>1?`réparties sur ${months.length} mois (${moisLbl(months[0])} à ${moisLbl(last)})`:`ajoutée(s) en ${moisLbl(months[0])}`}${dup?`, ${dup} doublon(s) ignoré(s)`:''}.${n?` L'IA a proposé un compte pour ${n} transaction(s).`:''} Chaque mois est une période : voyez l'onglet Périodes, ou exportez l'exercice d'un coup.`);
+  msg(`${added} transaction(s) ${months.length>1?`réparties sur ${months.length} mois (${moisLbl(months[0])} à ${moisLbl(last)})`:`ajoutée(s) en ${moisLbl(months[0])}`}${dup?`, ${dup} doublon(s) ignoré(s)`:''}.${n?` L'IA a proposé un compte pour ${n} transaction(s).`:''}${iaPanne?' L’IA n’a pas pu proposer de comptes pour l’instant : classez-les, ou relancez « Classer les inconnus avec l’IA » plus tard.':''} Chaque mois est une période : voyez l'onglet Périodes, ou exportez l'exercice d'un coup.`);
 }
 async function addTx(list){
   const {added,dup}=mergeInto(P,list);
   msg(`${added} transaction(s) ajoutée(s)${dup?`, ${dup} doublon(s) ignoré(s)`:''}.`);
   autoMatch();AIITEMS=[];render();savePer();
-  if(sampleFn&&P.tx.some(t=>t.st==='transit'&&t.unk))await askAI(true);
+  if(sampleFn&&P.tx.some(t=>t.st==='transit'&&t.unk))try{await askAI(true)}catch(e){console.warn(e)}
   const n=checks().filter(c=>c.lvl!=='ok').length;if(n)msg($('msg').textContent+` ${n} point(s) à vérifier plus bas.`);
 }
 
@@ -1111,7 +1110,6 @@ $('recForm').onsubmit=e=>{e.preventDefault();const sd=toCents($('rcSd').value.re
 /* ---------- grand livre ---------- */
 const cents=s=>{const c=toCents(s);return c==null?0:c};
 const fmtN=c=>c?new Intl.NumberFormat('fr-CA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(c/100):'';
-const accType=a=>{const d=String(a)[0];return d==='1'?'A':d==='2'?'P':d==='3'?'C':d==='4'?'R':'D'};
 function exRange(){const d=C.exDeb||(C.ouv&&C.ouv.date)||'',f=C.exFin||'';if(d&&f)return[d,f];
   if(d){const x=new Date(d+'T12:00');x.setFullYear(x.getFullYear()+1);x.setDate(x.getDate()-1);return[d,x.toISOString().slice(0,10)]}
   return['',''];}
@@ -1144,8 +1142,8 @@ function groups(acctSet,first){/* regroupe les comptes du plan par sections Sage
   return out.filter(g=>g.items.length)}
 let REP='bs',LED=null;
 function repUI(){$('repCmpL').hidden=!['bs','is'].includes(REP);$('repFromL').hidden=REP==='bs'||REP==='ap'||REP==='ar'}
-function initRep(){const[d,f]=exRange();['repFrom','repTo'].forEach(id=>{const el=$(id);el.min=d||'';el.max=f||'';if(el.value&&d&&f&&(el.value<d||el.value>f))el.value=''});repUI();
-  $('repHint').textContent=d?`Exercice du ${d} au ${f}. Inscrivez les dates à afficher, puis cliquez sur Afficher.`:'';
+function initRep(){const[d,f]=exRange();['repFrom','repTo'].forEach(id=>{const el=$(id);el.min=d||'';el.max=f||'';if(el.value&&d&&f&&(el.value<d||el.value>f))el.value=''});if(d&&f&&!$('repFrom').value&&!$('repTo').value){$('repFrom').value=d;$('repTo').value=f}repUI();
+  $('repHint').textContent=d?`Exercice du ${d} au ${f}. Changez les dates au besoin, puis cliquez sur Afficher.`:'';
   $('repAcc').innerHTML='<option value="">Tous les comptes</option>'+OPTS;if(!d)$('repMsg').textContent='Indiquez le début et la fin de l’exercice dans Paramètres (ou les soldes d’ouverture dans Écritures).';runRep()}
 document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';repUI();runRep();navPush()});
 $('repGo').onclick=()=>{runRep(true);navPush()};$('repCmp').onchange=()=>runRep();
@@ -1174,7 +1172,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
     let cols=[{t,f,...cur}];for(let k=1;k<=nC;k++){const tk=shiftY(t,k),fk=shiftY(f||exD,k);cols.push({t:tk,f:fk,...(colBal(E,fk,tk)||{})})}
     if(MO){const d0=(f||exD),d1=(t||exF);cols=[];if(d0&&d1){for(let m=d0.slice(0,7);m<=d1.slice(0,7)&&cols.length<13;){const[y,mm]=m.split('-').map(Number);const fin=new Date(y,mm,0).getDate();const a=m+'-01'<d0?d0:m+'-01',b=`${m}-${String(fin).padStart(2,'0')}`>d1?d1:`${m}-${String(fin).padStart(2,'0')}`;cols.push({f:a,t:b,I:balances(E,a,b),lbl:moisLbl(m)});m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,'0')}`}
       cols.push({f:d0,t:d1,I:balances(E,d0,d1),lbl:'Total'})}}
-    const M=REP==='bs'?'B':'I',ok=c=>!!c[M],head=`<tr class="grp"><td></td>${cols.map(c=>`<td class="num">${esc(c.lbl||(REP==='bs'?c.t:(c.f+' au '+c.t)))}${ok(c)?'':'<br><small>non disponible</small>'}</td>`).join('')}</tr>`;
+    const M=REP==='bs'?'B':'I',ok=c=>!!c[M],omis=MO?0:cols.slice(1).filter(c=>!ok(c)).length;if(omis)cols=cols.filter((c,i)=>i===0||ok(c));const head=`<tr class="grp"><td></td>${cols.map(c=>`<td class="num">${esc(c.lbl||(REP==='bs'?c.t:(c.f+' au '+c.t)))}${ok(c)?'':'<br><small>non disponible</small>'}</td>`).join('')}</tr>`;
     const val=(c,a,sign)=>ok(c)?sign*(c[M].get(a)||0):null,cell=v=>`<td class="num">${v==null?'':fmtN(v)}</td>`;
     const sect=(title,first,sign)=>{const set=new Set(cols.flatMap(c=>ok(c)?[...c[M]].filter(([a,v])=>v&&first.includes(String(a)[0])&&(REP==='bs'||+String(a)[0]>=4)).map(([a])=>a):[]));
       const tot=cols.map(c=>ok(c)?0:null);let x=`<tr class="sec"><td colspan="${cols.length+1}">${title}</td></tr>`;
@@ -1188,7 +1186,7 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
         <p class="${okB?'ok-b':'bad-b'}">${okB?'Le bilan balance.':`Écart de ${fmtN(ta[0]-tp[0]-tc[0])} $ : vérifiez les soldes d'ouverture.`}</p>`}
     else{const[r,tr_]=sect('Revenus','4',-1),[d,td]=sect('Dépenses','56789',1);
       h=`<h2>${MO?'Résultats par mois':'État des résultats'} du ${esc(f||cols[0]?.f||'')} au ${esc(t||cols[cols.length-1]?.t||'')}</h2>${MO?'<div class="scroll">':''}<table class="rep"${MO?' style="font-size:12px"':''}>${nC||MO?head:''}${r}${row('sub','Total des revenus',tr_)}${d}${row('sub','Total des dépenses',td)}${row('tot','Bénéfice net (perte)',sub(tr_,td,-1))}</table>${MO?'</div>':''}`}
-    if(nC&&cols.slice(1).some(c=>!ok(c)))h+=`<p class="note">Les années sans données dans ce dossier (ni exercice ni soldes d’ouverture correspondants) sont indiquées « non disponible ».</p>`}
+    if(omis)h+=`<p class="note">Comparatif omis pour ${omis>1?'les années':'l’année'} sans données dans ce dossier (ni exercice ni soldes d’ouverture correspondants).</p>`}
   if(REP==='tb'){const B=balances(E,null,t);const[exD]=exRange();const I=balances(E,f||exD,t);let D=0,K=0,x='';
     const all=new Map([...[...B].filter(([a])=>+String(a)[0]<4),...[...I].filter(([a])=>+String(a)[0]>=4)]);
     [...all].filter(([,c])=>c).sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'fr',{numeric:true})).forEach(([a,c])=>{c>0?D+=c:K-=c;x+=`<tr><td>${link(a)}</td><td class="num">${c>0?fmtN(c):''}</td><td class="num">${c<0?fmtN(-c):''}</td></tr>`});
@@ -1697,7 +1695,6 @@ let delArm=false;$('delC').onclick=()=>{if(!delArm){delArm=true;$('delC').textCo
 let MIS=null,mStep='acc',mSec='',mTimer=null;
 const lk=d=>{if(!d||!C)return false;if((C.ex||[]).some(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin))return true;if((C.ex||[]).some(x=>x.deverr&&d>=x.deb&&d<=x.fin))return false;if(C.lkAvant&&d<C.lkAvant)return true;
   return false};
-const lkPourquoi=d=>{const x=(C.ex||[]).find(x=>x.statut==='ferme'&&d>=x.deb&&d<=x.fin);return x?`exercice ${exLbl(x)} fermé`:C.lkAvant&&d<C.lkAvant?`dates protégées avant le ${C.lkAvant}`:'dates protégées'};
 function lkJournal(quoi){audit('Exercices',quoi);const qui=(document.getElementById('whoE')?.textContent||'').trim();C.lkLog=[...(C.lkLog||[]),{le:new Date().toISOString(),qui,quoi}].slice(-50)}
 function renderLk(){if(!C)return;C.lk2=false;$('lkAv').value=C.lkAvant||'';const L=C.lkLog||[];
   $('lkLog').innerHTML=L.length?'<strong>Historique</strong><br>'+L.slice().reverse().slice(0,12).map(x=>`${esc(new Date(x.le).toLocaleString('fr-CA',{dateStyle:'medium',timeStyle:'short'}))}${x.qui?' · '+esc(x.qui):''} : ${esc(x.quoi)}`).join('<br>'):''}
@@ -1768,7 +1765,7 @@ async function fermerEx(x,garder){if(!x){$('yeMsg').textContent='Indiquez d’ab
     if(!n){n={id:nd,deb:nd,fin:finOf(nd),statut:'ouvert',ouv:null};C.ex.push(n);C.ex.sort((a,b)=>a.deb.localeCompare(b.deb))}
     const upd=n.statut!=='ferme';if(upd)n.ouv={date:nd,s};
     saveClient();if(!garder)useEx(n.id);
-    $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')}
+    $('yeMsg').textContent=`Exercice ${exLbl(x)} fermé et verrouillé. Exercice affiché : ${exLbl(n)}.`+(upd?` Soldes d’ouverture figés (${Object.keys(s).length} comptes).`:' L’exercice suivant est fermé : rouvrez-le pour mettre à jour ses soldes d’ouverture.')+(todo?` Attention : ${todo} transaction(s) étaient encore au compte transitoire.`:'')+` Pour garder une copie de l’exercice fermé : Archive et export › choisissez « ${exLbl(x)} ».`;C.arcSugg=x.id}
   catch(err){$('yeMsg').textContent='Calcul impossible.'}}
 $('exReopen').onclick=e=>confirm2(e.currentTarget,'',()=>{const x=curEx();if(!x)return;if(!confirm(`Voulez-vous vraiment rouvrir l’exercice ${exLbl(x)}?\n\nSi la T2 a déjà été produite, une modification changera des chiffres déjà déclarés.`))return;lkJournal(`Exercice ${exLbl(x)} rouvert`);x.statut='ouvert';delete x.fermeLe;saveClient();useEx(x.id);
   $('yeMsg').textContent=`Exercice ${exLbl(x)} rouvert. Après vos corrections, refermez-le pour mettre à jour les soldes d’ouverture de l’exercice suivant.`;$('exReopen').textContent='Rouvrir l’exercice affiché'});
@@ -1892,46 +1889,6 @@ function fsCalc(d){const S=(m,k)=>m?[...m].filter(([a])=>secOf(a)===k).reduce((s
   const cur=col(d.cur,d.x.ouv,true),pri=col(d.prior,d.pOuv,d.priorIS);
   const isA=[...new Set([...d.cur.keys(),...(d.prior&&d.priorIS?d.prior.keys():[])])].filter(a=>+String(a)[0]>=4&&(d.cur.get(a)||(d.priorIS&&d.prior?.get(a)))).sort((a,b)=>String(a).localeCompare(String(b),'fr',{numeric:true}));
   return{cur,pri,isA}}
-function efHtml(d){const M=MIS,f=fsCalc(d),{cur,pri}=f,N=d.x.fin.slice(0,4),N1=String(+N-1),nom=esc(C.nom),fin=dLong(d.x.fin),hasP=!!pri;
-  const th=`<tr class="sec"><td></td><td class="num">${N}</td>${hasP?`<td class="num">${N1}</td>`:''}</tr>`;
-  const r=(l,a,b,k='',ind=true)=>(a||b)||k==='tot'?`<tr${k?` class="${k}"`:''}><td${ind&&!k?' class="ind"':''}>${l}</td><td class="num">${fmtP(a)}</td>${hasP?`<td class="num">${pri?fmtP(b):''}</td>`:''}</tr>`:'';
-  const g=(t)=>`<tr class="grp"><td colspan="${hasP?3:2}">${t}</td></tr>`;const grp=(t,rows,a,b)=>rows?g(t)+rows+r('',a,b,'sub'):'';const P_=pri||{ca:{},cl:{},v:{}};
-  let n=1;const notes=[];const NO={};
-  if(M.ef.nImmo&&(cur.v.F||P_.v.F)){NO.F=++n}if(M.ef.nDette&&(cur.dd||P_.dd)){NO.DD=++n}if(M.ef.nAct&&(cur.ee||P_.ee)){NO.EE=++n}if(M.ef.nCap&&(cur.cap||P_.cap)){NO.GG=++n}
-  const nl=(k,l)=>NO[k]?`${l} (note ${NO[k]})`:l;
-  const head=t=>`<p class="c"><strong>${nom}</strong></p><h1 class="c">${t}</h1>`;
-  const foot='<p class="c i" style="margin-top:14px">Non audité — voir le rapport de compilation</p>';
-  let h=`<div class="pg"><div style="height:140px"></div><h1 class="c">${nom}</h1><p class="c">États financiers</p><p class="c">Exercice clos le ${fin}</p><p class="c i">(non audités — voir le rapport de compilation)</p>
-    <div style="height:60px"></div><h3>Table des matières</h3><p>Rapport de compilation</p><p>Bilan</p><p>État des résultats</p><p>État des bénéfices non répartis</p><p>Notes complémentaires</p></div>`;
-  h+=`<div class="pg">${rapHtml(d)}</div>`;
-  h+=`<div class="pg">${head('Bilan')}<p class="c">au ${fin}</p><table class="rep fs">${th}
-    <tr class="sec"><td colspan="${hasP?3:2}">Actif</td></tr>${grp('Actif à court terme',r('Encaisse',cur.ca.A,P_.ca.A)+r('Placements',cur.ca.B,P_.ca.B)+r('Débiteurs',cur.ca.C,P_.ca.C)+r('Taxes à recouvrer',cur.ca.tax,P_.ca.tax)+r('Stocks',cur.ca.D,P_.ca.D)+r('Frais payés d’avance',cur.ca.E,P_.ca.E),cur.tca,P_.tca)}${r(nl('F','Immobilisations'),cur.v.F,P_.v.F,'',false)}${r('Autres actifs',cur.v.G,P_.v.G,'',false)}${r('',cur.ta,P_.ta,'tot')}
-    <tr class="sec"><td colspan="${hasP?3:2}">Passif</td></tr>${grp('Passif à court terme',r('Découvert bancaire',cur.cl.ovd,P_.cl.ovd)+r('Créditeurs et charges à payer',cur.cl.AA,P_.cl.AA)+r('Sommes à remettre à l’État',cur.cl.BB,P_.cl.BB)+r('Impôts sur le revenu à payer',cur.cl.CC,P_.cl.CC),cur.tcl,P_.tcl)}${r(nl('DD','Dette à long terme'),cur.dd,P_.dd,'',false)}${r(nl('EE','Avances de l’actionnaire'),cur.ee,P_.ee,'',false)}${r('',cur.tl,P_.tl,'sub')}
-    <tr class="sec"><td colspan="${hasP?3:2}">Avoir des actionnaires</td></tr>${r(nl('GG','Capital-actions'),cur.cap,P_.cap)}${r('Bénéfices non répartis',cur.re,P_.re)}${r('',cur.eq,P_.eq,'sub')}
-    ${r('',cur.tl+cur.eq,P_.tl+P_.eq,'tot')}</table>
-    <p class="${Math.abs(cur.ta-cur.tl-cur.eq)<1?'':'flag'}" style="font-size:12px">${Math.abs(cur.ta-cur.tl-cur.eq)<1?'':`Le bilan ne balance pas (écart ${fmtN(cur.ta-cur.tl-cur.eq)} $) : vérifiez les soldes d’ouverture.`}</p>
-    <p style="margin-top:30px">Au nom de la direction,</p><div class="sig">Administrateur</div>${foot}</div>`;
-  const isRows=k=>f.isA.filter(a=>secOf(a)===k&&!/IMPOTS? SUR LE REVENU/.test(norm(accName(a)))).map(a=>{const sg=k==='10'?-1:1;return r(esc(accName(a)),sg*(d.cur.get(a)||0),sg*(pri&&d.priorIS?(d.prior.get(a)||0):0))}).join('');
-  const tot=(k,m,sg)=>m?f.isA.filter(a=>secOf(a)===k&&!/IMPOTS? SUR LE REVENU/.test(norm(accName(a)))).reduce((s,a)=>s+sg*(m.get(a)||0),0):0;
-  const tax=m=>m?f.isA.filter(a=>/IMPOTS? SUR LE REVENU/.test(norm(accName(a)))).reduce((s,a)=>s+(m.get(a)||0),0):0;
-  const pm=pri&&d.priorIS?d.prior:null;const rv=[tot('10',d.cur,-1),tot('10',pm,-1)],cs=[tot('20',d.cur,1),tot('20',pm,1)],ch=[tot('30',d.cur,1)+tot('40',d.cur,1),tot('30',pm,1)+tot('40',pm,1)],tx=[tax(d.cur),tax(pm)];
-  const hasCS=cs[0]||cs[1];
-  h+=`<div class="pg">${head('État des résultats')}<p class="c">de l’exercice clos le ${fin}</p><table class="rep fs">${th}
-    ${g('Produits')}${isRows('10')}${r('',rv[0],rv[1],'sub')}
-    ${hasCS?g('Coût des ventes')+isRows('20')+r('',cs[0],cs[1],'sub')+r('Bénéfice brut',rv[0]-cs[0],rv[1]-cs[1],'',false):''}
-    ${g('Charges')}${isRows('30')}${isRows('40')}${r('',ch[0],ch[1],'sub')}
-    ${r('Bénéfice (perte) avant impôts',rv[0]-cs[0]-ch[0],rv[1]-cs[1]-ch[1],'',false)}${r('Impôts sur le revenu',tx[0],tx[1],'',false)}
-    ${r('Bénéfice net (perte nette)',cur.ni,pm?P_.ni:0,'tot')}</table>${pri&&!d.priorIS?'<p class="note" style="font-size:12px">Chiffres comparatifs de l’état des résultats non disponibles : ajoutez-les dans les options ci-dessus.</p>':''}${foot}</div>`;
-  h+=`<div class="pg">${head('État des bénéfices non répartis')}<p class="c">de l’exercice clos le ${fin}</p><table class="rep fs">${th}
-    ${r('Solde au début',cur.deb,P_.deb,'',false)}${r('Bénéfice net (perte nette)',cur.ni,pm?P_.ni:0,'',false)}${r('Dividendes',cur.div?-cur.div:0,P_.div?-P_.div:0,'',false)}${r('Redressements et autres',cur.oth,P_.oth,'',false)}
-    ${r('Solde à la fin',cur.re,P_.re,'tot')}</table>${foot}</div>`;
-  const nt=(k,t,body)=>NO[k]?`<h3>${NO[k]}. ${t}</h3>${body}`:'';
-  const acctTab=k=>`<table class="rep fs">${th}${d.accts.filter(a=>secOf(a)===k).map(a=>{const sg=String(a)[0]==='1'?1:-1;return r(esc(accName(a)),sg*(d.cur.get(a)||0),sg*(d.prior?.get(a)||0))}).join('')}${r('',k==='F'?cur.v.F:k==='DD'?cur.dd:cur.ee,k==='F'?P_.v.F:k==='DD'?P_.dd:P_.ee,'tot')}</table>`;
-  h+=`<div class="pg">${head('Notes complémentaires')}<p class="c">de l’exercice clos le ${fin}</p>
-    <h3>1. Méthode de comptabilité</h3>${esc(M.ent.note1).split('\n').map(p=>`<p>${p}</p>`).join('')}
-    ${nt('F','Immobilisations',acctTab('F'))}${nt('DD','Dette à long terme',acctTab('DD')+esc(M.ef.dette).split('\n').map(p=>`<p>${p}</p>`).join(''))}
-    ${nt('EE','Avances de l’actionnaire',esc(M.ef.act).split('\n').map(p=>`<p>${p}</p>`).join(''))}${nt('GG','Capital-actions',esc(M.ef.cap).split('\n').map(p=>`<p>${p}</p>`).join('')+`<table class="rep fs">${th}${r('Capital-actions émis',cur.cap,P_.cap,'tot')}</table>`)}${foot}</div>`;
-  return h}
 function rapHtml(d){const M=MIS,nom=esc(C.nom),fin=dLong(d.x.fin);
   return `<h1 class="c">Rapport de compilation</h1><p>À la direction de ${nom}</p>
   <p>Sur la base des informations fournies par la direction, nous avons compilé le bilan de ${nom} au ${fin}, ainsi que l’état des résultats et l’état des bénéfices non répartis de l’exercice clos à cette date, et la note 1, qui décrit la méthode de comptabilité appliquée pour leur préparation (les « informations financières »).</p>
@@ -2464,7 +2421,7 @@ $('mailSend').onclick=async()=>{if(!mailOk())return;keepTo();const b=$('mailSend
 
 
 /* ---------- archive PDF du dossier (fermeture d'exercice ou transfert au nouveau comptable) ---------- */
-function fillArcEx(){const L=(C.ex||[]).slice().sort((a,b)=>a.deb.localeCompare(b.deb));$('arcEx').innerHTML=(L.length>1?'<option value="*">Tous les exercices</option>':'')+L.map(x=>`<option value="${esc(x.id)}"${x.id===C.exCur?' selected':''}>${esc(exLbl(x))}${x.statut==='ferme'?' · fermé':''}</option>`).join('')||'<option value="">Aucun exercice</option>'}
+function fillArcEx(){const L=(C.ex||[]).slice().sort((a,b)=>a.deb.localeCompare(b.deb));$('arcEx').innerHTML=(L.length>1?'<option value="*">Tous les exercices</option>':'')+L.map(x=>`<option value="${esc(x.id)}"${x.id===(C.arcSugg&&L.some(y=>y.id===C.arcSugg)?C.arcSugg:C.exCur)?' selected':''}>${esc(exLbl(x))}${x.statut==='ferme'?' · fermé':''}</option>`).join('')||'<option value="">Aucun exercice</option>'}
 async function captureDl(fn){const out=[],orig=downloads;downloads={save:async o=>{out.push(o)}};try{await fn()}finally{downloads=orig}return out}
 async function arcBuild(exIds,withData,say){const orig=C.exCur,files=[],REPS=[['bs','01_Bilan'],['is','02_Etat_des_resultats'],['tb','03_Balance_de_verification'],['gl','04_Grand_livre'],['jr','05_Journal_general'],['tx','06_TPS-TVQ_sommaire'],['txd','07_TPS-TVQ_detail']];
   const keepREP=REP,keepF=$('repFrom').value,keepT=$('repTo').value,keepAcc=$('repAcc').value;let n=0;
@@ -2492,7 +2449,7 @@ $('arcGo').onclick=async()=>{const b=$('arcGo'),say=t=>$('arcMsg').textContent=t
   try{const files=await arcBuild(ids,$('arcData').checked,say);say('Compression…');await loadScript('https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.52/dist/zip.min.js');zip.configure({useWebWorkers:false});
     const pw=$('arcPw').value;const w=new zip.ZipWriter(new zip.Uint8ArrayWriter(),pw?{password:pw,encryptionStrength:3}:{});
     for(const[n,d]of files)await w.add(n,typeof d==='string'?new zip.TextReader(d):new zip.Uint8ArrayReader(d instanceof Uint8Array?d:new Uint8Array(d)));
-    const data=await w.close(),name=`${C.nom}_archive_${v==='*'?'tous_les_exercices':curEx()?.fin||''}.zip`.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_');
+    const data=await w.close(),name=`${C.nom}_archive_${v==='*'?'tous_les_exercices':(C.ex||[]).find(x=>x.id===v)?.fin||''}.zip`.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.-]+/g,'_');
     if(downloads)await downloads.save({filename:name,data});else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/zip'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
     say(`${files.length} fichier(s) dans l’archive.`);notify(`Archive du dossier téléchargée (${files.filter(f=>f[0].endsWith('.pdf')).length} PDF)`)}
   catch(e){say(e?.code==='declined'?'Téléchargement annulé.':'Archive impossible : '+(e?.message||'réessayez.'));notify('Archive impossible',1)}b.disabled=false};
