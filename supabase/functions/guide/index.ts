@@ -16,6 +16,19 @@ const COMPTA = [
     "<b>Soldes d’ouverture</b> : Écritures › Soldes d’ouverture (versez la balance de vérification de fin d’année précédente, ou « soldes à zéro » pour un nouveau client).",
     "L’<b>Accueil</b> du dossier liste ce qui reste à mettre en place (✕ pour masquer un point qui ne s’applique pas).",
   ])),
+  S("boite", "Nouveau dossier : la Boîte de dépôt", ETAPES([
+    "Accueil › <b>Boîte de dépôt</b> : déposez tout le paquet du client d’un coup (un ZIP ou les fichiers en vrac). Les dossiers __MACOSX et .DS_Store sont ignorés.",
+    "Chaque document est reconnu : relevés de banque et de cartes (rattachés au compte par les 4 derniers chiffres, devise détectée), rapport PayPal, exports CSV, états financiers de l’an dernier (balance de vérification), commandes de la boutique, rapports Elavon/AMEX, courriels.",
+    "Le tableau propose une action par ligne : Verser, Soldes d’ouverture, ou Garder pour référence. Les lignes en jaune demandent votre attention. Les comptes manquants sont proposés (ex. « Banque RBC USD 6664 », en US$).",
+    "Un même compte en PDF et en CSV : seuls les PDF sont versés (ils donnent aussi les soldes pour la conciliation).",
+    "« Appliquer » : exercice (si absent), comptes créés, soldes d’ouverture lus dans la balance de l’an dernier (IA, débits = crédits), relevés versés, puis virements entre les comptes appariés. Vérifiez ensuite la Conciliation : elle signale aussi un solde d’ouverture qui ne concorde pas avec le relevé.",
+  ])),
+  S("methode", "Méthode de comptabilisation et comptes en dollars US", ETAPES([
+    "Réglages › Paramètres › <b>Méthode de comptabilisation</b> : caisse (dépôts = revenus, sorties = dépenses), factures appariées aux paiements, ou ventes dans « Transactions à déposer ». Par défaut : caisse tant qu’aucune facture de vente n’est versée. La méthode et les notes « Comment on tient ce dossier » s’affichent à l’Accueil et guident l’IA.",
+    "<b>Comptes en US$</b> : la devise se choisit dans Paramètres (elle est aussi détectée sur les relevés « Fonds en USD », les cartes « en dollars US » et les exports avec une colonne USD). Les relevés se concilient en US$; le grand livre convertit chaque transaction en $ CA au taux quotidien de la Banque du Canada.",
+    "<b>Virements entre vos comptes</b> (paiement de la Visa, opération de change CAD↔USD, PayPal → banque) : les deux côtés sont appariés et comptés une seule fois. Entre devises, c’est le montant réel en $ CA qui est retenu.",
+    "<b>Fin d’exercice</b> : Écritures › Régularisations › la réévaluation de chaque compte en US$ au taux de clôture est calculée et proposée (gain ou perte de change).",
+  ])),
   S("releves", "2. Verser les relevés", ETAPES([
     "Transactions › choisissez seulement le <b>compte</b> (banque ou carte), puis déposez un ou plusieurs relevés (PDF, CSV ou Excel). Le mois affiché n’a pas d’importance.",
     "Le logiciel lit le relevé (directement, ou par l’IA en relais) et vérifie que <b>solde d’ouverture + transactions = solde de clôture</b>. Le rapport par fichier indique : lues, ajoutées, doublons ignorés, mises de côté.",

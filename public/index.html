@@ -245,7 +245,11 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 
   <!-- Accueil -->
   <section id="tHome">
-    <div class="kpis" id="hKpi"></div>
+    <p class="note" id="hMeth" style="margin:0 0 10px"></p><div class="kpis" id="hKpi"></div>
+    <div class="panel" id="bxPanel"><h2 style="margin-top:0">Boîte de dépôt</h2>
+      <div class="drop" id="bxDrop"><div><strong>Déposez tout le paquet du client</strong><div class="note">Un ZIP ou plusieurs fichiers, en vrac : relevés de banque et de cartes (PDF ou CSV), rapports PayPal, états financiers de l’an dernier, exports de la boutique… Chaque document est reconnu et rattaché à son compte; vous confirmez avant que rien ne soit versé.</div></div>
+        <input type="file" id="bxFile" multiple accept=".zip,.pdf,.csv,.xlsx,.xls,.txt" aria-label="Choisir les documents du client"></div>
+      <div id="bxOut"></div></div>
     <div class="hgrid">
       <div class="panel"><h2>À faire</h2><ul class="todo" id="hTodo"><li><div>Chargement…</div></li></ul></div>
       <div class="panel"><h2>Mois de l'exercice</h2><div class="months" id="hMonths"></div><p class="note" style="margin:10px 0 0">Cliquez sur un mois pour voir ou classer ses transactions.</p></div>
@@ -667,7 +671,10 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       </div>
       <label class="f" style="margin-top:10px">Courriel du client (demandes de précisions)<input id="sEmail" type="email" placeholder="client@exemple.ca" autocomplete="off"></label>
       <label class="f" style="margin-top:10px">Description de l'entreprise (activités, employés, véhicules… : l'IA s'en sert pour classer)<textarea id="sDesc" style="min-height:70px"></textarea></label><div class="row" style="gap:6px 20px;margin-top:6px"><label class="opt"><input type="checkbox" id="sTx"> Inscrit à la TPS/TVQ</label><label class="opt"><input type="checkbox" id="sEmp"> A des employés (paie et DAS)</label></div><p class="note" id="sDescSrc" style="margin:2px 0 0"></p>
-      <label class="f" style="margin-top:10px">Notes pour l'IA (ex. « les virements à Jean Tremblay sont des salaires »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
+      <label class="f" style="margin-top:10px">Méthode de comptabilisation<select id="sMeth"><option value="">Automatique : caisse tant qu’aucune facture de vente n’est versée</option><option value="caisse">Comptabilité de caisse (dépôts = revenus, sorties = dépenses)</option><option value="factures">Factures appariées aux paiements (comptes clients et fournisseurs)</option><option value="adeposer">Ventes dans « Transactions à déposer » (dépôts portés en réduction)</option></select></label>
+      <p class="note" id="sMethNote" style="margin:4px 0 0"></p>
+      <div id="sDevBox" style="margin-top:10px"></div>
+      <label class="f" style="margin-top:10px">Comment on tient ce dossier (pour l'équipe et l'IA : particularités, ex. « les virements à Jean Tremblay sont des salaires », « on ignore les commandes WooCommerce »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
     <div class="panel">
