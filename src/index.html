@@ -478,7 +478,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       </div>
       <p class="note" style="margin-top:12px">Ou collez-le ici : un compte par ligne, le numéro puis le nom.</p>
       <textarea id="planTxt" spellcheck="false"></textarea>
-      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><button id="planBase">Ajouter les comptes manquants du plan de base</button><button id="planSage">Renuméroter à la Sage 50</button><span class="msg" id="planMsg"></span></div>
+      <div class="row" style="margin-top:8px"><button class="pri" id="planSave">Enregistrer le plan</button><button id="planBase">Ajouter les comptes manquants du plan de base</button><span class="msg" id="planMsg"></span></div>
     </div>
   </section>
 
@@ -2588,30 +2588,6 @@ async function handlePlan(files){const f=files[0];if(!f)return;$('planMsg').text
     $('planTxt').value=lines.join('\n');planFromFile=true;$('planMsg').textContent=`${lines.length} comptes reconnus. Vérifiez puis cliquez sur « Enregistrer le plan ».`;
   }catch(e){$('planMsg').textContent='Lecture impossible de ce fichier.'}}
 $('planFile').onchange=e=>{handlePlan([...e.target.files]);e.target.value=''};dropzone($('planDrop'),handlePlan);
-/* ---------- renumérotation à la Sage 50 : toutes les charges dans 5000-5999 (Sage 50 n'accepte pas 6000 et plus) ----------
-   Le numéro change partout : plan, IGRF, règles, soldes d'ouverture, transactions, écritures, factures, devises. */
-function sageCarte(){const sage=(n)=>n>=6000&&n<=6999?5200+(n-6000)*2:n>9000&&n<=9099?5900+(n-9000):null;
-  const A=PLAN.filter(([n,t])=>+n>=6000&&+n<=9999);if(!A.length)return null;const pris=new Set(PLAN.filter(([n])=>+n<6000).map(p=>p[0])),M={},det=[];
-  const libre=d=>{for(let n=d;n<=5999;n++)if(!pris.has(String(n)))return String(n);return null};let suiv=5200;
-  for(const[n,t]of A.sort((a,b)=>+a[0]-+b[0])){if(isHeader(n,t)){M[n]=null;det.push([n,t,'(titre retiré)']);continue}
-    let k=sage(+n);k=k&&!pris.has(String(k))?String(k):libre(Math.max(suiv,+n>=9000?5900:5200));if(!k)return{err:'Pas assez de numéros libres entre 5200 et 5999.'};pris.add(k);suiv=+k+1;M[n]=k;det.push([n,t,k])}
-  return{M,det}}
-$('planSage').onclick=()=>{const c=sageCarte();const box=$('planMsg');if(!c){box.textContent='Ce plan est déjà à la Sage 50 : aucun compte 6000 ou plus.';return}if(c.err){box.textContent=c.err;return}
-  box.innerHTML=`<div style="margin-top:8px"><strong>${c.det.length} compte(s) à renuméroter</strong> (le numéro change partout : transactions, écritures, factures, règles, soldes d’ouverture, IGRF).<div style="max-height:220px;overflow:auto;margin:6px 0"><table class="rep">${c.det.map(([a,t,k])=>`<tr><td>${esc(a)} ${esc(t)}</td><td>→</td><td><strong>${esc(k)}</strong></td></tr>`).join('')}</table></div><button class="pri sm" id="planSageOk">Renuméroter</button> <button class="sm" id="planSageX">Annuler</button></div>`;
-  $('planSageX').onclick=()=>{box.textContent=''};$('planSageOk').onclick=async()=>{$('planSageOk').disabled=true;try{await renumeroter(c.M);box.textContent=`Plan renuméroté à la Sage 50 : ${c.det.length} compte(s).`}catch(e){box.textContent='Erreur : '+(e.message||e)}}};
-async function renumeroter(M){const mp=a=>a==null?a:Object.prototype.hasOwnProperty.call(M,String(a))?(M[String(a)]??a):a;const cle=o=>{if(!o)return o;const r={};for(const[k,v]of Object.entries(o)){const n=mp(k);if(n!=null)r[n]=v}return r};
-  if(P&&pTimer)savePerNow();await pWriting;
-  C.plan=PLAN.filter(([n])=>!(Object.prototype.hasOwnProperty.call(M,n)&&M[n]===null)).map(([n,t])=>[mp(n),t]).sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true})).map(p=>p.join(' ')).join('\n');
-  C.gifi=cle(C.gifi);if(C.gifiIa)C.gifiIa=cle(C.gifiIa);if(C.dev)C.dev=cle(C.dev);if(Array.isArray(C.sage))C.sage=C.sage.map(mp);
-  (C.rules||[]).forEach(r=>r.a=mp(r.a));(C.links||[]).forEach(l=>{if(l.acct)l.acct=mp(l.acct)});for(const k of['tr','tpsA','tvqA','tpsV','tvqV','cc','cf'])if(C[k])C[k]=mp(C[k]);
-  if(C.ouv)C.ouv.s=cle(C.ouv.s);(C.ex||[]).forEach(x=>{if(x.ouv&&x.ouv!==C.ouv)x.ouv.s=cle(x.ouv.s)});
-  let nt=0;for(const p of await iaPeriodes()){let ch=false;(p.tx||[]).forEach(t=>{const a=mp(t.acct);if(a!==t.acct){t.acct=a;ch=true;nt++}});if(!ch)continue;p.updated=new Date().toISOString();
-    if(local)LOCAL.periodes[C.id+'/'+p.mois+'_'+p.src]=p;else await db.collection('clients').doc(C.id).collection('periodes').doc(p.mois+'_'+p.src).set(p)}
-  let nj=0;for(const j of await loadJe()){let ch=false;const lines=(j.lines||[]).map(l=>{const a=mp(l.a);if(a!==l.a)ch=true;return{...l,a}});if(!ch)continue;nj++;const{id,...doc}=j;doc.lines=lines;
-    if(local)LOCAL.je[C.id+'/'+id]=doc;else await(await jeCol()).doc(id).set(doc)}
-  let ni=0;for(const i of await loadInv()){const a=mp(i.acct);if(a!==i.acct){i.acct=a;ni++;await saveInv(i)}}
-  audit('Plan renuméroté (Sage 50)',`${Object.keys(M).length} compte(s); ${nt} transaction(s), ${nj} écriture(s), ${ni} facture(s)`);
-  setPlan();fillSelects();renderSettings();renderRules();$('planTxt').value=C.plan;LED=null;saveClient();if(P)P.multi?openRange():openPeriod()}
 $('planBase').onclick=()=>{const cur=parsePlanText($('planTxt').value),have=new Set(cur.map(p=>p[0])),names=new Set(cur.map(p=>norm(p[1])));
   const add=parsePlanText(DEF_PLAN).filter(([n,t])=>!have.has(n)&&!names.has(norm(t))&&!isHeader(n,t));const clash=parsePlanText(DEF_PLAN).filter(([n,t])=>have.has(n)&&!names.has(norm(t))&&!isHeader(n,t));
   if(!add.length){$('planMsg').textContent='Rien à ajouter : le plan contient déjà tous les comptes du plan de base.';return}
