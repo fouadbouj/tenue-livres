@@ -3475,7 +3475,11 @@ async function boiteReconnaitre(f){const nm=f.name,ch=norm(f._chemin||nm);const 
       else if(/ORDER|COMMANDE/.test(h.join(' '))&&/SKU|PRODUCT|PRODUIT|TOTAL/.test(h.join(' '))){r.type='commandes';r.ventes=commandesParMois(rows);const v=r.ventes;
         r.note=v?`${v.n} commande(s) payée(s), ${v.resume}. ${methodeEff()==='adeposer'?'Ventes du mois inscrites dans « Transactions à déposer ».':'Choisissez « Ventes du mois » pour inscrire les ventes par mois dans « Transactions à déposer » (les dépôts viendront les réduire).'}`:`Commandes de la boutique (${rows.length-1} lignes) : colonnes de total ou de date introuvables.`;
         if(v&&methodeEff()==='adeposer')r.action='ventes'}
-      else if(/AMERICAN EXPRESS|ELAVON|PAYMENT STATEMENT|SALES REPORT|PAYMENT REPORT|SETTLEMENT|CONSOLIDATION/.test(top+' '+ch)){r.type='reglements';r.note='Rapport du processeur de paiement : les versements sont déjà dans le relevé bancaire (revenus en comptabilité de caisse). Sert au contrôle.'}
+      else if(/AMERICAN EXPRESS|ELAVON|PAYMENT STATEMENT|SALES REPORT|PAYMENT REPORT|SETTLEMENT|CONSOLIDATION/.test(top+' '+ch)){r.type='reglements';r.proc=/AMEX|AMERICAN EXPRESS/.test(top+' '+ch)?'AMEX':/ELAVON/.test(top+' '+ch)?'ELAVON':'';
+        if(r.proc==='AMEX'&&/CONSOLIDATION|SYNTHESE/.test(top+' '+ch)){r.note='Synthèse des relevés AMEX : les relevés mensuels servent à leur place (même information).'}
+        else if(r.proc==='AMEX'){r.frais=fraisAmex(rows);r.note=r.frais?`Relevé de règlement AMEX : AMEX verse le net, après sa commission (${r.frais.resume}). « Frais du mois » inscrit ces commissions en frais de cartes, en réduction de ${methodeEff()==='adeposer'?'« Transactions à déposer »':'des ventes'}.`:'Relevé AMEX : commissions introuvables.';if(r.frais&&methodeEff()==='adeposer')r.action='frais'}
+        else if(r.proc==='ELAVON'){r.frais={regle:true};r.note='Rapport Elavon : Elavon verse les ventes au complet et prélève ses frais à part, en fin de mois (sorties « ELAVON » dans le compte bancaire). « Frais du mois » crée la règle : sorties ELAVON → frais de cartes.';if(methodeEff()==='adeposer')r.action='frais'}
+        else r.note='Rapport du processeur de paiement : les versements sont déjà dans le relevé bancaire. Sert au contrôle.'}
       else{const g=guess(rows);if(g.date>=0&&(g.amt>=0||g.out>=0)){Object.assign(r,{type:'banque-csv',action:'verser',doute:true,note:'Export bancaire sans numéro de compte : choisissez le compte.'})}else{r.type='document';r.note='Tableau non reconnu.';r.doute=true}}}
     else{r.type='document';r.note='Format non pris en charge ici.'}}
   catch(e){r.type='erreur';r.note='Lecture impossible : '+(e instanceof Event?'outil de lecture non chargé (connexion)':e.message||e);r.doute=true}
@@ -3513,7 +3517,7 @@ function boiteAfficher(){if(!BOITE)return;const{L,crees,exProp}=BOITE;const box=
   <div style="overflow:auto"><table class="rep"><tr class="grp"><td>Document</td><td>Reconnu comme</td><td>Compte</td><td>Action</td><td>Note</td></tr>
   ${R.map(({r,i,ix})=>`<tr${ix.some(j=>L[j].doute)?' style="background:#fff6d6"':''}><td style="max-width:260px;word-break:break-word">${ix.length>1?`<strong>${ix.length} relevés</strong><div class="why">${esc(L[ix[0]].nom)} … ${esc(L[ix[ix.length-1]].nom)}</div>`:esc(r.nom)}<div class="why">${esc(r.chemin.split('/').slice(0,-1).join(' / '))}</div></td><td>${esc(TYPES_BX[r.type]||r.type)}${r.dev==='USD'?' · US$':''}</td>
     <td>${['banque','carte','paypal','banque-csv','carte-csv'].includes(r.type)?`<select data-bxa="${ix.join(',')}" style="width:auto;max-width:220px">${opts(r.acct)}</select>`:''}</td>
-    <td><select data-bxx="${ix.join(',')}" style="width:auto">${[['verser','Verser'],['ouverture','Soldes d’ouverture'],['ventes','Ventes du mois → à déposer'],['ignorer','Garder pour référence']].filter(([v])=>v!=='ouverture'||r.type==='etats').filter(([v])=>v!=='ventes'||(r.type==='commandes'&&r.ventes)).filter(([v])=>v!=='verser'||!['etats','commandes'].includes(r.type)).map(([v,t])=>`<option value="${v}"${r.action===v?' selected':''}>${t}</option>`).join('')}</select></td>
+    <td><select data-bxx="${ix.join(',')}" style="width:auto">${[['verser','Verser'],['ouverture','Soldes d’ouverture'],['ventes','Ventes du mois → à déposer'],['frais','Frais du mois'],['ignorer','Garder pour référence']].filter(([v])=>v!=='ouverture'||r.type==='etats').filter(([v])=>v!=='ventes'||(r.type==='commandes'&&r.ventes)).filter(([v])=>v!=='frais'||r.frais).filter(([v])=>v!=='verser'||!['etats','commandes','reglements','courriel','document','erreur','autre','paypal-pdf'].includes(r.type)).map(([v,t])=>`<option value="${v}"${r.action===v?' selected':''}>${t}</option>`).join('')}</select></td>
     <td class="note" style="max-width:360px">${esc(r.note||'')}</td></tr>`).join('')}</table></div>
   <div class="row" style="margin-top:10px"><button class="pri" id="bxGo">Appliquer : créer les comptes et tout verser</button><button id="bxX">Annuler</button><span class="msg" id="bxMsg"></span></div>`;
   box.querySelectorAll('[data-bxa]').forEach(s=>s.onchange=()=>{s.dataset.bxa.split(',').forEach(j=>{const r=L[+j];r.acct=s.value;r.doute=!s.value});boiteAfficher()});
@@ -3553,6 +3557,24 @@ async function ventesMensuelles(r){const V=r.ventes;const ad=adepAssurer();const
     const remp=await jeEcrire(doc);res.push(`${moisLbl(m)} : ${fmtN(tot)} $ CA${remp?' (écriture remplacée)':''}.`);
     const prov=Object.entries(V.M[m]).filter(([k])=>k.startsWith('prov|'));if(prov.length)res.push(`   Canada par province : ${prov.map(([k,v])=>`${k.slice(5)} ${fmtN(v)}`).join(', ')} : taxes à séparer selon la province de livraison.`)}
   audit('Ventes du mois',`${r.nom} : ${res.length} mois → ${ad} ${accName(ad)}`);return res}
+/* Relevé de règlement AMEX (Payment Statement) : une ligne « TOTAL jj/mm/aaaa » par versement; à la fin : brut, débits, remboursements, commission, frais de service, versé. */
+function fraisAmex(rows){const top=norm(rows.slice(0,6).map(x=>x.join(' ')).join(' '));const dev=/USD|US DOLLAR/.test(top)?'USD':'CAD';const M={};let n=0;
+  for(const r of rows){const cel=r.map(x=>String(x??'').trim()).filter(Boolean);const t=cel.find(x=>/^TOTAL \d{2}\/\d{2}\/\d{4}$/.test(x));if(!t)continue;
+    const nums=cel.filter(x=>/^\(?-?\$?\s?-?[\d,]*\d(\.\d{1,2})?\s?\$?\)?$/.test(x)&&/[.$]/.test(x+(/^-?\d+$/.test(x)?'':''))).map(toCents).filter(v=>v!=null);if(nums.length<6)continue;const fee=nums[nums.length-3]+nums[nums.length-2];
+    const[d,mo,y]=t.slice(6).split('/');const m=`${y}-${mo}`;M[m]=(M[m]||0)+fee;n++}
+  if(!n)return null;const tot=Object.values(M).reduce((a,b)=>a+b,0);return{M,dev,resume:`${n} versements, commissions ${fmtN(-tot)} ${dev==='USD'?'US$':'$'}`}}
+async function moyMois(m){const fin=`${m}-${String(new Date(+m.slice(0,4),+m.slice(5,7),0).getDate()).padStart(2,'0')}`;await tauxAssurer(m+'-01',fin);const L=Object.entries(C.taux||{}).filter(([d])=>d.slice(0,7)===m).map(([,v])=>v);return L.length?+(L.reduce((a,b)=>a+b,0)/L.length).toFixed(4):null}
+const fraisAcc=()=>findAcc(/FRAIS DE CARTES?|CARTE DE CREDIT ET DE PAIEMENT|FRAIS DE TRAITEMENT|FRAIS MARCHAND|MERCHANT/)||(()=>{const n=compteLibre(6270,6299);addAccount(n,'Frais de carte de crédit et de paiement');return n})();
+/* frais des processeurs : AMEX (déduits des versements) → écriture par mois; Elavon (prélevés à part) → règle de classement des sorties */
+async function fraisMensuels(r){const fa=fraisAcc(),res=[];
+  if(r.frais?.regle){const p='ELAVON';C.rules=(C.rules||[]).filter(x=>!(x.p===p&&x.s==='sortie'));C.rules.push({p,a:fa,t:false,s:'sortie'});saveClient();renderRules();LED=null;audit('Règle (Boîte de dépôt)',`sorties ${p} → ${fa}`);return[`Règle : sorties « ${p} » → ${fa} ${accName(fa)} (frais prélevés en fin de mois).`]}
+  const ct=methodeEff()==='adeposer'?adepAssurer():(findAcc(/VENTES?.*(EXPORT|INTERNATION)/)||findAcc(/^VENTES?\b/)||'');if(!ct)return['Compte de ventes introuvable : écriture non créée.'];const x=curEx();
+  for(const m of Object.keys(r.frais.M).sort()){const fin=`${m}-${String(new Date(+m.slice(0,4),+m.slice(5,7),0).getDate()).padStart(2,'0')}`;if(x&&(fin<x.deb||m+'-01'>x.fin))continue;if(lk(fin)){res.push(`${m} : exercice fermé, ignoré.`);continue}
+    let c=-r.frais.M[m],tx='';if(!c)continue;if(r.frais.dev==='USD'){const moy=await moyMois(m);if(!moy){res.push(`${m} : taux introuvable.`);continue}tx=` (${fmtN(c)} US$ × ${moy})`;c=Math.round(c*moy)}
+    const L=c>0?[{a:fa,d:c,c:0},{a:ct,d:0,c}]:[{a:ct,d:-c,c:0},{a:fa,d:0,c:-c}];
+    const remp=await jeEcrire({date:x&&fin>x.fin?x.fin:fin,ref:`FRAIS ${r.proc} ${m}`,desc:`Commissions ${r.proc} de ${moisLbl(m)}, déduites des versements${tx}`.slice(0,200),type:'normal',auto:'frais-'+r.proc,ex:exOf(fin),lines:L,updated:new Date().toISOString()});
+    res.push(`${moisLbl(m)} : ${fmtN(c)} $ CA${remp?' (remplacée)':''}.`)}
+  audit('Frais du mois',`${r.nom} : ${res.length} mois → ${fa}`);return res}
 async function boiteOuverture(r,date){if(!sampleFn)throw new Error('la lecture de la balance demande l’IA');
   const pages=(await pdfPages(r.f));const T=r.tbp.map(i=>pages[i]).join('\n\n').slice(0,24000);
   const det=PLAN.filter(([n,t])=>!isHeader(n,t)&&+String(n)[0]<=3).map(p=>p.join(' ')).join('\n');
@@ -3582,6 +3604,7 @@ async function boiteAppliquer(){const{L,crees,exProp}=BOITE;const say=t=>{$('bxM
     if(P&&pTimer)savePerNow();await pWriting;
     for(const r of L.filter(r=>r.action==='ventes'&&r.ventes)){say('Ventes du mois…');if(C.methode!=='adeposer'){C.methode='adeposer';saveClient();res.push('Méthode du dossier : ventes dans « Transactions à déposer » (les dépôts les réduisent).')}
       const v=await ventesMensuelles(r);res.push(`Ventes du mois depuis « ${r.nom} » → ${adepAcc()} ${accName(adepAcc())} :`,...v.map(x=>'  '+x))}
+    {const vus=new Set();for(const r of L.filter(r=>r.action==='frais'&&r.frais)){say('Frais des processeurs…');const k=r.proc+(r.frais.regle?'-regle':'');const v=await fraisMensuels(r);if(r.frais.regle&&vus.has(k))continue;vus.add(k);res.push(`Frais ${r.proc} (${r.nom}) :`,...v.map(x=>'  '+x))}}
     say('Appariement des virements entre vos comptes…');const n=await pairInterne();if(n)res.push(`${n} virement(s) entre vos comptes apparié(s) (comptés une seule fois).`);
     audit('Boîte de dépôt',`${L.length} document(s) : ${res.length} opération(s)`);LED=null;
     $('bxOut').innerHTML=`<div class="msg" style="white-space:pre-line;margin-top:8px">${esc(res.join('\n'))}</div><div class="row" style="margin-top:10px"><button class="sm pri" data-go="rec">Voir la conciliation</button><button class="sm" data-go="rev">Classer les transactions</button></div>`;BOITE=null;renderHome().catch(()=>{})}
