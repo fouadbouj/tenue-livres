@@ -2608,7 +2608,7 @@ $('tHome').addEventListener('click',e=>{const b=e.target.closest('[data-mo],[dat
   $('pMois').value=m;if(src&&[...$('pSrc').options].some(o=>o.value===src))$('pSrc').value=src;setTab('rev');openPeriod()});
 
 /* ---------- sauvegarde ---------- */
-const SUBS=['periodes','ecritures','factures','missions','paies'];
+const SUBS=['periodes','ecritures','factures','missions','paies','audit'];
 $('bkExp').onclick=async()=>{const say=t=>$('bkMsg').textContent=t;say('Préparation…');
   try{const out={format:'tenue-livres-v1',date:new Date().toISOString(),clients:[]};
     const L=local?Object.entries(LOCAL.clients).map(([id,d])=>({id,d})):(await db.collection('clients').get()).docs.map(x=>({id:x.id,d:x.data()}));
