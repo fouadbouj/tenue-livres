@@ -103,6 +103,23 @@ async function destinataires(admin: SupabaseClient, cli: { id: string; courriel:
 // deno-lint-ignore no-explicit-any
 function message(p: any, cli: any, rappel: boolean) {
   const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+  if (p.signature_requise && !p.contrat_id) return {
+    sujet: `Document à signer : ${p.titre} — Boujrad CPA Inc.`,
+    texte: `Bonjour${cli.contact ? " " + cli.contact : ""},
+
+Nous avons déposé un document à signer dans votre portail client : « ${p.titre} ».${/MR-69|procuration/i.test(p.titre + " " + (p.type || "")) ? "\n\nIl s'agit de la procuration qui nous permet d'agir pour vous auprès de Revenu Québec (répondre aux demandes, corriger votre dossier). Vous pourrez la révoquer en tout temps." : ""}
+
+Pour le lire et le signer électroniquement (environ deux minutes) :
+1. Connectez-vous à votre portail client : ${site}/portail.html
+2. Onglet « Entreprise », section « À payer et documents du cabinet »
+3. Bouton « Lire et signer »
+
+Si vous avez des questions avant de signer, écrivez-nous dans la section « Messages » du portail.
+
+Merci!
+
+Boujrad CPA Inc.`,
+  };
   if (p.contrat_id) return {
     sujet: `Votre contrat de services avec Boujrad CPA Inc. est prêt à signer`,
     texte: `Bonjour${cli.contact ? " " + cli.contact : ""},
@@ -209,6 +226,18 @@ Deno.serve(async (req) => {
       await courriel(to, m.sujet, m.texte);
       await admin.from("cc_publications").update({ avise_le: new Date().toISOString() }).eq("id", p.id);
       return json({ ok: true, envoye_a: to });
+    }
+
+    if (body.action === "document_signe") {
+      const { data: acc } = await admin.from("cc_acces").select("id").eq("client_id", p.client_id).eq("user_id", user.id).maybeSingle();
+      if (!acc || !p.signe_le) return json({ error: "non autorisé" }, 403);
+      const notif = Deno.env.get("NOTIF_CABINET");
+      if (notif) {
+        const site = Deno.env.get("SITE_URL") || "https://app.boujradcpa.com";
+        await courriel([notif], `Document signé : ${p.cc_clients.nom} — ${p.titre}`,
+          `${p.cc_clients.nom} a signé électroniquement « ${p.titre} ».\n\nSignataire : ${p.signe_nom}${p.signe_titre ? ", " + p.signe_titre : ""}\nDate : ${new Date(p.signe_le).toLocaleString("fr-CA", { timeZone: "America/Toronto" })}\nCompte du portail : ${user.email}\n\nLe document signé (PDF) est dans la fiche du client, onglet « Portail et documents » : ${site}/centre.html`);
+      }
+      return json({ ok: true });
     }
 
     if (body.action === "signature") {
