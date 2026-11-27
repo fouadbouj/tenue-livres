@@ -160,7 +160,7 @@ const findAcc=(re,exp)=>{const L=PLAN.filter(([n,t])=>re.test(norm(t))&&!isHeade
 function detectSpecial(c){const pl=parsePlanText(c.plan),f=re=>pl.find(([,t])=>re.test(norm(t)))?.[0]||'';
   return {tr:f(/TRANSITOIRE|D'ATTENTE|EN SUSPENS|SUSPENSE|A CLASSER/)||c.tr||'',tpsA:f(/\bCTI\b/)||f(/TPS.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tpsA||'',tvqA:f(/\bRTI\b/)||f(/TVQ.*(\bPAYEES?\b|RECUP|A RECEVOIR)/)||c.tvqA||'',tpsV:f(/TPS.*(PERCUE|A PAYER|FACTUREE)/)||c.tpsV||'',tvqV:f(/TVQ.*(PERCUE|A PAYER|FACTUREE)/)||c.tvqV||''}}
 const banqueDef=()=>{const SA=srcAccounts();return(SA.find(([n,t])=>/COMPTE COURANT|COURANT|CHEQUE/.test(norm(t)))||SA.find(([n,t])=>/BANQUE|ENCAISSE/.test(norm(t)))||SA[0]||[''])[0]};
-const srcAccounts=()=>{const s=PLAN.filter(([n,t])=>/^[12]/.test(n)&&/BANQUE|ENCAISSE|COURANT|CHEQUE|CAISSE|EPARGNE|CARTE|VISA|MASTERCARD|AMEX|MARGE|PAYPAL|STRIPE|SQUARE|WISE/.test(norm(t)));return s.length?s:(PLAN.filter(([n])=>/^[12]/.test(n)).length?PLAN.filter(([n])=>/^[12]/.test(n)):PLAN)};
+const srcAccounts=()=>{const s=PLAN.filter(([n,t])=>/^[12]/.test(n)&&/BANQUE|BANCAIRE|ENCAISSE|COURANT|CHEQUE|CAISSE|EPARGNE|CARTE|VISA|MASTERCARD|AMEX|MARGE|PAYPAL|STRIPE|SQUARE|WISE/.test(norm(t)));return s.length?s:(PLAN.filter(([n])=>/^[12]/.test(n)).length?PLAN.filter(([n])=>/^[12]/.test(n)):PLAN)};
 /* ---------- devises : comptes en dollars US ----------
    Les transactions d'un compte en USD gardent leur montant d'origine (conciliation, doublons et relevés restent en US$);
    le grand livre les convertit en $ CA au taux quotidien de la Banque du Canada, ou au montant réel d'un virement apparié (t.cad). */
@@ -650,6 +650,7 @@ $('accForm').addEventListener('submit',e=>{if(e.submitter?.value==='cancel'){dlg
   if(PLAN.some(p=>p[0]===no)){e.preventDefault();$('accErr').textContent=`Le compte ${no} existe déjà : ${accName(no)}.`;return}
   addAccount(no,nm);const t=dlgTx;dlgTx=null;if(dlgCb){const cb=dlgCb;dlgCb=null;cb(no)}
   if(t){Object.assign(t,{acct:no,st:'manuel',why:'Classé à la main',unk:false});afterManual(t,no)}});
+function renommerCompte(no,nm){const L=PLAN.map(p=>p[0]===no?[no,nm]:p);C.plan=L.map(p=>p.join(' ')).join('\n');audit('Compte renommé',`${no} → ${nm}`);setPlan();fillSelects();renderSettings();renderRules();$('planTxt').value=C.plan;saveClient()}
 function addAccount(no,nm){if(!Array.isArray(C.sage))C.sage=PLAN.map(p=>p[0]);
   const L=PLAN.concat([[no,nm]]).sort((a,b)=>a[0].localeCompare(b[0],'fr',{numeric:true}));C.plan=L.map(p=>p.join(' ')).join('\n');
   setPlan();fillSelects();renderSettings();renderRules();$('planTxt').value=C.plan;saveClient();render()}
@@ -2690,7 +2691,12 @@ async function boiteAnalyser(files){const box=$('bxOut');box.innerHTML='<p class
   const F=await boiteDeplier(files);const L=[];for(const[k,f]of F.entries()){box.innerHTML=`<p class="note">Lecture de ${esc(f.name)} (${k+1}/${F.length})…</p>`;L.push(await boiteReconnaitre(f))}
   /* comptes : existants, ou à créer (un seul par compte même s'il y a plusieurs relevés) */
   const pris=new Set(PLAN.map(p=>p[0])),crees=[];
-  for(const r of L.filter(r=>r.action==='verser')){const c=boiteCompte(r,crees);if(c.acct){r.acct=c.acct;r.neuf=c.neuf}else{const carte=/carte/.test(r.type);const n=r.type==='paypal'?(()=>{for(let x=1068;x<1099;x++)if(!pris.has(String(x)))return String(x)})():boiteNumero(carte,pris);pris.add(n);crees.push({acct:n,nom:c.nom,dev:r.dev,der:r.der,carte});r.acct=n;r.neuf=true}}
+  /* compte générique existant à reprendre (et renommer) plutôt que d'en créer un : même nature, même devise, sans numéro de compte dans le nom; d'abord celui qui a un solde d'ouverture */
+  const reprendre=(r,nom)=>{const carte=/carte/.test(r.type),pp=r.type==='paypal',ouv=C.ouv?.s||{},pris2=new Set(crees.map(c=>c.acct));
+    const cands=srcAccounts().filter(([n,t])=>!isHeader(n,t)&&!pris2.has(n)&&!/\d{4}/.test(t)&&(carte?/^2/.test(n):/^1/.test(n))&&devOf(n)===r.dev&&(pp?/PAYPAL/.test(norm(t)):!/PAYPAL|CAISSE|EPARGNE|PLACEMENT/.test(norm(t)))&&(!carte||!r.banque||true));
+    const marque=([n,t])=>carte?(/VISA/.test(norm(t))&&/VISA/.test(norm(r.chemin+' '+r.nom))?2:/MASTERCARD/.test(norm(t))&&/MASTER/.test(norm(r.chemin+' '+r.nom))?2:0):0;
+    const c=cands.sort((a,b)=>(ouv[b[0]]?1:0)-(ouv[a[0]]?1:0)||marque(b)-marque(a)||a[0].localeCompare(b[0]))[0];return c?{acct:c[0],ancien:c[1],nom}:null};
+  for(const r of L.filter(r=>r.action==='verser')){const c=boiteCompte(r,crees);if(c.acct){r.acct=c.acct;r.neuf=c.neuf}else if(c.neuf&&!c.acct&&(()=>{const k=reprendre(r,c.nom);if(!k)return false;crees.push({acct:k.acct,nom:k.nom,dev:r.dev,der:r.der,carte:/carte/.test(r.type),ancien:k.ancien});r.acct=k.acct;r.neuf=true;return true})()){}else{const carte=/carte/.test(r.type);const n=r.type==='paypal'?(()=>{for(let x=1068;x<1099;x++)if(!pris.has(String(x)))return String(x)})():boiteNumero(carte,pris);pris.add(n);crees.push({acct:n,nom:c.nom,dev:r.dev,der:r.der,carte});r.acct=n;r.neuf=true}}
   /* un même compte en PDF et en CSV : les relevés PDF (avec leurs soldes) passent avant l'export */
   for(const r of L.filter(r=>/-csv$/.test(r.type)&&r.acct))if(L.some(x=>x.acct===r.acct&&(x.type==='banque'||x.type==='carte'))){r.action='ignorer';r.note='Même compte que les relevés PDF : l’export CSV ferait double (les PDF donnent aussi les soldes pour la conciliation).'}
   const etats=L.filter(r=>r.type==='etats'&&r.tbp?.length).sort((a,b)=>(b.fin||'').localeCompare(a.fin||''));const x=curEx();
@@ -2702,7 +2708,7 @@ async function boiteAnalyser(files){const box=$('bxOut');box.innerHTML='<p class
   BOITE={L,crees,exProp,bon};boiteAfficher()}
 const TYPES_BX={banque:'Relevé bancaire',carte:'Relevé de carte','banque-csv':'Export bancaire (CSV)','carte-csv':'Export de carte (CSV)',paypal:'Rapport PayPal (CSV)','paypal-pdf':'Rapport PayPal (PDF)',etats:'États financiers',commandes:'Commandes de la boutique',reglements:'Rapport de paiements',courriel:'Courriel',document:'Document',erreur:'Illisible',autre:'Autre'};
 function boiteAfficher(){if(!BOITE)return;const{L,crees,exProp}=BOITE;const box=$('bxOut');
-  const opts=a=>`<option value="">— compte —</option>`+srcAccounts().filter(([n,t])=>!isHeader(n,t)).map(([n,t])=>`<option value="${esc(n)}"${n===a?' selected':''}>${esc(n+' '+t)}</option>`).join('')+crees.map(c=>`<option value="${esc(c.acct)}"${c.acct===a?' selected':''}>${esc(c.acct+' '+c.nom)} (nouveau)</option>`).join('');
+  const opts=a=>`<option value="">— compte —</option>`+srcAccounts().filter(([n,t])=>!isHeader(n,t)).map(([n,t])=>`<option value="${esc(n)}"${n===a?' selected':''}>${esc(n+' '+t)}</option>`).join('')+crees.filter(c=>!c.ancien).map(c=>`<option value="${esc(c.acct)}"${c.acct===a?' selected':''}>${esc(c.acct+' '+c.nom)} (nouveau)</option>`).join('');
   const ord=['banque','carte','paypal','banque-csv','carte-csv','etats','paypal-pdf','reglements','commandes','courriel','document','erreur','autre'];
   const R0=L.map((r,i)=>({r,i})).sort((a,b)=>ord.indexOf(a.r.type)-ord.indexOf(b.r.type)||String(a.r.acct||'').localeCompare(String(b.r.acct||''))||a.r.nom.localeCompare(b.r.nom));
   /* les relevés d'un même compte sur une seule ligne */
@@ -2710,7 +2716,8 @@ function boiteAfficher(){if(!BOITE)return;const{L,crees,exProp}=BOITE;const box=
   const nb=L.filter(r=>r.action!=='ignorer').length;
   box.innerHTML=`<p style="margin:8px 0"><strong>${L.length} document(s) reconnu(s).</strong> ${nb} à verser ou à utiliser, ${L.length-nb} gardé(s) pour référence. Vérifiez les lignes en jaune, puis appliquez.</p>
   ${exProp?`<p class="msg" style="margin:6px 0">Exercice proposé : du ${exProp.deb} au ${exProp.fin} (d’après les états financiers de l’an dernier).</p>`:''}
-  ${crees.length?`<p class="note" style="margin:6px 0">Comptes à créer : ${crees.map(c=>`<strong>${esc(c.acct)} ${esc(c.nom)}</strong>${c.dev==='USD'?' (en US$)':''}`).join(' · ')}</p>`:''}
+  ${crees.filter(c=>c.ancien).length?`<p class="note" style="margin:6px 0">Comptes existants repris et renommés : ${crees.filter(c=>c.ancien).map(c=>`${esc(c.acct)} « ${esc(c.ancien)} » → <strong>${esc(c.nom)}</strong>${c.dev==='USD'?' (en US$)':''}`).join(' · ')}</p>`:''}
+  ${crees.filter(c=>!c.ancien).length?`<p class="note" style="margin:6px 0">Comptes à créer : ${crees.filter(c=>!c.ancien).map(c=>`<strong>${esc(c.acct)} ${esc(c.nom)}</strong>${c.dev==='USD'?' (en US$)':''}`).join(' · ')}</p>`:''}
   <div style="overflow:auto"><table class="rep"><tr class="grp"><td>Document</td><td>Reconnu comme</td><td>Compte</td><td>Action</td><td>Note</td></tr>
   ${R.map(({r,i,ix})=>`<tr${ix.some(j=>L[j].doute)?' style="background:#fff6d6"':''}><td style="max-width:260px;word-break:break-word">${ix.length>1?`<strong>${ix.length} relevés</strong><div class="why">${esc(L[ix[0]].nom)} … ${esc(L[ix[ix.length-1]].nom)}</div>`:esc(r.nom)}<div class="why">${esc(r.chemin.split('/').slice(0,-1).join(' / '))}</div></td><td>${esc(TYPES_BX[r.type]||r.type)}${r.dev==='USD'?' · US$':''}</td>
     <td>${['banque','carte','paypal','banque-csv','carte-csv'].includes(r.type)?`<select data-bxa="${ix.join(',')}" style="width:auto;max-width:220px">${opts(r.acct)}</select>`:''}</td>
@@ -2784,7 +2791,7 @@ Réponds uniquement en JSON : {"soldes":[{"compte":"1060","montant":1234.56,"sou
   const tot=Object.values(s).reduce((a,c)=>a+c,0);return{s,tot,rem:(nouv.length?`Compte(s) créé(s) pour l’ouverture : ${nouv.join(', ')}. `:'')+String(j?.remarques||'')}}
 async function boiteAppliquer(){const{L,crees,exProp}=BOITE;const say=t=>{$('bxMsg').textContent=t};$('bxGo').disabled=true;const res=[];
   try{if(exProp&&!curEx()){C.exDeb=exProp.deb;C.exFin=exProp.fin;syncEx();saveClient();res.push(`Exercice du ${exProp.deb} au ${exProp.fin}.`)}
-    for(const c of crees.filter(c=>L.some(r=>r.acct===c.acct&&r.action==='verser'))){addAccount(c.acct,c.nom);C.dev={...(C.dev||{}),[c.acct]:c.dev};res.push(`Compte créé : ${c.acct} ${c.nom}${c.dev==='USD'?' (US$)':''}.`)}
+    for(const c of crees.filter(c=>L.some(r=>r.acct===c.acct&&r.action==='verser'))){if(c.ancien){renommerCompte(c.acct,c.nom);res.push(`Compte renommé : ${c.acct} « ${c.ancien} » → ${c.nom}${c.dev==='USD'?' (US$)':''}.`)}else{addAccount(c.acct,c.nom);res.push(`Compte créé : ${c.acct} ${c.nom}${c.dev==='USD'?' (US$)':''}.`)}C.dev={...(C.dev||{}),[c.acct]:c.dev}}
     for(const r of L.filter(r=>r.action==='verser'&&r.acct&&r.dev==='USD'))if(devOf(r.acct)!=='USD'){C.dev={...(C.dev||{}),[r.acct]:'USD'}}
     saveClient();LED=null;
     const o=L.find(r=>r.action==='ouverture');if(o){say('Lecture de la balance de vérification de l’an dernier (IA)…');const x=curEx();const date=x?.deb||addDays(o.fin,1);
