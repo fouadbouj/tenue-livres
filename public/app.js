@@ -1168,7 +1168,9 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
   box.innerHTML=`<div class="row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px">
       <span class="note">Les groupes avec un compte proposé sont en haut : vérifiez le compte, puis « Classer ». Les autres : choisissez le compte. « Règle » retient le classement pour les prochains relevés.</span>
       ${sampleFn?`<button class="sm pri" id="gIA" title="Les fournisseurs connus à un seul usage (Wix, Adobe, Mailchimp…) sont classés d’office; les autres reçoivent une proposition à vérifier">✦ Classer avec l’IA</button>`:''}</div>
+    <div id="gBulk" hidden><strong id="gbN"></strong><select id="gbA">${opt('')}</select><label class="opt"><input type="checkbox" id="gbT"> Taxes</label><label class="opt"><input type="checkbox" id="gbR" checked> Règles</label><button class="sm pri" id="gbGo">Classer la sélection</button><button class="sm" id="gbX">Désélectionner</button></div>
     ${G.map((g,i)=>`<div class="grp" data-g="${i}"><div class="gh">
+      <input type="checkbox" data-gs="${i}" title="Sélectionner ce groupe pour classer plusieurs groupes dans le même compte" style="width:18px;height:18px;margin:0">
       <div style="min-width:0"><div class="gn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(g.tx[0].desc)}">${esc(g.tx.length===1?g.tx[0].desc:g.nom)}</div><div class="gs">${g.tx.length} ${g.sens}${g.tx.length>1?'s':''} · ${esc(g.d1)}${g.d2!==g.d1?' → '+esc(g.d2):''}</div></div>
       <div class="num" style="font-weight:600;white-space:nowrap">${fmt(g.tot)}</div>
       <div><select data-ga="${i}">${opt(g.prop)}</select><div style="margin-top:3px">${g.prop?'<span class="src ia">proposé par l’IA</span>':'<span class="src none">aucune proposition</span>'}</div></div>
@@ -1176,12 +1178,23 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
       <label class="opt" title="Retenir pour les prochains relevés"><input type="checkbox" data-gr="${i}"${g.tx.length>1?' checked':''}> Règle</label>
       <button class="sm pri" data-gc="${i}">Classer (${g.tx.length})</button></div>
       <details><summary>Voir les ${g.tx.length} transaction(s)</summary><table class="rep" style="margin-top:6px">${g.tx.map(t=>`<tr><td style="width:28px"><input type="checkbox" data-gx="${t.id}" checked title="Décocher pour l’exclure du groupe"></td><td class="d">${esc(t.date)}</td><td>${esc(t.desc)}</td><td class="num">${fmt(t.amt)}</td></tr>`).join('')}</table></details></div>`).join('')}`;
+  /* classer un groupe (le bouton du groupe, ou la sélection de plusieurs groupes dans le même compte) */
+  const classerG=(g,a,tax,regle)=>{const T=g.tx.filter(t=>!GEXCL.has(t.id));T.forEach(t=>Object.assign(t,{acct:a,tax,st:'manuel',why:'Classé par groupe',unk:false}));
+    audit('Classement par groupe',`${T.length} transaction(s) « ${g.nom} » → ${a} ${accName(a)}${tax?', taxes incluses':''}`);
+    const p=keyOf(T[0]?.desc||'');if(regle&&p&&p.length>=3){C.rules=(C.rules||[]).filter(r=>!(r.p===p&&(r.s||'les deux')===(g.sens==='sortie'?'sortie':'entree')));C.rules.push({p,a,t:tax,s:g.sens==='sortie'?'sortie':'entree'})}return T.length};
   box.querySelectorAll('[data-gc]').forEach(b=>b.onclick=()=>{const g=G[+b.dataset.gc],a=box.querySelector(`[data-ga="${b.dataset.gc}"]`).value;if(!a){box.querySelector(`[data-ga="${b.dataset.gc}"]`).focus();return}if(!revOk())return;
     const tax=box.querySelector(`[data-gt="${b.dataset.gc}"]`).checked,regle=box.querySelector(`[data-gr="${b.dataset.gc}"]`).checked;
-    const T=g.tx.filter(t=>!GEXCL.has(t.id));T.forEach(t=>Object.assign(t,{acct:a,tax,st:'manuel',why:'Classé par groupe',unk:false}));
-    audit('Classement par groupe',`${T.length} transaction(s) « ${g.nom} » → ${a} ${accName(a)}${tax?', taxes incluses':''}`);
-    const p=keyOf(T[0]?.desc||'');if(regle&&p&&p.length>=3){C.rules=(C.rules||[]).filter(r=>!(r.p===p&&(r.s||'les deux')===(g.sens==='sortie'?'sortie':'entree')));C.rules.push({p,a,t:tax,s:g.sens==='sortie'?'sortie':'entree'});saveClient();renderRules()}
-    savePer();render();showToast(`<span>✓ ${T.length} transaction(s) « ${esc(g.nom)} » classée(s) dans ${esc(a)} ${esc(accName(a))}${regle?' · règle retenue':''}.</span>`)});
+    const n=classerG(g,a,tax,regle);if(regle){saveClient();renderRules()}
+    savePer();render();showToast(`<span>✓ ${n} transaction(s) « ${esc(g.nom)} » classée(s) dans ${esc(a)} ${esc(accName(a))}${regle?' · règle retenue':''}.</span>`)});
+  const selG=()=>[...box.querySelectorAll('[data-gs]:checked')].map(c=>+c.dataset.gs);
+  const majBulk=()=>{const S=selG();$('gBulk').hidden=!S.length;box.querySelectorAll('.grp').forEach(d=>d.classList.toggle('sel',S.includes(+d.dataset.g)));
+    if(S.length){const n=S.reduce((a,i)=>a+G[i].tx.filter(t=>!GEXCL.has(t.id)).length,0),tot=S.reduce((a,i)=>a+G[i].tx.filter(t=>!GEXCL.has(t.id)).reduce((x,t)=>x+t.amt,0),0);
+      $('gbN').textContent=`${S.length} groupe(s) · ${n} transaction(s) · ${fmt(tot)}`;const props=[...new Set(S.map(i=>box.querySelector(`[data-ga="${i}"]`).value).filter(Boolean))];if(!$('gbA').value&&props.length===1)$('gbA').value=props[0]}};
+  box.querySelectorAll('[data-gs]').forEach(c=>c.onchange=majBulk);
+  $('gbX').onclick=()=>{box.querySelectorAll('[data-gs]').forEach(c=>c.checked=false);$('gbA').value='';majBulk()};
+  $('gbGo').onclick=()=>{const S=selG(),a=$('gbA').value;if(!S.length)return;if(!a){$('gbA').focus();return}if(!revOk())return;
+    const tax=$('gbT').checked,regle=$('gbR').checked;let n=0;S.forEach(i=>{n+=classerG(G[i],a,tax,regle&&G[i].tx.length>1)});if(regle){saveClient();renderRules()}
+    savePer();render();showToast(`<span>✓ ${n} transaction(s) de ${S.length} groupe(s) classée(s) dans ${esc(a)} ${esc(accName(a))}${regle?' · règles retenues':''}.</span>`)};
   box.querySelectorAll('[data-gx]').forEach(c=>c.onchange=()=>{const id=+c.dataset.gx;if(c.checked)GEXCL.delete(id);else GEXCL.add(id)});
   if($('gIA'))$('gIA').onclick=async()=>{$('gIA').disabled=true;$('gIA').textContent='L’IA classe…';
     const prev=P.tx.filter(t=>t.st==='suggere'&&!lk(t.date)).map(t=>[t,t.acct,t.tax,t.why]);prev.forEach(([t])=>Object.assign(t,{st:'transit',unk:true}));const avant=P.tx.filter(aCl).length;
