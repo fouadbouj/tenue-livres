@@ -196,7 +196,10 @@ async function pairInterne(){if(!C)return 0;if(P&&pTimer)savePerNow();await pWri
       else if(X.length===1){const t=X[0].t;delete t.pair;delete t.mirror;Object.assign(t,{st:'transit',acct:C.tr,why:'Virement apparié dont le pendant a disparu : à reclasser'});ch.add(X[0].p)}}}
   const ud=L.filter(p=>devOf(p.src)==='USD').flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(ud.length)await tauxAssurer(ud[0],ud[ud.length-1]);
   const est=(t,src)=>devOf(src)==='USD'?(tauxDe(t.date)?t.amt*tauxDe(t.date):null):t.amt;
-  const pool=[];L.forEach(p=>(p.tx||[]).forEach(t=>{if(t.pair||t.st==='manuel'||t.st==='facture'||lk(t.date))return;pool.push({p,t,src:p.src,c:est(t,p.src),k:VIR.test(norm(t.desc))})}));
+  /* une transaction classée à la main reste candidate si on l'a laissée au transitoire ou classée vers un autre compte du client
+     (ex. paiement de carte mis au transitoire avant que le relevé de la carte soit versé) */
+  const srcs=new Set(L.map(p=>p.src));
+  const pool=[];L.forEach(p=>(p.tx||[]).forEach(t=>{if(t.pair||(t.st==='manuel'&&!isTr(t)&&!srcs.has(String(t.acct)))||t.st==='facture'||lk(t.date))return;pool.push({p,t,src:p.src,c:est(t,p.src),k:VIR.test(norm(t.desc))})}));
   pool.sort((a,b)=>a.t.date.localeCompare(b.t.date));let n=0;const rep0=ch.size;
   for(const a of pool){if(a.t.pair||a.t.amt>=0||a.c==null)continue;
     const C_=pool.filter(b=>!b.t.pair&&b.src!==a.src&&b.t.amt>0&&b.c!=null&&dd(a.t.date,b.t.date)<=4&&(a.k||b.k)&&(devOf(a.src)===devOf(b.src)?b.t.amt===-a.t.amt:Math.abs(a.c+b.c)<=Math.abs(a.c)*0.04));
@@ -475,7 +478,7 @@ Pour reclasser « toutes les transactions X », cherche d'abord (ou prends celle
 - Contrepartie juste : n'utilise jamais Achats (5010) ni une autre dépense pour annuler un vieux solde de bilan (charges à payer, fournisseurs, remboursements de taxes). Une dette qui n'est plus due → Revenus divers; payée par l'actionnaire → Avances de l'actionnaire; un remboursement de TPS/TVQ non inscrit à recevoir → Revenus divers. En cas de doute, demande.
 - Paiements d'impôt (TAXES D'ENTREPRISE, TXINS, CDPRQ, acomptes) → Impôts à payer (2160), jamais en dépense; la charge d'impôt de l'année se fait en régularisation.
 - TPS/TVQ : ventes hors Canada = détaxées (pas de taxe perçue). CTI/RTI seulement si le fournisseur facture la taxe sous le régime normal (numéros RT0001/TQ0001). Fournisseurs étrangers au régime simplifié/désigné (Meta, Google, OpenAI, Wix, Mailchimp, Twilio…) : taxes non récupérables, montant complet en dépense (taxable:false). Un remboursement d'achat réduit les CTI/RTI (2315/2325), jamais la TPS/TVQ perçue.
-- Virements entre comptes du client : appariés, jamais en revenu ni en dépense. Retraits du propriétaire : avances de l'actionnaire.
+- Virements entre comptes du client (banque → carte de crédit, CAD ↔ USD, PayPal → banque) : le logiciel les APPARIE (un côté compte, l'autre est « déjà compté »), jamais en revenu ni en dépense. Ne propose jamais de les faire « s'annuler » en passant par le transitoire ou en classant un côté vers l'autre compte : ça compte le virement deux fois. Si des paiements de carte ne sont pas appariés, dis à l'utilisateur d'ouvrir la période dans Transactions (l'appariement se refait) ou de verser le relevé manquant. Retraits du propriétaire : avances de l'actionnaire.
 - Méthode « Transactions à déposer » : les ventes entrent par les écritures mensuelles du rapport de commandes (Dt 1080 / Ct ventes); les dépôts des processeurs (Elavon, AMEX, PayPal, Stripe) réduisent le 1080; leurs frais vont en frais de carte (5740); les remboursements aux clients réduisent les ventes.
 - Comptes en US$ : les montants des écritures sont en $ CA; la réévaluation se fait au taux de fin d'exercice (Écritures › Régularisations).
 - Stock : jamais d'estimation sans l'accord de l'utilisateur; l'ajustement passe par la variation des stocks (5020).
@@ -556,7 +559,7 @@ async function openPeriod(){
 }
 let mode='m';
 const openCur=()=>mode==='r'?openRange():openPeriod();
-$('pOpen').onclick=openCur;$('pMois').onchange=openPeriod;$('pSrc').onchange=openCur;$('rFrom').onchange=openRange;$('rTo').onchange=openRange;
+$('pOpen').onclick=()=>{openCur();pairPlus()};/* à l'ouverture : cherche aussi les virements entre comptes pas encore appariés (ex. relevé de carte versé après la banque) */$('pMois').onchange=openPeriod;$('pSrc').onchange=openCur;$('rFrom').onchange=openRange;$('rTo').onchange=openRange;
 async function setMode(m){mode=m;document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===m));
   $('lMois').hidden=m==='r';$('lFrom').hidden=$('lTo').hidden=m!=='r';$('pClear').hidden=m==='r';
   $('pOpen').textContent=m==='r'?'Ouvrir ces mois':'Ouvrir la période';
