@@ -1325,12 +1325,14 @@ Pour reclasser « toutes les transactions X », cherche d'abord (ou prends celle
 /* ---------- historique du navigateur : le bouton Précédent reste dans la plateforme ---------- */
 let NAVQ=false,PENDING=null;
 const hashOf=()=>C?`#c=${encodeURIComponent(C.id)}&t=${tab}`+(tab==='rep'?`&r=${REP}`+($('repFrom').value?`&du=${$('repFrom').value}`:'')+($('repTo').value?`&au=${$('repTo').value}`:'')+(REP==='gl'&&$('repAcc').value?`&acc=${encodeURIComponent($('repAcc').value)}`:''):tab==='rev'&&mode==='m'&&$('pMois').value?`&m=${$('pMois').value}&s=${encodeURIComponent($('pSrc').value)}`:tab==='mis'&&MIS?`&ms=${mStep}`:''):'#';
+/* l'entrée courante de l'historique suit les dates et options choisies, pour que Précédent ramène le rapport tel qu'il était */
+function navReplace(){if(NAVQ||!C)return;try{history.replaceState(null,'',hashOf())}catch(e){}}
 function navPush(){if(NAVQ)return;const h=hashOf();if(location.hash===h||(h==='#'&&!location.hash))return;try{history.pushState(null,'',h)}catch(e){}}
 function parseHash(){const q=new URLSearchParams(location.hash.slice(1));return{c:q.get('c'),t:q.get('t')||'home',r:q.get('r'),du:q.get('du')||'',au:q.get('au')||'',acc:q.get('acc')||'',m:q.get('m'),s:q.get('s'),ms:q.get('ms')}}
 async function navRest(h){if(h.t==='rev'&&h.m&&(!P||P.mois!==h.m||P.src!==h.s)){if(mode!=='m'){mode='m';document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode==='m'));$('lMois').hidden=false;$('lFrom').hidden=$('lTo').hidden=true}$('pMois').value=h.m;if([...$('pSrc').options].some(o=>o.value===h.s))$('pSrc').value=h.s;await openPeriod();return}
   if(h.t==='mis'&&h.ms&&h.ms!==mStep){mStep=h.ms;await renderMis();return}
   navRep(h)}
-function navRep(h){if(h.t!=='rep'||!h.r)return;REP=h.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===REP));$('repFrom').value=h.du;$('repTo').value=h.au;$('repAccL').hidden=REP!=='gl';if(REP==='gl')$('repAcc').value=h.acc;repUI();runRep()}
+function navRep(h){if(h.t!=='rep'||!h.r)return;REP=h.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===REP));if(h.du||!$('repFrom').value)$('repFrom').value=h.du;if(h.au||!$('repTo').value)$('repTo').value=h.au;$('repAccL').hidden=REP!=='gl';if(REP==='gl')$('repAcc').value=h.acc;repUI();runRep()}
 window.addEventListener('popstate',async()=>{const h=parseHash(),{c,t}=h;NAVQ=true;
   try{if(!c){if(C)$('back').click()}else if(!C||C.id!==c){if(P)savePerNow();if(CLIENTS.some(x=>x.id===c)||local){await openClient(c);setTab(t);await navRest(h)}}else{if(tab!==t)setTab(t);await navRest(h)}}finally{NAVQ=false}});
 {const h=parseHash();if(h.c)PENDING=h}
@@ -2237,7 +2239,7 @@ function initRep(){const[d,f]=exRange();['repFrom','repTo'].forEach(id=>{const e
   $('repAcc').innerHTML='<option value="">Tous les comptes</option>'+OPTS;if(!d)$('repMsg').textContent='Indiquez le début et la fin de l’exercice dans Paramètres (ou les soldes d’ouverture dans Écritures).';runRep()}
 document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';repUI();runRep();navPush()});
 $('repGo').onclick=()=>{runRep(true);navPush()};$('compBtn').onclick=()=>{if(C)compUI()};$('repCmp').onchange=()=>runRep();$('repUsd').onchange=()=>{try{localStorage.tlRepUsd=$('repUsd').value}catch(e){}runRep()};try{if(localStorage.tlRepUsd)$('repUsd').value=localStorage.tlRepUsd}catch(e){}
-$('repEx').onclick=()=>{const[d,f]=exRange();$('repFrom').value=d;$('repTo').value=f;runRep()};
+$('repEx').onclick=()=>{const[d,f]=exRange();$('repFrom').value=d;$('repTo').value=f;runRep();navReplace()};['repFrom','repTo'].forEach(id=>$(id).addEventListener('change',navReplace));
 /* comparatifs : mêmes dates, 1 à 3 ans plus tôt, calculés dans le contexte de l'exercice concerné */
 const shiftY=(d,k)=>{if(!d)return d;const[y,m,j]=d.split('-').map(Number);const last=new Date(Date.UTC(y-k,m,0)).getUTCDate();return `${y-k}-${String(m).padStart(2,'0')}-${String(Math.min(j,last)).padStart(2,'0')}`};
 const veille=d=>new Date(new Date(d+'T12:00Z')-864e5).toISOString().slice(0,10);
