@@ -333,7 +333,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="tabs" role="group" aria-label="Vue"><button data-gv="g" aria-pressed="true">Classement rapide par groupes</button><button data-gv="l" aria-pressed="false">Liste détaillée</button></div>
-        <span class="row" style="gap:8px;align-items:center"><span class="note" id="gvNote"></span><button class="sm" id="txeBtn" title="Retirer la TPS/TVQ des dépenses chez des fournisseurs étrangers">Taxes sur les achats à l’étranger</button></span>
+        <span class="row" style="gap:8px;align-items:center"><span class="note" id="gvNote"></span><button class="sm" id="pairBtn" title="Apparier les virements entre les comptes du client et expliquer ceux qui restent">Apparier les virements</button><button class="sm" id="txeBtn" title="Retirer la TPS/TVQ des dépenses chez des fournisseurs étrangers">Taxes sur les achats à l’étranger</button></span>
       </div>
       <div id="txeBox" hidden></div><div id="grpBox"></div>
       <div id="lstBox">
@@ -1835,7 +1835,10 @@ dropzone($('drop'),handle);
 /* ---------- IA : fournisseurs inconnus ---------- */
 async function aiSuggest(txs){
   /* une ligne par description + sens (entrée/sortie), avec la devise du compte : l'IA classe d'office ce qui est certain (fournisseur connu à un seul usage), propose le reste */
-  const cand=txs.filter(t=>t.st==='transit'&&!lk(t.date)&&!t.pair);const keyD=t=>t.desc+'|'+(t.amt<0?'s':'e');const vus=new Map();cand.forEach(t=>{if(!vus.has(keyD(t)))vus.set(keyD(t),t)});
+  /* les virements entre comptes (paiement de carte, virement par banque en direct…) restent au transitoire : l'appariement s'en charge,
+     même si le relevé de l'autre compte n'arrive que plus tard */
+  const plusieurs=srcAccounts().length>1||new Set((C.stmts||[]).map(s=>s.src)).size>1;
+  const cand=txs.filter(t=>t.st==='transit'&&!lk(t.date)&&!t.pair&&!(plusieurs&&VIR.test(norm(t.desc))&&!/PAYPAL/.test(norm(t.desc))));const keyD=t=>t.desc+'|'+(t.amt<0?'s':'e');const vus=new Map();cand.forEach(t=>{if(!vus.has(keyD(t)))vus.set(keyD(t),t)});
   const L=[...vus.values()].slice(0,150);if(!L.length)return 0;const dv=devOf(P?.src||C.src||'');
   const r=await sampleFn.json(`Tu aides un cabinet comptable québécois à faire la tenue de livres du client « ${C.nom} ». Plan comptable du client :\n${PLAN.map(p=>p.join(' ')).join('\n')}\n${iaProfil()?`\n${iaProfil()}\n`:''}${C.notes?`\nNotes du cabinet sur ce client : ${C.notes}\n`:''}
 Pour chaque transaction bancaire ci-dessous (description · sens · montant${dv==='USD'?' · compte en dollars US':''}), donne le compte le plus probable dans CE plan (numéro exact de détail).
@@ -2039,6 +2042,22 @@ function renderGroupes(){const box=$('grpBox');if(!box)return;document.querySele
     const nIA=P.tx.filter(t=>t.st==='ia').length;audit('Classement par l’IA',`${avant-P.tx.filter(aCl).length} transaction(s) classée(s) d’office (fournisseurs connus)`);savePer();render();
     showToast(`<span>✦ ${avant-P.tx.filter(aCl).length} transaction(s) de fournisseurs connus classée(s) d’office. Le reste a une proposition à vérifier.</span>`)}}
 $('txeBtn').onclick=()=>{if(C)taxesEtrangeresUI()};
+/* appariement à la demande, avec la raison pour chaque virement de la période qui reste seul */
+$('pairBtn').onclick=async()=>{if(!C||!P)return;const b=$('pairBtn');b.disabled=true;b.textContent='Recherche…';
+  try{const n=await pairInterne();const L=await iaPeriodes(),own=new Set(L.map(p=>p.src)),all=L.flatMap(p=>(p.tx||[]).map(t=>({t,src:p.src})));
+    const seuls=P.tx.filter(t=>!t.pair&&VIR.test(norm(t.desc))&&!lk(t.date));
+    const why=t=>{const c=all.filter(x=>x.src!==P.src&&Math.sign(x.t.amt)===-Math.sign(t.amt)&&(devOf(x.src)===devOf(P.src)?Math.abs(x.t.amt+t.amt)<=1:true)&&dd(x.t.date,t.date)<=15).sort((a,b)=>dd(a.t.date,t.date)-dd(b.t.date,t.date));
+      if(!c.length)return own.size<2?'un seul compte versé':`aucun montant égal dans les autres comptes (${[...own].filter(x=>x!==P.src).join(', ')}) à 15 jours près : relevé manquant?`;const x=c[0];
+      if(x.t.pair)return `le ${x.src} du ${x.t.date} est déjà apparié à un autre virement`;if(lk(x.t.date))return `le ${x.src} du ${x.t.date} est dans un exercice fermé`;
+      if(dd(x.t.date,t.date)>4)return `montant trouvé au ${x.src} le ${x.t.date} : plus de 4 jours d’écart (appariez à la main si c’est le même)`;
+      if(x.t.st==='manuel'&&!isTr(x.t)&&!own.has(String(x.t.acct)))return `trouvé au ${x.src} le ${x.t.date}, mais classé à la main en ${x.t.acct} ${accName(x.t.acct)} : remettez-le au transitoire`;
+      if(x.t.st==='facture')return `trouvé au ${x.src} le ${x.t.date}, mais lié à une facture`;
+      if(!VIR.test(norm(x.t.desc))&&!VIR.test(norm(t.desc)))return `trouvé au ${x.src} le ${x.t.date}, mais aucune des deux descriptions ne ressemble à un virement`;return `trouvé au ${x.src} le ${x.t.date}`};
+    const box=$('txeBox');box.hidden=false;box.innerHTML=`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:6px 0 10px;background:#fff"><strong>${n?`✓ ${n} virement(s) apparié(s).`:'Aucun nouveau virement apparié.'}</strong>
+      ${seuls.length?` <span class="note">${seuls.length} virement(s) de cette période restent seuls :</span><table class="rep" style="margin-top:6px">${seuls.slice(0,60).map(t=>`<tr><td class="d">${esc(t.date)}</td><td>${esc(t.desc)}</td><td class="num">${fmt(t.amt)}</td><td class="why">${esc(why(t))}</td></tr>`).join('')}</table>`:' <span class="note">Tous les virements de cette période sont appariés.</span>'}
+      <div style="margin-top:6px"><button class="sm" onclick="this.closest('#txeBox').hidden=true">Fermer</button></div></div>`;
+    if(n){P.multi?await openRange():await openPeriod()}}
+  catch(e){msg('Appariement impossible : '+e.message)}finally{b.disabled=false;b.textContent='Apparier les virements'}};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-gv]');if(!b)return;GV=b.dataset.gv;render()});
 $('bulkGo').onclick=()=>{const a=$('bulkAcct').value,tx=$('bulkTax').value;if(!a||a==='__new'){$('bulkAcct').focus();return}if(!revOk())return;
   const sel=P.tx.filter(t=>SEL.has(t.id));audit('Classement en lot',`${sel.length} transaction(s) → ${a} ${accName(a)}${tx!==''?(tx==='1'?', taxes cochées':', taxes décochées'):''} : ${sel.slice(0,6).map(txTxt).join(' · ')}${sel.length>6?' …':''}`);sel.forEach(t=>{Object.assign(t,{acct:a,st:'manuel',why:'Classé en lot',unk:false});if(tx!=='')t.tax=tx==='1'});
