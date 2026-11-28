@@ -1397,12 +1397,12 @@ function groups(acctSet,first){/* regroupe les comptes du plan par sections Sage
   out.push(cur);[...acctSet].filter(a=>first.includes(String(a)[0])&&!PLAN.some(p=>p[0]===a)).forEach(a=>out[out.length-1].items.push(a));
   return out.filter(g=>g.items.length)}
 let REP='bs',LED=null;
-function repUI(){$('repCmpL').hidden=!['bs','is'].includes(REP);$('repFromL').hidden=REP==='bs'||REP==='ap'||REP==='ar'}
+function repUI(){$('repCmpL').hidden=!['bs','is'].includes(REP);$('repUsdL').hidden=REP!=='bs'||!comptesUSD().length;$('repFromL').hidden=REP==='bs'||REP==='ap'||REP==='ar'}
 function initRep(){const[d,f]=exRange();['repFrom','repTo'].forEach(id=>{const el=$(id);el.min=d||'';el.max=f||'';if(el.value&&d&&f&&(el.value<d||el.value>f))el.value=''});if(d&&f&&!$('repFrom').value&&!$('repTo').value){$('repFrom').value=d;$('repTo').value=f}repUI();
   $('repHint').textContent=d?`Exercice du ${d} au ${f}. Changez les dates au besoin, puis cliquez sur Afficher.`:'';
   $('repAcc').innerHTML='<option value="">Tous les comptes</option>'+OPTS;if(!d)$('repMsg').textContent='Indiquez le début et la fin de l’exercice dans Paramètres (ou les soldes d’ouverture dans Écritures).';runRep()}
 document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{REP=b.dataset.r;document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('repAccL').hidden=REP!=='gl';repUI();runRep();navPush()});
-$('repGo').onclick=()=>{runRep(true);navPush()};$('compBtn').onclick=()=>{if(C)compUI()};$('repCmp').onchange=()=>runRep();
+$('repGo').onclick=()=>{runRep(true);navPush()};$('compBtn').onclick=()=>{if(C)compUI()};$('repCmp').onchange=()=>runRep();$('repUsd').onchange=()=>{try{localStorage.tlRepUsd=$('repUsd').value}catch(e){}runRep()};try{if(localStorage.tlRepUsd)$('repUsd').value=localStorage.tlRepUsd}catch(e){}
 $('repEx').onclick=()=>{const[d,f]=exRange();$('repFrom').value=d;$('repTo').value=f;runRep()};
 /* comparatifs : mêmes dates, 1 à 3 ans plus tôt, calculés dans le contexte de l'exercice concerné */
 const shiftY=(d,k)=>{if(!d)return d;const[y,m,j]=d.split('-').map(Number);const last=new Date(Date.UTC(y-k,m,0)).getUTCDate();return `${y-k}-${String(m).padStart(2,'0')}-${String(Math.min(j,last)).padStart(2,'0')}`};
@@ -1457,12 +1457,16 @@ async function runRep(force){$('repOut').innerHTML='<p class="note">Calcul…</p
     let cols=[{t,f,...cur}];for(let k=1;k<=nC;k++){const tk=shiftY(t,k),fk=shiftY(f||exD,k);cols.push({t:tk,f:fk,...(colBal(E,fk,tk)||{})})}
     if(MO){const d0=(f||exD),d1=(t||exF);cols=[];if(d0&&d1){for(let m=d0.slice(0,7);m<=d1.slice(0,7)&&cols.length<13;){const[y,mm]=m.split('-').map(Number);const fin=new Date(y,mm,0).getDate();const a=m+'-01'<d0?d0:m+'-01',b=`${m}-${String(fin).padStart(2,'0')}`>d1?d1:`${m}-${String(fin).padStart(2,'0')}`;cols.push({f:a,t:b,I:balances(E,a,b),lbl:moisLbl(m)});m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,'0')}`}
       cols.push({f:d0,t:d1,I:balances(E,d0,d1),lbl:'Total'})}}
+    const FX=new Map();if(REP==='bs'&&$('repUsd').value==='1'&&comptesUSD().length){await tauxAssurer(t,t);const r=tauxDe(t);
+      for(const a of comptesUSD()){const{usd,src}=usdSolde(E,a,t),cad=cols[0].B.get(a)||0;if(usd==null&&!cad)continue;
+        const imp=usd?Math.abs(cad/usd):null,cible=usd!=null&&r?Math.round(usd*r):null,ec=cible!=null?cible-cad:null;
+        FX.set(a,usd==null?'Solde en US$ inconnu : aucun relevé avec soldes pour ce compte (Conciliation).':usd&&cad&&(usd>0)!==(cad>0)?`${fmtN(usd)} US$ selon le relevé, mais ${fmtN(cad)} $ CA aux livres (signes opposés) : vérifiez le solde d’ouverture et la conciliation de ce compte.`:`${fmtN(Math.abs(usd))} US$ (${src}) · taux qui donne ce montant : ${imp?imp.toFixed(4):'—'}${r?` · taux de la Banque du Canada au ${t} : ${r}`:''}${ec!=null?(Math.abs(ec)<100?' · ✓ réévalué':` · réévaluation à faire : ${fmtN(cible)} $ CA, ${ec>0?'gain':'perte'} de change de ${fmtN(Math.abs(ec))} $ (Écritures › Régularisations)`):''}`)}}
     const M=REP==='bs'?'B':'I',ok=c=>!!c[M],omis=MO?0:cols.slice(1).filter(c=>!ok(c)).length;if(omis)cols=cols.filter((c,i)=>i===0||ok(c));const head=`<tr class="grp"><td></td>${cols.map(c=>`<td class="num">${esc(c.lbl||(REP==='bs'?c.t:(c.f+' au '+c.t)))}${ok(c)?'':'<br><small>non disponible</small>'}</td>`).join('')}</tr>`;
     const val=(c,a,sign)=>ok(c)?sign*(c[M].get(a)||0):null,cell=v=>`<td class="num">${v==null?'':fmtN(v)}</td>`;
     const sect=(title,first,sign)=>{const set=new Set(cols.flatMap(c=>ok(c)?[...c[M]].filter(([a,v])=>v&&first.includes(String(a)[0])&&(REP==='bs'||+String(a)[0]>=4)).map(([a])=>a):[]));
       const tot=cols.map(c=>ok(c)?0:null);let x=`<tr class="sec"><td colspan="${cols.length+1}">${title}</td></tr>`;
       groups(set,first).forEach(g=>{const st=cols.map(c=>ok(c)?0:null);if(g.title)x+=`<tr class="grp"><td colspan="${cols.length+1}">${esc(g.title)}</td></tr>`;
-        g.items.forEach(a=>{const v=cols.map(c=>val(c,a,sign));v.forEach((y,i)=>{if(y!=null)st[i]+=y});x+=`<tr><td class="ind">${link(a)}</td>${v.map(cell).join('')}</tr>`});
+        g.items.forEach(a=>{const v=cols.map(c=>val(c,a,sign));v.forEach((y,i)=>{if(y!=null)st[i]+=y});x+=`<tr><td class="ind">${link(a)}${FX.has(a)?`<div class="why">${esc(FX.get(a))}</div>`:''}</td>${v.map(cell).join('')}</tr>`});
         if(g.title)x+=`<tr class="sub"><td>Total ${esc(g.title.toLowerCase())}</td>${st.map(cell).join('')}</tr>`;st.forEach((y,i)=>{if(y!=null)tot[i]+=y})});return[x,tot]};
     const row=(cls,l,v)=>`<tr class="${cls}"><td>${l}</td>${v.map(cell).join('')}</tr>`,sub=(a,b,sg=1)=>a.map((y,i)=>y==null||b[i]==null?null:y+sg*b[i]);
     if(REP==='bs'){const[a,ta]=sect('Actif','1',1),[p,tp]=sect('Passif','2',-1);let[c,tc]=sect('Avoir des actionnaires','3',-1);const ni=cols.map(k=>ok(k)?k.ni:null);
@@ -1729,12 +1733,16 @@ Transactions bancaires APRÈS la fin d'exercice (pour frais courus, revenus à r
 Écritures de journal déjà passées dans l'exercice :\n${je.join('\n')||'aucune'}
 Régularisations acceptées les années précédentes (à reproposer si elles s'appliquent encore, avec les montants de cette année) :\n${memo.join('\n')||'aucune'}`}}
 /* réévaluation des comptes en US$ au taux de clôture : calculée, pas devinée (solde du relevé × taux de la Banque du Canada) */
+/* solde d'un compte en dollars US à une date : solde d'ouverture du relevé + transactions du relevé (au cent près) */
+function usdSolde(E,a,f){const S=(C.stmts||[]).filter(s=>s.src===a&&s.sd!=null).sort((x,y)=>x.du.localeCompare(y.du));
+  const s=S.find(s=>s.du<=f&&s.au>=f)||[...S].reverse().find(s=>s.au<=f);const tx=E.filter(e=>e.kind==='rel'&&e.src===a);let usd=null,src='';
+  if(s&&s.au>=f){usd=s.sd+tx.filter(e=>e.date>=s.du&&e.date<=f).reduce((t,e)=>t+e.amt,0);src=`relevé du ${s.du} au ${s.au}`}
+  else if(s){usd=s.sf+tx.filter(e=>e.date>s.au&&e.date<=f).reduce((t,e)=>t+e.amt,0);src=`relevé terminé le ${s.au} et transactions suivantes`}
+  return{usd,src}}
 async function reevalProps(){const x=curEx();const[d,f]=x?[x.deb,x.fin]:exRange();const U=comptesUSD();if(!f||!U.length)return[];
   await tauxAssurer(f,f);const r=tauxDe(f);if(!LED)LED=await loadLedger();const out=[];
   for(const a of U){const S=(C.stmts||[]).filter(s=>s.src===a).sort((x,y)=>x.du.localeCompare(y.du));
-    const s=S.find(s=>s.du<=f&&s.au>=f)||[...S].reverse().find(s=>s.au<=f);const tx=LED.filter(e=>e.kind==='rel'&&e.src===a);let usd=null,src='';
-    if(s&&s.au>=f){usd=s.sd+tx.filter(e=>e.date>=s.du&&e.date<=f).reduce((t,e)=>t+e.amt,0);src=`relevé du ${s.du} au ${s.au}`}
-    else if(s){usd=s.sf+tx.filter(e=>e.date>s.au&&e.date<=f).reduce((t,e)=>t+e.amt,0);src=`relevé terminé le ${s.au} et transactions suivantes`}
+    const{usd,src}=usdSolde(LED,a,f);
     const titre=`Réévaluation du compte en dollars US ${a} ${accName(a)}`;
     if(usd==null||!r){out.push({titre,explication:usd==null?'Aucun relevé avec soldes pour ce compte : versez les relevés (Conciliation) pour calculer la réévaluation.':'Taux de la Banque du Canada introuvable pour la fin d’exercice.',confiance:'basse',lignes:[],err:'données manquantes',etat:''});continue}
     const B=balances(LED,null,f).get(a)||0,cible=Math.round(usd*r),diff=cible-B;if(Math.abs(diff)<1)continue;
