@@ -2112,11 +2112,24 @@ async function runRec(force){const src=$('recSrc').value;$('recList').innerHTML=
   const ouvD=C.ouv?.date||'',redr=LED.filter(e=>e.kind==='je'&&ouvD&&e.date===ouvD&&e.lines.some(l=>l[0]===src));const adjOuv=redr.reduce((a,e)=>a+e.lines.filter(l=>l[0]===src).reduce((x,l)=>x+l[1],0),0);
   const occ={};const tx=LED.filter(e=>!redr.includes(e)&&((e.kind==='rel'&&e.src===src&&(usd||!e.mirror))||(!usd&&!(e.kind==='rel'&&e.src===src)&&e.lines.some(l=>l[0]===src)))).map(e=>{const own=e.kind==='rel'&&e.src===src;
     const amt=own?e.amt:e.lines.filter(l=>l[0]===src).reduce((a,l)=>a+l[1],0);const b=`${e.date}|${amt}|${norm(e.desc).slice(0,24)}`;occ[b]=(occ[b]||0)+1;
-    return{date:e.date,amt,desc:own?e.desc:`[${prov(e)}] ${e.desc}`,k:src+'|'+(own?'':'x|')+b+'|'+occ[b],mois:e.mois,i:e.i,acct:own?e.acct:prov(e),st:e.st,ext:!own}}).filter(t=>t.amt);
+    return{date:e.date,amt,desc:own?e.desc:`[${prov(e)}] ${e.desc}`,k:src+'|'+(own?'':'x|')+b+'|'+occ[b],mois:e.mois,i:e.i,acct:own?e.acct:prov(e),st:e.st,ext:!own,rel:own?e.rel||'':''}}).filter(t=>t.amt);
   RECD={src,S,tx,T:{}};const pt=C.recPt||{};
-  let ok=0,prev=null;const rows=S.map((s,i)=>{let T=tx.filter(t=>t.date>=s.du&&t.date<=s.au),share='';
+  /* chaque transaction importée d'un relevé appartient à CE relevé (t.rel = « du_au » du relevé d'où elle vient), même si sa date déborde
+     ou tombe sur le jour partagé avec le relevé voisin; les autres (saisies, écritures, autre compte) se rattachent par la date */
+  const relS=t=>{if(!t.rel)return null;const x=S.find(s=>s.du+'_'+s.au===t.rel);if(x)return x;const[a,b]=t.rel.split('_');const L=S.filter(s=>s.du>=a&&s.au<=b);
+    return L.find(s=>t.date>=s.du&&t.date<=s.au)||(L.length===1?L[0]:null)};tx.forEach(t=>t.st_=relS(t));
+  /* relevé à cheval sur la fin (ou le début) de l'exercice : on concilie la partie dans l'exercice, avec un solde de fin calculé
+     d'après les opérations du relevé lui-même (celles d'après la fin d'exercice sont mises de côté pour l'exercice suivant) */
+  {const b=exBornes();if(b){const[xd,xf]=b,att=(C.attente||[]).filter(x=>x.src===src&&x.rel);const S2=[];
+    for(const s of S){if(!(s.du<xd&&s.au>=xd)&&!(s.du<=xf&&s.au>xf)){S2.push(s);continue}
+      let mine=tx.filter(t=>t.st_===s).concat(att.filter(x=>relS(x)===s));if(!mine.length)mine=tx.filter(t=>!t.ext&&!t.st_&&t.date>=s.du&&t.date<=s.au).concat((C.attente||[]).filter(x=>x.src===src&&!x.rel&&x.date>=s.du&&x.date<=s.au));const som=f=>mine.filter(f).reduce((a,x)=>a+x.amt,0);
+      const du=s.du<xd?xd:s.du,au=s.au>xf?xf:s.au,sd=s.du<xd?s.sd+som(x=>x.date<xd):s.sd,sf=s.au>xf?sd+som(x=>x.date>=du&&x.date<=au):s.sf;
+      const v={...s,du,au,sd,sf,nom:(s.nom||'')+` (partie dans l’exercice : relevé du ${s.du} au ${s.au}, solde ${s.au>xf?'au '+xf+' calculé':'au '+xd+' calculé'} d’après ses opérations)`};
+      tx.forEach(t=>{if(t.st_===s)t.st_=(t.date>=du&&t.date<=au)?v:'hors'});S2.push(v)}
+    S.length=0;S.push(...S2);}}
+  let ok=0,prev=null;const rows=S.map((s,i)=>{let T=tx.filter(t=>t.st_?t.st_===s:t.date>=s.du&&t.date<=s.au),share='';
     const sh=new Set();if(S[i-1]&&S[i-1].au===s.du)sh.add(s.du);if(S[i+1]&&S[i+1].du===s.au)sh.add(s.au);
-    if(sh.size){const core=T.filter(t=>!sh.has(t.date)),B=T.filter(t=>sh.has(t.date));const tgt=s.sf-s.sd-core.reduce((a,t)=>a+t.amt,0);
+    if(sh.size&&T.some(t=>!t.st_&&sh.has(t.date))){const core=T.filter(t=>t.st_||!sh.has(t.date)),B=T.filter(t=>!t.st_&&sh.has(t.date));const tgt=s.sf-s.sd-core.reduce((a,t)=>a+t.amt,0);
       if(B.reduce((a,t)=>a+t.amt,0)!==tgt&&B.length<=18){for(let m=0;m<(1<<B.length);m++){let x=0;for(let k=0;k<B.length;k++)if(m>>k&1)x+=B[k].amt;if(x===tgt){T=core.concat(B.filter((_,k)=>m>>k&1));share=`Jour partagé avec le relevé voisin (${[...sh].map(d=>d.slice(5)).join(', ')}).`;break}}}}const inn=T.filter(t=>t.amt>0).reduce((a,t)=>a+t.amt,0),out=T.filter(t=>t.amt<0).reduce((a,t)=>a+t.amt,0);
     RECD.T[i]=T;const npt=T.filter(t=>pt[t.k]).length;
     const calc=s.sd+inn+out,diff=s.sf-calc;const gap=prev&&prev.sf!==s.sd?` Le relevé précédent finit à ${fmtN(prev.sf)}.`:'';const hole=prev&&dd(prev.au,s.du)>1?` Trou du ${prev.au} au ${s.du}.`:'';prev=s;if(!diff&&!gap&&!hole)ok++;
@@ -2199,7 +2212,7 @@ async function loadLedger(){
   const U=new Set(L.map(p=>p.src).filter(s=>devOf(s)==='USD'));
   if(U.size){const ds=L.filter(p=>U.has(p.src)).flatMap(p=>(p.tx||[]).map(t=>t.date)).sort();if(ds.length)await tauxAssurer(ds[0],ds[ds.length-1])}
   L.forEach(p=>(p.tx||[]).forEach((x,i)=>{const t={...x};classify(t,p.src);const us=U.has(p.src),r=us&&t.cad==null?tauxDe(t.date):null,cad=!us?t.amt:t.cad!=null?t.cad:r?Math.round(t.amt*r):null;
-    E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:us?`${t.desc} [${fmtN(t.amt)} US$ ${t.cad!=null?'au montant réel du virement':'× '+(r||'taux manquant')}]`:t.desc,lines:t.mirror||cad==null?[]:lines({...t,amt:cad},p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,i,amt:t.amt,cad,pair:t.pair||'',aConf:!!t.aConf,dev:us?'USD':'',sansTaux:cad==null,mirror:!!t.mirror,acct:t.acct,tax:!!t.tax,st:t.st,todo:isTr(t)&&!t.mirror})}));
+    E.push({date:t.date,ref:('REL'+t.date.slice(5).replace('-','')),desc:us?`${t.desc} [${fmtN(t.amt)} US$ ${t.cad!=null?'au montant réel du virement':'× '+(r||'taux manquant')}]`:t.desc,lines:t.mirror||cad==null?[]:lines({...t,amt:cad},p.src).filter(l=>l[1]),kind:'rel',mois:p.mois,src:p.src,i,rel:t.rel||'',amt:t.amt,cad,pair:t.pair||'',aConf:!!t.aConf,dev:us?'USD':'',sansTaux:cad==null,mirror:!!t.mirror,acct:t.acct,tax:!!t.tax,st:t.st,todo:isTr(t)&&!t.mirror})}));
   await loadInv();INV.forEach(i=>E.push({date:i.date,ref:(i.type==='achat'?'ACH ':'VTE ')+(i.no||''),desc:i.tiers+(i.desc?' — '+i.desc:''),lines:invLines(i),kind:'inv',id:i.id}));
   (await loadJe()).forEach(j=>E.push({date:j.date,ref:j.ref||'JG',desc:j.desc||'',lines:(j.lines||[]).map(l=>[l.a,(l.d||0)-(l.c||0)]).filter(l=>l[1]),kind:'je',id:j.id,aje:j.type==='aje',todo:!!C.tr&&(j.lines||[]).some(l=>l.a===C.tr)}));
   E.sort((a,b)=>a.date.localeCompare(b.date));
