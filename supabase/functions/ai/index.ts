@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     const { data: membre } = await sb.from("tl_membres").select("user_id").eq("user_id", user.id).maybeSingle();
     if (!membre) return json({ error: "non autorisé" }, 403);
 
-    const { prompt, images = [], tier = "default" } = await req.json();
+    const { prompt, images = [], tier = "default", web = false } = await req.json();
     if (!prompt || typeof prompt !== "string") return json({ error: "demande vide" }, 400);
     const content: unknown[] = images.slice(0, 5).map((i: { media_type: string; data: string }) => ({
       type: "image", source: { type: "base64", media_type: i.media_type, data: i.data },
@@ -44,6 +44,8 @@ Deno.serve(async (req) => {
         model: Deno.env.get("MODELE_" + tier.toUpperCase()) || MODELES[tier] || MODELES.default,
         max_tokens: 16000,
         messages: [{ role: "user", content }],
+        // recherche Web (ex. Registraire des entreprises pour pré-remplir une fiche client à partir du NEQ)
+        ...(web ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6 }] } : {}),
       }),
     });
     if (r.status === 429) return json({ error: "limite atteinte" }, 429);

@@ -17,7 +17,7 @@ function periodes(c,auj=new Date()){const M=+String(c.fin_exercice).slice(0,2)||
 const STP={'à envoyer':'g','envoyée':'g','reçue':'ok','apportée au bureau':'ok','annulée':''};
 
 async function load(){const[a,b,c,d,e,f,g,h,k,l,m1,m2,m3,m4,m5]=await Promise.all([sb.from('cc_clients').select('*').order('nom'),sb.from('cc_demandes').select('*').order('fin',{ascending:false}),sb.from('pc_soumissions').select('*').order('updated_at',{ascending:false}),sb.from('cc_acces').select('*'),sb.from('cc_publications').select('*').order('created_at',{ascending:false}),sb.from('cc_messages').select('*').order('created_at'),sb.from('cc_contrats').select('*'),sb.from('cc_taches').select('*'),sb.from('cc_notes').select('*').order('created_at',{ascending:false}),sb.from('cc_echeances').select('*'),sb.from('cc_dpa_accords').select('*'),sb.from('cc_factures').select('*'),sb.from('cc_lots_dpa').select('*'),sb.from('cc_parametres').select('*'),sb.from('cc_services').select('*').order('created_at',{ascending:false})]);
-  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};REPR=(m4.data||[]).find(x=>x.cle==='representant')?.valeur||{};CONF=(m4.data||[]).find(x=>x.cle==='configuration')?.valeur||{};SAUVP=(m4.data||[]).find(x=>x.cle==='sauvegarde')?.valeur||null;
+  ACC=d.data||[];PUB=e.data||[];MSG=f.data||[];CTR=g.data||[];TCH=h.data||[];NOT=k.data||[];ECH=l.data||[];ACCD=m1.data||[];FAC=m2.data||[];LOTS=m3.data||[];SVC=m5.data||[];PAR=(m4.data||[]).find(x=>x.cle==='facturation')?.valeur||{};REPR=(m4.data||[]).find(x=>x.cle==='representant')?.valeur||{};CAB=(m4.data||[]).find(x=>x.cle==='cabinet')?.valeur||{};CONF=(m4.data||[]).find(x=>x.cle==='configuration')?.valeur||{};SAUVP=(m4.data||[]).find(x=>x.cle==='sauvegarde')?.valeur||null;
   if(a.error){$('tdem').innerHTML=`<div class="card"><p class="msg err">Lecture impossible : ${esc(a.error.message)}. Avez-vous exécuté le fichier supabase/portail_centre.sql?</p></div>`;return}
   CLI=a.data||[];DEM=b.data||[];PCS=c.data||[];render()}
 function render(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===TAB));['board','dem','cli','pay','tache','pc','fact','sauv','dt','conf'].forEach(k=>$('t'+k).hidden=k!==TAB);badge();confBan();({board:rBoard,dem:rDem,cli:rCli,pay:rPay,tache:rTache,pc:rPc,fact:rFact,dt:rDt,conf:rConf,sauv:()=>window.rSauv&&window.rSauv()})[TAB]()}
@@ -175,7 +175,7 @@ function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par
     ${grp.length?`<p class="sub" style="font-size:14px">Même groupe : ${grp.map(x=>`<a href="#" data-cli="${x.id}">${esc(x.nom)}</a>`).join(', ')}</p>`:''}
     <h3>Coordonnées</h3><div class="grid">${inp('cC','Personne-ressource principale','contact')}${inp('cE','Courriel','courriel','email')}${inp('cTel','Téléphone','telephone','tel')}${inp('cAd','Adresse','adresse')}${inp('cVi','Ville','ville')}${inp('cPr','Province','province')}${inp('cCp','Code postal','code_postal')}</div>
     <h3>Autres personnes</h3><div id="cPers">${(c.contacts||[]).map(pRow).join('')}</div><button class="sm" id="cPAdd" style="margin-top:6px">+ Ajouter une personne</button>
-    <div id="cEntBloc"${c.type==='particulier'?' hidden':''}><h3>Numéros et fiscalité</h3><div class="grid">${inp('cNeq','NEQ','neq')}${inp('cBn','Numéro d’entreprise (NE)','no_entreprise','text','9 chiffres')}${inp('cTps','Numéro de TPS','no_tps','text','123456789 RT0001')}${inp('cTvq','Numéro de TVQ','no_tvq','text','1234567890 TQ0001')}
+    <div id="cEntBloc"${c.type==='particulier'?' hidden':''}><h3>Numéros et fiscalité</h3><div class="row" style="gap:8px;align-items:center;margin:-4px 0 8px"><button class="sm" id="cNeqGo" type="button">Remplir à partir du NEQ (Registraire des entreprises)</button><span class="msg" id="cNeqM"></span></div><div class="grid">${inp('cNeq','NEQ','neq')}${inp('cBn','Numéro d’entreprise (NE)','no_entreprise','text','9 chiffres')}${inp('cTps','Numéro de TPS','no_tps','text','123456789 RT0001')}${inp('cTvq','Numéro de TVQ','no_tvq','text','1234567890 TQ0001')}
       <label class="f"><b>Fin d’exercice (mm-jj)</b><input id="cX" value="${v('fin_exercice')}" placeholder="12-31"></label></div>
       <label class="opt"><input type="checkbox" id="cDpe"${c.spcc_dpe?' checked':''}> <span>SPCC admissible à la déduction pour petite entreprise (solde fédéral payable 3 mois après la fin d’exercice; Québec : 2 mois)</span></label>
       <label class="opt"><input type="checkbox" id="cEmp"${c.employeur?' checked':''}> <span>Employeur (remises de DAS, T4/RL-1, CNESST)</span></label>
@@ -187,10 +187,33 @@ function fFiche(){const c={type:'entreprise',statut:'actif',forme:'Société par
     <label class="f" style="margin-top:12px"><b>Description de l’entreprise</b><small class="sub" style="font-weight:400">Activités, clientèle, employés, véhicules, particularités. L’IA s’en sert pour proposer le plan comptable et classer les transactions.</small><textarea id="cDs" placeholder="Ex. firme d’ingénieurs en structure, 2 employés, un véhicule, bureau loué à Laval">${v('description')}</textarea></label>
     <label class="f" style="margin-top:12px"><b>Notes internes</b><textarea id="cNo">${v('notes')}</textarea></label>
     <p class="sub" style="font-size:13px;margin:12px 0 0">Obligatoires : nom, personne-ressource et courriel; pour une société : forme juridique, NEQ, numéro d’entreprise, fin d’exercice et adresse; si le client est inscrit à la TPS/TVQ : ses numéros de taxes. (Un prospect : nom et courriel ou téléphone.)</p>
-    <div class="row" style="margin-top:8px"><button class="pri" id="cSave">${c.id?'Enregistrer':'Créer le client'}</button>${c.id?'<button class="sm danger" id="cDel">Supprimer le client</button>':''}<span class="msg" id="cM"></span></div>`}
+    <div class="row" style="margin-top:8px"><button class="pri" id="cSave">${c.id?'Enregistrer':'Créer le client'}</button>${c.id?'<button class="sm danger" id="cDel">Supprimer le client</button>':''}<span class="msg" id="cM"></span></div>`;marqueReq()}
 const pRow=(p={})=>`<div class="row pers" style="gap:8px;margin-bottom:6px;align-items:flex-end">${[['nom','Nom'],['role','Rôle (actionnaire, conjoint…)'],['courriel','Courriel'],['telephone','Téléphone']].map(([k,l])=>`<label class="f" style="flex:1;min-width:150px"><b>${l}</b><input data-p="${k}" value="${esc(p[k]||'')}"></label>`).join('')}<button class="sm danger" data-pdel>Retirer</button></div>`;
+/* ---------- pré-remplir la fiche à partir du NEQ : l'IA consulte le Registraire des entreprises (recherche Web), vous vérifiez ---------- */
+async function neqRemplir(){const neq=($('cNeq').value||'').replace(/\D/g,''),nom=$('cN').value.trim(),m=$('cNeqM');
+  if(neq.length!==10&&!nom){m.textContent='Inscrivez le NEQ (10 chiffres) ou le nom de l’entreprise.';return}
+  $('cNeqGo').disabled=true;m.textContent='Recherche au Registraire des entreprises… (20 à 40 secondes)';
+  try{const d=await fn(cfg.FONCTION_IA||'ai',{tier:'default',web:true,prompt:`Trouve l'état de renseignements du Registraire des entreprises du Québec pour l'entreprise ${neq.length===10?`de NEQ ${neq}`:''}${nom?` « ${nom} »`:''}. Cherche d'abord sur le site du Registraire (registreentreprises.gouv.qc.ca / quebec.ca), sinon sur des sites qui reprennent ses données publiques. Ne retiens que des renseignements qui concernent bien cette entreprise${neq.length===10?' (même NEQ)':''}.
+Réponds uniquement en JSON : {"trouve":true,"neq":"1234567890","nom":"nom légal exact","autres_noms":["..."],"forme":"Société par actions|Entreprise individuelle|Société de personnes|OBNL|Fiducie","statut":"Immatriculée|Radiée|...","date_immatriculation":"aaaa-mm-jj","adresse":"numéro, rue, bureau","ville":"","province":"QC","code_postal":"A1A 1A1","activite":"secteur d'activité principal","actionnaires":["Nom Prénom"],"administrateurs":[{"nom":"Nom Prénom","fonction":"Président"}],"source":"URL consultée"}. Si tu ne trouves pas : {"trouve":false,"raison":"..."}.`});
+    const t=String(d?.text||'').replace(/\`\`\`json|\`\`\`/g,''),i=t.indexOf('{'),j=t.lastIndexOf('}');if(i<0||j<i)throw new Error('réponse illisible');const r=JSON.parse(t.slice(i,j+1));
+    if(!r.trouve){m.textContent='Introuvable : '+(r.raison||'aucun résultat')+'. Remplissez à la main.';return}
+    const put=(id,v)=>{const e=$(id);if(e&&v&&!e.value.trim()){e.value=v;e.style.background='#eef7f1';return 1}return 0};let n=0;
+    n+=put('cN',r.nom);n+=put('cNeq',r.neq);n+=put('cAd',r.adresse);n+=put('cVi',r.ville);n+=put('cPr',r.province);n+=put('cCp',r.code_postal);
+    if(r.forme&&FORMES.includes(r.forme)&&$('cFo')){$('cFo').value=r.forme;n++}
+    const ds=$('cDs');if(ds&&r.activite&&!ds.value.trim()){ds.value=r.activite;ds.style.background='#eef7f1';n++}
+    const deja=new Set([...document.querySelectorAll('#cPers [data-p="nom"]')].map(x=>x.value.trim().toLowerCase()));
+    const pers=[...(r.administrateurs||[]).map(a=>({nom:a.nom,role:a.fonction||'Administrateur'})),...(r.actionnaires||[]).map(a=>({nom:typeof a==='string'?a:a.nom,role:'Actionnaire'}))];const vus=new Map();
+    pers.forEach(p=>{const k=String(p.nom||'').trim().toLowerCase();if(!k||deja.has(k))return;vus.set(k,vus.has(k)?{...vus.get(k),role:vus.get(k).role+', '+p.role}:p)});
+    vus.forEach(p=>{$('cPers').insertAdjacentHTML('beforeend',pRow(p));n++});
+    m.innerHTML=`✓ ${n} champ(s) rempli(s) (en vert) d’après le Registraire${r.statut?` · statut : ${esc(r.statut)}`:''}${r.date_immatriculation?` · immatriculée le ${esc(r.date_immatriculation)}`:''}${r.source?` · <a href="${esc(r.source)}" target="_blank" rel="noopener">source</a>`:''}. Vérifiez avant d’enregistrer.`}
+  catch(e){m.textContent='Recherche impossible : '+e.message}finally{$('cNeqGo').disabled=false}}
 /* ---------- fiche client : champs obligatoires ---------- */
 const CHAMPS={cN:'Nom',cC:'Personne-ressource',cE:'Courriel',cTel:'Téléphone',cFo:'Forme juridique',cNeq:'NEQ',cBn:'Numéro d’entreprise (ARC)',cX:'Fin d’exercice',cAd:'Adresse',cVi:'Ville',cCp:'Code postal',cTps:'Numéro de TPS',cTvq:'Numéro de TVQ'};
+/* astérisque rouge sur les champs obligatoires de la fiche, selon le type, la forme, le statut et l'inscription aux taxes */
+function marqueReq(){if(!$('cN'))return;const r={type:$('cTy')?.value,forme:$('cFo')?.value,statut:$('cSt')?.value},ids=new Set(manquants(r).m);
+  if(r.type!=='particulier'&&!/individuelle|personnes|Particulier/.test(r.forme||'')&&r.statut!=='prospect')ids.add('cFo');if($('cTx')?.checked&&r.type!=='particulier'&&r.statut!=='prospect'){ids.add('cTps');ids.add('cTvq')}
+  Object.keys(CHAMPS).forEach(id=>{const b=$(id)?.closest('label')?.querySelector('b');if(b)b.classList.toggle('req',ids.has(id))})}
+document.addEventListener('change',e=>{if(['cTy','cFo','cSt','cTx'].includes(e.target.id))marqueReq()});
 function manquants(r){const m=[],fmt=[],v=x=>String(x||'').trim(),soc=r.type!=='particulier'&&!/individuelle|personnes|Particulier/.test(r.forme||''),pros=r.statut==='prospect';
   if(!v(r.nom))m.push('cN');
   if(pros){if(!v(r.courriel)&&!v(r.telephone))m.push('cE')}
@@ -507,13 +530,14 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button,a[d
 
 
 /* ---------- facturation et débits préautorisés ---------- */
-let CONF={},SAUVP=null,REPR={},ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
+let CONF={},SAUVP=null,REPR={},CAB={},ACCD=[],FAC=[],LOTS=[],PAR={},FV='prel',FF='ouvertes',FD='';
 const F=()=>window.FACTURE;
 const fmt=v=>F().money(v);
 const acOf=id=>ACCD.filter(a=>a.client_id===id).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
 const acActif=id=>ACCD.find(a=>a.client_id===id&&a.statut==='actif');
 const STF={'à prélever':'g','transmise':'g','payée':'ok','rejetée':'r','à payer':'r','annulée':''};
-const emetteur=()=>({nom:'Boujrad CPA Inc.',adresse:'220-672, boulevard des Laurentides',ville:'Laval (Québec) H7G 2V9',tps:PAR.tps||'',tvq:PAR.tvq||'',courriel:PAR.courriel||''});
+/* identité du cabinet : Intranet › Paramètres du cabinet (repli sur les anciennes valeurs) */
+const emetteur=()=>({nom:CAB.nom||'Boujrad CPA Inc.',adresse:CAB.adresse||'220-672, boulevard des Laurentides',ville:CAB.ville||'Laval (Québec) H7G 2V9',tps:CAB.tps||PAR.tps||'',tvq:CAB.tvq||PAR.tvq||'',courriel:CAB.courrielFact||CAB.courriel||PAR.courriel||'',telephone:CAB.telephone||''});
 const nomC=id=>CLI.find(c=>c.id===id)?.nom||'?';
 function prochainJour(j){const n=new Date(),d=new Date(n.getFullYear(),n.getMonth(),j);if(d<=n)d.setMonth(d.getMonth()+1);return d.toLocaleDateString('fr-CA')}
 function joursOuvrables(a,b){let n=0;const d=new Date(a+'T12:00');const e=new Date(b+'T12:00');while(d<e){d.setDate(d.getDate()+1);if(d.getDay()%6)n++}return n}
@@ -599,7 +623,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button[dat
   let to=c.courriel;if(!to){to=prompt('Courriel du client pour l’envoi de la facture :','');if(!to)return;await sb.from('cc_clients').update({courriel:to}).eq('id',c.id)}
   if(f.envoye_le&&!confirm(`Renvoyer la facture ${f.numero} à ${to}?`))return;b.disabled=true;try{await envoyerFacture(f,to)}catch(err){notify('Envoi impossible : '+err.message,1);b.disabled=false}});
 function vPar(){const p=PAR,i=(k,l,ph='',hint='')=>`<label class="f"><b>${l}</b><input data-par="${k}" value="${esc(p[k]||'')}" placeholder="${ph}">${hint?`<small class="sub">${hint}</small>`:''}</label>`;
-  $('fvBody').innerHTML=`<h3 style="margin-top:0">Cabinet (sur les factures)</h3><div class="grid">${i('tps','Numéro de TPS du cabinet','123456789 RT0001')}${i('tvq','Numéro de TVQ du cabinet','1234567890 TQ0001')}${i('courriel','Courriel de facturation','admin@boujradcpa.com')}${i('jour','Jour de prélèvement par défaut','1','Entre 1 et 28')}</div>
+  const e=emetteur();$('fvBody').innerHTML=`<h3 style="margin-top:0">Cabinet (sur les factures)</h3><p class="sub" style="font-size:14px">${esc(e.nom)} · ${esc(e.adresse)}, ${esc(e.ville)} · TPS ${esc(e.tps||'—')} · TVQ ${esc(e.tvq||'—')} · ${esc(e.courriel||'—')}<br>Ces renseignements se modifient dans <a href="intranet.html#parametres">Intranet › Paramètres du cabinet</a> (administrateurs).</p><div class="grid">${i('jour','Jour de prélèvement par défaut','1','Entre 1 et 28')}</div>
     <h3>Desjardins — retrait direct (débits préautorisés)</h3><p class="sub" style="font-size:14px">Ces renseignements vous sont remis par votre caisse lors de l’adhésion au service de retrait direct dans AccèsD Affaires.</p>
     <div class="grid">${i('organisme','Numéro d’organisme (10 chiffres)','0000000000','Remis par la caisse')}${i('nomCourt','Nom abrégé (15 caractères)','BOUJRAD CPA','Apparaît sur le relevé du client')}${i('nomLong','Nom complet (30 caractères)','BOUJRAD CPA INC.')}${i('transitRetour','Transit de votre caisse (5 chiffres)','','Compte où les montants sont déposés et les retours imputés')}${i('compteRetour','Numéro de folio (compte)','')}${i('codeEnt','Code de transaction — DPA d’entreprise','700','700 = DPA d’entreprise')}${i('codePers','Code de transaction — DPA personnel','','À confirmer avec Desjardins pour les particuliers')}</div>
     <h3>Paiement des factures (clients sans débit préautorisé)</h3><p class="sub" style="font-size:14px">Ces modes de paiement figurent dans le courriel de facture, sur la facture en PDF et sur la page de paiement du client.</p>
@@ -660,7 +684,7 @@ document.addEventListener('click',async e=>{const a=e.target.closest('a[data-acs
     if(error){$('fnMsg').textContent=error.message;b.disabled=false;return}const envoyer=$('fnSend')?.checked&&m==='autre';await load();
     if(envoyer){const f=FAC.filter(x=>x.client_id===cid).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''))[0];try{await envoyerFacture(f)}catch(err){notify('Facture créée, mais envoi impossible : '+err.message,1);return}}else notify('Facture créée');return}
   if(b.id==='repSave'){const v={};document.querySelectorAll('[data-rep]').forEach(i=>v[i.dataset.rep]=i.value.trim());const{error}=await sb.from('cc_parametres').upsert({cle:'representant',valeur:v,updated_at:new Date().toISOString()});$('repM').textContent=error?error.message:'Enregistré : vos clients le voient dans leur portail.';if(!error)REPR=v;return}
-  if(b.id==='parSave'){const v={};document.querySelectorAll('[data-par]').forEach(i=>v[i.dataset.par]=i.value.trim());
+  if(b.id==='parSave'){const v={...PAR};document.querySelectorAll('[data-par]').forEach(i=>v[i.dataset.par]=i.value.trim());
     if(v.organisme&&!/^\d{10}$/.test(v.organisme)){$('parM').textContent='Le numéro d’organisme doit avoir 10 chiffres.';return}
     const{error}=await sb.from('cc_parametres').upsert({cle:'facturation',valeur:v,updated_at:new Date().toISOString()});$('parM').textContent=error?error.message:'Enregistré.';if(!error){PAR=v;notify('Paramètres de facturation enregistrés')}return}
   if(ds.acshow){const a=ACCD.find(x=>x.id===ds.acshow);$('acNo').textContent=a.compte;b.remove();return}
@@ -807,6 +831,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
   if(b.id==='cNew'){EDIT={};FT='fiche';CED=null;rCli();window.scrollTo(0,0);return}
   if(ds.cs){CS=ds.cs;rCli();return}
   if(ds.ft){FT=ds.ft;CED=null;rFiche();return}
+  if(b.id==='cNeqGo'){neqRemplir();return}
   if(b.id==='cPAdd'){$('cPers').insertAdjacentHTML('beforeend',pRow());return}
   if('pdel' in ds){b.closest('.pers').remove();return}
   if(b.id==='cSave'){b.disabled=true;await saveFiche();return}
@@ -849,8 +874,14 @@ document.addEventListener('click',async e=>{const b=e.target.closest('button');i
 
 /* ---------- historique du navigateur : le bouton Précédent suit les onglets, les fiches et les sous-onglets ---------- */
 let NAVC=false;const hashC=()=>`#t=${TAB}`+(TAB==='cli'&&EDIT?.id?`&c=${EDIT.id}&f=${FT}`:'')+(TAB==='fact'?`&v=${FV}`:'')+(TAB==='dt'&&DTV?`&sv=${DTV}`:'');
-function navC(){if(NAVC||!CLI.length&&TAB==='board'&&!location.hash)return;const h=hashC();if(location.hash===h)return;try{history[location.hash&&/^#t=/.test(location.hash)?'pushState':'replaceState'](null,'',h)}catch(e){}}
-function lireHash(){const q=new URLSearchParams(location.hash.slice(1));if(!q.get('t'))return false;TAB=q.get('t');const c=q.get('c');EDIT=c?CLI.find(x=>x.id===c)||null:null;if(EDIT)FT=q.get('f')||'fiche';else if(TAB==='cli')EDIT=null;if(q.get('v'))FV=q.get('v');DTV=q.get('sv')||null;return true}
+function navC(){if(NAVC||!CLI.length&&TAB==='board'&&!location.hash||/nouveau=/.test(location.hash))return;const h=hashC();if(location.hash===h)return;try{history[location.hash&&/^#t=/.test(location.hash)?'pushState':'replaceState'](null,'',h)}catch(e){}}
+function lireHash(){const q=new URLSearchParams(location.hash.slice(1));
+  /* depuis la Comptabilité : « Créer la fiche client » ouvre une fiche neuve déjà remplie (nom, fin d'exercice, description, taxes) */
+  if(q.get('nouveau')){const nom=q.get('nom')||'',n=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\b(inc|ltee|ltd|enr|senc)\b\.?/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+    const ex=CLI.find(x=>n(x.nom)===n(nom));TAB='cli';FT='fiche';CED=null;
+    EDIT=ex||{nom,type:'entreprise',...(q.get('fin')?{fin_exercice:q.get('fin')}:{}),...(q.get('desc')?{description:q.get('desc')}:{}),...(q.get('tx')?{tps_tvq:q.get('tx')==='1'}:{}),...(q.get('neq')?{neq:q.get('neq')}:{})};
+    try{history.replaceState(null,'',location.pathname)}catch(e){}if(ex)setTimeout(()=>notify(`La fiche de ${ex.nom} existe déjà : la voici.`),300);return true}
+  if(!q.get('t'))return false;TAB=q.get('t');const c=q.get('c');EDIT=c?CLI.find(x=>x.id===c)||null:null;if(EDIT)FT=q.get('f')||'fiche';else if(TAB==='cli')EDIT=null;if(q.get('v'))FV=q.get('v');DTV=q.get('sv')||null;return true}
 window.addEventListener('popstate',()=>{if(!lireHash())return;NAVC=true;try{render();window.scrollTo(0,0)}finally{NAVC=false}});
 render=(o=>function(){const r=o.apply(this,arguments);navC();return r})(render);
 rFact=(o=>function(){const r=o.apply(this,arguments);navC();return r})(rFact);

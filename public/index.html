@@ -707,7 +707,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <label class="f" style="margin-top:10px">Méthode de comptabilisation<select id="sMeth"><option value="">Automatique : caisse tant qu’aucune facture de vente n’est versée</option><option value="caisse">Comptabilité de caisse (dépôts = revenus, sorties = dépenses)</option><option value="factures">Factures appariées aux paiements (comptes clients et fournisseurs)</option><option value="adeposer">Ventes dans « Transactions à déposer » (dépôts portés en réduction)</option></select></label>
       <p class="note" id="sMethNote" style="margin:4px 0 0"></p>
       <div id="sDevBox" style="margin-top:10px"></div>
-      <label class="f" style="margin-top:10px">Comment on tient ce dossier (pour l'équipe et l'IA : particularités, ex. « les virements à Jean Tremblay sont des salaires », « on ignore les commandes WooCommerce »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
+      <label class="f" style="margin-top:10px">Comment le dossier est géré : une règle par ligne (particularités pour l'équipe et l'IA, ex. « Les virements à Jean Tremblay sont des salaires », « Les dépôts de la RAMQ sont des revenus »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
     <div class="panel">
@@ -722,12 +722,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div id="lkLog" class="note"></div>
     </div>
     <div class="panel" id="usrPanel">
-      <h2>Utilisateurs du cabinet</h2>
-      <p class="note"><strong>Technicien</strong> : travaille de façon autonome dans tous les dossiers (relevés, classement, écritures, régularisations, rapports, exercices, envois aux clients). <strong>CPA (administrateur)</strong> : en plus, la <strong>mission de compilation</strong> (créer, remplir, terminer) et la gestion des utilisateurs. Ces deux limites sont appliquées aussi par la base de données, pas seulement à l’écran.</p>
-      <div class="scroll"><table class="stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th></th></tr></thead><tbody id="usrList"></tbody></table></div>
-      <div class="row" style="gap:8px;align-items:flex-end;margin-top:10px" id="usrInv"><label class="f" style="flex:1;min-width:220px">Inviter (courriel)<input type="email" id="usrMail" placeholder="employe@boujradcpa.com"></label><label class="f">Rôle<select id="usrRole"><option value="membre">Technicien</option><option value="admin">CPA (administrateur)</option></select></label><button class="sm pri" id="usrGo">Inviter</button></div>
-      <p class="note" style="margin-top:6px">La personne invitée crée son compte sur app.boujradcpa.com avec ce courriel (« Créer un compte ») et reçoit automatiquement son rôle.</p>
-      <p class="msg" id="usrMsg"></p>
+      <h2>Utilisateurs et paramètres du cabinet</h2>
+      <p class="note" style="margin:0">L’identité du cabinet (nom, adresse, téléphones, courriels, TPS/TVQ) et les utilisateurs de l’intranet se gèrent dans <a href="intranet.html#parametres">Intranet › Paramètres du cabinet</a> (administrateurs). Ici, seulement ce qui concerne ce dossier.</p>
     </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Piste de vérification</h2><div class="row" style="gap:6px"><input id="audQ" placeholder="Filtrer (compte, montant, personne…)" style="min-width:220px"><button class="sm" id="audCsv">Exporter (CSV)</button></div></div>

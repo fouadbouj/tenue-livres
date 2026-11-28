@@ -706,7 +706,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <label class="f" style="margin-top:10px">Méthode de comptabilisation<select id="sMeth"><option value="">Automatique : caisse tant qu’aucune facture de vente n’est versée</option><option value="caisse">Comptabilité de caisse (dépôts = revenus, sorties = dépenses)</option><option value="factures">Factures appariées aux paiements (comptes clients et fournisseurs)</option><option value="adeposer">Ventes dans « Transactions à déposer » (dépôts portés en réduction)</option></select></label>
       <p class="note" id="sMethNote" style="margin:4px 0 0"></p>
       <div id="sDevBox" style="margin-top:10px"></div>
-      <label class="f" style="margin-top:10px">Comment on tient ce dossier (pour l'équipe et l'IA : particularités, ex. « les virements à Jean Tremblay sont des salaires », « on ignore les commandes WooCommerce »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
+      <label class="f" style="margin-top:10px">Comment le dossier est géré : une règle par ligne (particularités pour l'équipe et l'IA, ex. « Les virements à Jean Tremblay sont des salaires », « Les dépôts de la RAMQ sont des revenus »)<textarea id="sNotes" style="min-height:90px"></textarea></label>
       <div class="row" style="margin-top:10px"><button class="pri" id="sSave">Enregistrer</button><span class="msg" id="sMsg"></span></div>
     </div>
     <div class="panel">
@@ -721,12 +721,8 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
       <div id="lkLog" class="note"></div>
     </div>
     <div class="panel" id="usrPanel">
-      <h2>Utilisateurs du cabinet</h2>
-      <p class="note"><strong>Technicien</strong> : travaille de façon autonome dans tous les dossiers (relevés, classement, écritures, régularisations, rapports, exercices, envois aux clients). <strong>CPA (administrateur)</strong> : en plus, la <strong>mission de compilation</strong> (créer, remplir, terminer) et la gestion des utilisateurs. Ces deux limites sont appliquées aussi par la base de données, pas seulement à l’écran.</p>
-      <div class="scroll"><table class="stack"><thead><tr><th>Utilisateur</th><th>Rôle</th><th></th></tr></thead><tbody id="usrList"></tbody></table></div>
-      <div class="row" style="gap:8px;align-items:flex-end;margin-top:10px" id="usrInv"><label class="f" style="flex:1;min-width:220px">Inviter (courriel)<input type="email" id="usrMail" placeholder="employe@boujradcpa.com"></label><label class="f">Rôle<select id="usrRole"><option value="membre">Technicien</option><option value="admin">CPA (administrateur)</option></select></label><button class="sm pri" id="usrGo">Inviter</button></div>
-      <p class="note" style="margin-top:6px">La personne invitée crée son compte sur app.boujradcpa.com avec ce courriel (« Créer un compte ») et reçoit automatiquement son rôle.</p>
-      <p class="msg" id="usrMsg"></p>
+      <h2>Utilisateurs et paramètres du cabinet</h2>
+      <p class="note" style="margin:0">L’identité du cabinet (nom, adresse, téléphones, courriels, TPS/TVQ) et les utilisateurs de l’intranet se gèrent dans <a href="intranet.html#parametres">Intranet › Paramètres du cabinet</a> (administrateurs). Ici, seulement ce qui concerne ce dossier.</p>
     </div>
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Piste de vérification</h2><div class="row" style="gap:6px"><input id="audQ" placeholder="Filtrer (compte, montant, personne…)" style="min-width:220px"><button class="sm" id="audCsv">Exporter (CSV)</button></div></div>
@@ -1302,7 +1298,7 @@ ACTIONS (après confirmation) :
 - {"type":"reclasser","refs":["R:2026-03_bnc:4","J:abc:1"],"compte":"8521","taxable":true,"raison":"Précision du client : publicité Facebook"} — déplace des transactions (refs exactes du contexte ou d'une recherche) vers un autre compte. "taxable" facultatif (relevés seulement).
 - {"type":"regle","motif":"DEPOT DIRECT","compte":"4000","sens":"entree|sortie|les deux","taxable":false} — retient une règle pour classer automatiquement les transactions dont la description contient ce motif (aussi les prochains relevés).
 - {"type":"compte","numero":"8525","nom":"PUBLICITÉ EN LIGNE"} — ajoute un compte au plan.
-- {"type":"profil","description":"...","notes":"...","methode":"caisse|factures|adeposer","tps_tvq":true,"employeur":false,"devises":{"1062":"USD"}} — met à jour le profil du dossier (Paramètres) : description de l'entreprise, « Comment on tient ce dossier » (notes), méthode de comptabilisation, inscription TPS/TVQ, employeur, devise des comptes. Tous les champs sont facultatifs : ne mets que ceux à changer. Pour les notes, garde ce qui existe déjà et ajoute (sauf si on te demande de remplacer).
+- {"type":"profil","description":"...","notes":"...","methode":"caisse|factures|adeposer","tps_tvq":true,"employeur":false,"devises":{"1062":"USD"}} — met à jour le profil du dossier (Paramètres) : description de l'entreprise, « Comment on tient ce dossier » (notes), méthode de comptabilisation, inscription TPS/TVQ, employeur, devise des comptes. Tous les champs sont facultatifs : ne mets que ceux à changer. Pour les notes (« Comment le dossier est géré ») : une règle courte par ligne, seulement les particularités; garde les lignes existantes et ajoute (sauf si on te demande de remplacer). La description = seulement ce qu’est l’entreprise (activités, actionnaires, employés), pas les règles de classement.
 - {"type":"rapport","rapport":"bs|is|tb|gl|jr|tx|gifi","du":"AAAA-MM-JJ","au":"AAAA-MM-JJ"} — ouvre un rapport (exécuté sans confirmation).
 - {"type":"ouvrir_dossier","id":"..."} — ouvre un dossier client (exécuté sans confirmation).
 Reclasser fonctionne aussi sur des transactions DÉJÀ classées, dans n'importe quel mois (sauf un exercice fermé) : par exemple, pour enlever la TPS/TVQ (montant taxes comprises dans la dépense), cherche les transactions puis reclasser vers le même compte avec "taxable":false. Ne dis jamais que tu n'as pas accès aux transactions classées : cherche-les.
@@ -1471,8 +1467,9 @@ function render(){try{revUI()}catch(e){}try{renderGroupes()}catch(e){console.war
     <td><input type="checkbox" data-k="tax" aria-label="Taxes incluses" ${t.tax?'checked':''}${lk(t.date)?' disabled':''}></td></tr>`).join('')
     :`<tr><td colspan="6" class="empty">${!tx.length?'Aucune transaction dans cette période.':filter==='todo'?'Rien au transitoire. La période est prête à exporter.':'Rien à afficher.'}</td></tr>`;
   const tot=tx.length,todo=tx.filter(aCl).length,sug=tx.filter(t=>t.st==='suggere').length;
-  $('gPer').textContent=P?(P.multi&&P.to!==P.mois?`${moisLbl(P.mois)} – ${moisLbl(P.to)}`:moisLbl(P.mois)):'—';$('gTot').textContent=tot;$('gOk').textContent=tot-todo-sug;$('gTodo').textContent=todo;
-  $('bOk').style.width=tot?((tot-todo-sug)/tot*100)+'%':'0';$('bSug').style.width=tot?(sug/tot*100)+'%':'0';$('bTodo').style.width=tot?(todo/tot*100)+'%':'0';
+  $('gPer').textContent=P?(P.multi&&P.to!==P.mois?`${moisLbl(P.mois)} – ${moisLbl(P.to)}`:moisLbl(P.mois)):'—';$('gTot').textContent=tot;$('gOk').textContent=tot-todo;$('gTodo').textContent=todo;
+  /* « à classer » comprend déjà les suggestions de l'IA non confirmées */
+  $('bOk').style.width=tot?((tot-todo)/tot*100)+'%':'0';$('bSug').style.width=tot?(sug/tot*100)+'%':'0';$('bTodo').style.width=tot?((todo-sug)/tot*100)+'%':'0';
   const unk=tx.filter(t=>t.st==='transit'&&t.unk).length;
   $('ask').hidden=!sampleFn||!unk;$('ask').textContent=`Classer les ${unk} inconnus avec l'IA`;
   $('acceptSug').hidden=!sug;$('acceptSug').textContent=`Accepter les ${sug} suggestions`;
@@ -2932,10 +2929,10 @@ async function renderUsers(){const box=$('usrList');if(!box)return;if(!window.tl
     box.innerHTML=M.map(m=>`<tr><td>${esc(m.email)}${m.email===window.tlMoi?' <span class="note">(vous)</span>':''}</td><td>${admin&&!(m.role==='admin'&&nA<2)?`<select data-urole="${esc(m.user_id)}"><option value="membre"${m.role!=='admin'?' selected':''}>Technicien</option><option value="admin"${m.role==='admin'?' selected':''}>CPA (administrateur)</option></select>`:m.role==='admin'?'CPA (administrateur)':'Technicien'}</td><td>${admin&&m.email!==window.tlMoi?`<button class="sm danger" data-uout="${esc(m.user_id)}" data-mail="${esc(m.email)}">Retirer l’accès</button>`:''}</td></tr>`).join('')+
       I.map(i=>`<tr><td>${esc(i.email)} <span class="pill todo">invitation en attente</span></td><td>${i.role==='admin'?'CPA (administrateur)':'Technicien'}</td><td><button class="sm" data-uinv="${esc(i.email)}">Annuler</button></td></tr>`).join('')}
   catch(e){box.innerHTML=`<tr><td colspan="3" class="empty">Lecture impossible : ${esc(e.message||e)}</td></tr>`}}
-$('usrGo').onclick=async()=>{const m=$('usrMail').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)){$('usrMsg').textContent='Courriel invalide.';return}
+if($('usrGo'))$('usrGo').onclick=async()=>{const m=$('usrMail').value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)){$('usrMsg').textContent='Courriel invalide.';return}
   try{await window.tlAdmin.inviter(m,$('usrRole').value);audit('Utilisateur invité',`${m} (${$('usrRole').value==='admin'?'CPA':'Technicien'})`);$('usrMail').value='';$('usrMsg').textContent=`✓ ${m} invité.`;renderUsers()}catch(e){$('usrMsg').textContent='Invitation impossible : '+e.message}};
-$('usrList').addEventListener('change',async e=>{const u=e.target.dataset.urole;if(!u)return;try{await window.tlAdmin.role(u,e.target.value);audit('Rôle modifié',`${e.target.closest('tr').cells[0].textContent} → ${e.target.value==='admin'?'CPA':'Technicien'}`);$('usrMsg').textContent='✓ Rôle modifié (effectif à sa prochaine connexion).';renderUsers()}catch(x){$('usrMsg').textContent='Modification impossible : '+x.message}});
-$('usrList').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+$('usrList')?.addEventListener('change',async e=>{const u=e.target.dataset.urole;if(!u)return;try{await window.tlAdmin.role(u,e.target.value);audit('Rôle modifié',`${e.target.closest('tr').cells[0].textContent} → ${e.target.value==='admin'?'CPA':'Technicien'}`);$('usrMsg').textContent='✓ Rôle modifié (effectif à sa prochaine connexion).';renderUsers()}catch(x){$('usrMsg').textContent='Modification impossible : '+x.message}});
+$('usrList')?.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.uout){if(!confirm(`Retirer l’accès de ${b.dataset.mail} à l’intranet?`))return;try{await window.tlAdmin.retirer(b.dataset.uout);audit('Accès retiré',b.dataset.mail);renderUsers()}catch(x){$('usrMsg').textContent=x.message}}
   if(b.dataset.uinv){try{await window.tlAdmin.annuler(b.dataset.uinv);renderUsers()}catch(x){$('usrMsg').textContent=x.message}}});
 $('audQ').oninput=()=>renderAudit();
@@ -3896,7 +3893,20 @@ async function boiteAppliquer(){const{L,crees,exProp}=BOITE;PAIR_OFF=true;clearT
   catch(e){console.error(e);say('Erreur : '+(e.message||e))}finally{PAIR_OFF=false;const b=$('bxGo');if(b)b.disabled=false}}
 dropzone($('bxDrop'),f=>boiteAnalyser(f).catch(err=>{$('bxOut').innerHTML=`<p class="msg err">${esc(err.message||err)}</p>`}));
 $('bxFile').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)boiteAnalyser(f).catch(err=>{$('bxOut').innerHTML=`<p class="msg err">${esc(err.message||err)}</p>`})};
-async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('hMeth').innerHTML=`<strong>Comment on tient ce dossier :</strong> ${esc(METH[methodeEff()])}${C.methode?'':' <em>(automatique : aucune facture de vente versée)</em>'}${comptesUSD().length?` · Comptes en dollars US : ${esc(comptesUSD().join(', '))}`:''}${C.notes?`<br>${esc(C.notes.slice(0,400))}`:''} <a href="#" data-go="set">Modifier</a>`;
+/* « Comment le dossier est géré » : une règle par ligne de C.notes (pour l'équipe et l'IA). Les vieilles notes en paragraphe sont découpées par phrase. */
+function gestL(){let t=String(C.notes||'').trim();if(!t)return[];if(!t.includes('\n'))t=t.split(/(?<=[.;])\s+(?=[A-ZÀ-ÖØ-Ý0-9«])/).join('\n');return t.split('\n').map(x=>x.replace(/^[-•·*]\s*/,'').trim()).filter(Boolean)}
+function gestUI(){let L=gestL();const d=document.createElement('dialog');d.style.cssText='max-width:720px;width:92vw;border:1px solid var(--line);border-radius:12px;padding:18px 20px';
+  const draw=()=>{d.innerHTML=`<h2 style="margin:0 0 4px">Comment le dossier est géré</h2><p class="note" style="margin:0 0 10px">Les particularités seulement : ce qu’un collègue (et l’assistant IA) doit savoir pour bien classer. Pas besoin des évidences (une dépense Petro-Canada n’a pas besoin de règle).</p>
+    <p style="margin:0 0 8px"><strong>Méthode :</strong> ${esc(METH[methodeEff()])}${comptesUSD().length?` · comptes en US$ : ${esc(comptesUSD().join(', '))}`:''}</p>
+    <ul style="margin:0 0 10px;padding-left:0;list-style:none;display:grid;gap:6px">${L.map((x,i)=>`<li class="row" style="gap:6px;align-items:flex-start"><span style="margin-top:7px">•</span><textarea data-gi="${i}" rows="1" style="flex:1;min-height:34px;resize:vertical">${esc(x)}</textarea><button class="sm" data-gx="${i}" title="Retirer">✕</button></li>`).join('')||'<li class="note">Aucune règle pour l’instant.</li>'}</ul>
+    <div class="row" style="gap:6px"><input id="gsNew" placeholder="Ajouter une règle (ex. Les dépôts de la RAMQ sont des revenus)" style="flex:1"><button class="sm" id="gsAdd">Ajouter</button></div>
+    <div class="row" style="gap:6px;margin-top:14px;justify-content:flex-end"><button class="sm" id="gsX">Annuler</button><button class="pri sm" id="gsOk">Enregistrer</button></div>`;
+    d.querySelectorAll('[data-gi]').forEach(t=>t.oninput=()=>{L[+t.dataset.gi]=t.value});
+    d.querySelectorAll('[data-gx]').forEach(b=>b.onclick=()=>{L.splice(+b.dataset.gx,1);draw()});
+    const add=()=>{const v=d.querySelector('#gsNew').value.trim();if(v){L.push(v);draw();d.querySelector('#gsNew').focus()}};d.querySelector('#gsAdd').onclick=add;d.querySelector('#gsNew').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();add()}};
+    d.querySelector('#gsX').onclick=()=>d.close();d.querySelector('#gsOk').onclick=()=>{const av=C.notes||'';C.notes=L.map(x=>x.trim()).filter(Boolean).join('\n');if(C.notes!==av){saveClient();audit('Règles du dossier modifiées','Comment le dossier est géré')}d.close();renderHome()}};
+  draw();document.body.appendChild(d);d.addEventListener('close',()=>d.remove());d.showModal()}
+async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('hMeth').innerHTML=`<strong>Comment on tient ce dossier :</strong> ${esc(METH[methodeEff()])}${C.methode?'':' <em>(automatique : aucune facture de vente versée)</em>'}${comptesUSD().length?` · Comptes en dollars US : ${esc(comptesUSD().join(', '))}`:''}<br><button class="sm" id="hGest" style="margin-top:6px">📋 Comment le dossier est géré${gestL().length?` (${gestL().length})`:''}</button>`;$('hGest').onclick=gestUI;
   if(!x){$('hTodo').innerHTML='<li><i class="r"></i><div>Définissez l’exercice (début et fin)<small>Nécessaire pour les rapports, la clôture et la mission.</small></div><button class="sm pri" data-go="set">Ouvrir</button></li>';$('hMonths').innerHTML='';return}
   let L=[];try{if(local)L=Object.entries(LOCAL.periodes).filter(([k])=>k.startsWith(cid+'/')).map(([,v])=>v);else{const s=await db.collection('clients').doc(cid).collection('periodes').get();L=s.docs.map(d=>d.data())}}catch(e){}
   if(C?.id!==cid)return;PERS=L;L.forEach(todoNow);
@@ -3920,7 +3930,7 @@ async function renderHome(){const x=curEx(),cid=C.id;$('hKpi').innerHTML='';$('h
   if(!x.ouv)setItem('Soldes d’ouverture','Nouveau client qui démarre? Les soldes sont à zéro. Client qui change de comptable? Importez la balance de vérification de la fin de l’exercice précédent.',`<button class="sm" data-ouv0>Nouveau client : soldes à zéro</button><button class="sm pri" data-go="je">Importer la BV</button>`);
   if(!C.desc&&!FICHE?.description)setItem('Description de l’entreprise','Activités, employés, véhicules… L’IA s’en sert pour classer les transactions.','<button class="sm" data-go="set">Décrire</button>');
   if(!C.email&&!FICHE?.courriel)setItem('Courriel du client','Pour lui envoyer les demandes de précisions.','<button class="sm" data-go="set">Ajouter</button>');
-  if(window.tlFiche&&FICHE===null&&chargerFiche.fait)setItem('Fiche client dans Gestion du cabinet','Aucune fiche à ce nom : créez-la pour les échéances, le contrat et la facturation.','<a class="sm" href="centre.html" style="align-self:center">Ouvrir Gestion du cabinet</a>');
+  if(window.tlFiche&&FICHE===null&&chargerFiche.fait)setItem('Fiche client dans Gestion du cabinet','Aucune fiche à ce nom : créez-la pour les échéances, le contrat et la facturation.',`<a class="sm" href="centre.html#${new URLSearchParams({nouveau:'1',nom:C.nom||'',...(C.exFin?{fin:C.exFin.slice(5)}:{}),...(C.desc?{desc:C.desc.slice(0,800)}:{}),...(C.profil?.tx!=null?{tx:C.profil.tx?'1':'0'}:{})})}" style="align-self:center">Créer la fiche client</a>`);
   if(!L.length)setItem('Premier relevé bancaire','Déposez les relevés de la banque et des cartes de crédit pour commencer.',`<button class="sm" data-go="mo:${x.deb.slice(0,7)}:">Déposer</button>`);
   if(SET.length)T.unshift(`<li style="display:block;border:0;padding:4px 0 0"><strong>Mise en place du dossier</strong></li>`,...SET,`<li style="display:block;border:0;padding:8px 0 0"><strong>Travail en cours</strong></li>`);
   /* contrôles selon le profil de l'entreprise (TPS/TVQ, employés) */
