@@ -40,8 +40,12 @@ window.tlFiche=async nom=>{const n=s=>String(s||'').toLowerCase().normalize('NFD
 window.tlTaux=(de,a)=>sb.functions.invoke('taux',{body:{de,a}});
 window.tlGuideFn=n=>sb.functions.invoke('guide',{body:{nom:n}});
 window.tlSendEmail=async({to,subject,text,attachments})=>{const{data,error}=await sb.functions.invoke(cfg.FONCTION_COURRIEL||'tl-email',{body:{to,subject,text,attachments}});if(error){let m=error.message;try{m=(await error.context.json()).error||m}catch(e){}throw new Error(m)}if(data?.error)throw new Error(data.error);return data};
-sample.json=async(input,opts)=>{const{text}=await ask(input,opts);const t=text.replace(/```json|```/g,'');const i=Math.min(...['{','['].map(c=>{const k=t.indexOf(c);return k<0?1e9:k}));
-  const j=Math.max(t.lastIndexOf('}'),t.lastIndexOf(']'));if(i>=1e9||j<i)throw err('unavailable','réponse non JSON');return JSON.parse(t.slice(i,j+1))};
+const lireJSON=text=>{const t=String(text||'').replace(/```json|```/g,'');const i=Math.min(...['{','['].map(c=>{const k=t.indexOf(c);return k<0?1e9:k}));
+  const j=Math.max(t.lastIndexOf('}'),t.lastIndexOf(']'));if(i>=1e9||j<i)return undefined;try{return JSON.parse(t.slice(i,j+1))}catch(e){return undefined}};
+/* réponse JSON : une relance si la réponse n'est pas du JSON valide (l'IA répond parfois en texte) */
+sample.json=async(input,opts={})=>{const{text}=await ask(input,opts);let v=lireJSON(text);if(v!==undefined)return v;
+  const p=(typeof input==='string'?input:input.map(m=>m.content).join('\n\n'))+`\n\nTa réponse précédente n'était pas du JSON valide :\n${String(text).slice(0,1500)}\n\nRedonne la même réponse, uniquement en JSON valide (aucun texte autour).`;
+  v=lireJSON((await ask(p,{...opts,images:undefined})).text);if(v!==undefined)return v;throw err('unavailable','réponse non JSON')};
 sample.limits=async()=>({images:true});
 
 /* ---------- téléchargements ---------- */

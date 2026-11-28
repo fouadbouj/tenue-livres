@@ -1236,6 +1236,8 @@ ${P?`Période ouverte à l'écran : ${P.mois} (${P.src}).`:''}
 Plan comptable (numéro nom) :
 ${PLAN.filter(([n,t])=>!isHeader(n,t)).map(p=>p.join(' ')).join('\n')}
 
+${(()=>{const o=ouvInitial();return o?`Soldes d'ouverture au ${o.date} (débit +, crédit −) : ${Object.entries(o.s||{}).map(([a,c])=>`${a} ${accName(a)} ${iaMt(c)}`).join(' · ')}`:''})()}
+${C.comp?`Résultats de l'exercice précédent (${C.comp.deb} au ${C.comp.fin}, repris des états financiers ; débit +) : ${Object.entries(C.comp.I||{}).map(([a,c])=>`${a} ${accName(a)} ${iaMt(c)}`).join(' · ')}`:`Résultats de l'exercice précédent : pas encore repris (Rapports › « Comparatifs de l'exercice précédent »). Ne les invente pas : demande les chiffres à l'utilisateur.`}
 Soldes au ${fin} (débit +, crédit −; résultats depuis le début de l'exercice) :
 ${sol.map(([a,c])=>`${a} ${accName(a)} : ${iaMt(c)}`).join('\n')||'aucun'}
 
