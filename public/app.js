@@ -1052,7 +1052,8 @@ function checks(){
   const prevAmts=new Set(PREV.map(p=>p.amt));
   tr.filter(t=>AMBIG.test(norm(t.desc))&&t.amt<0&&prevAmts.has(t.amt)&&(grp.get(t.amt)||[]).length<2).forEach(t=>grp.set(t.amt,[t,t]));
   for(const[a,l]of grp){const u=[...new Set(l)];if(l.length>=2||(Math.abs(a)>=50000&&Math.abs(a)%10000===0))add('moyen',`Virement récurrent ou rond : ${fmt(a)}${u.length>1?` × ${u.length}`:''}`,'Souvent un loyer, un salaire ou un remboursement de prêt. Demandez au client, classez-le, puis retenez la règle.',u)}
-  const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3)dups.push([a,b])}
+  const dups=[];for(let i=0;i<tx.length;i++)for(let j=i+1;j<tx.length;j++){const a=tx[i],b=tx[j];if(a.amt===b.amt&&a.amt<0&&keyOf(a.desc)===keyOf(b.desc)&&!AMBIG.test(norm(a.desc))&&dd(a.date,b.date)<=3&&!/^FRAIS (PAYPAL|STRIPE|SQUARE)/.test(norm(a.desc))&&(norm(a.desc)===norm(b.desc)||!/—/.test(a.desc+b.desc))&&!/META PLATFORMS|FACEBK|FACEBOOK|GOOGLE ADS|GOOGLE \*ADS/.test(norm(a.desc))&&tx.filter(t=>t.amt===a.amt&&keyOf(t.desc)===keyOf(a.desc)).length<3)dups.push([a,b])}
+  /* facturation par seuil (publicité Meta/Google) et paiements répétés du même montant (3 fois ou plus) : un schéma normal, pas un double paiement */
   dups.forEach(([a,b])=>add('moyen',`Doublon possible : ${a.desc}`,`${fmt(a.amt)} le ${a.date} et le ${b.date}. Double paiement?`,[a,b]));
   const big=tx.filter(t=>t.amt<=-150000&&t.st!=='transit'&&/^[56]/.test(String(t.acct))&&!BIGSKIP.test(nm(t))&&!(parRegle(t)&&!IMMO.test(nm(t)))&&!PROF.test(norm(t.desc))&&!immoDejaOk(t));
   big.forEach(t=>add('moyen',`Dépense importante : ${t.desc} (${fmt(t.amt)})`,'Plus de 1 500 $ : obtenez la facture et vérifiez si c’est une immobilisation à amortir plutôt qu’une dépense.',[t]));
@@ -1062,7 +1063,8 @@ function checks(){
   if(nonInscrit){const tt=tx.filter(t=>t.tax);if(tt.length)add('haut',`Taxes ventilées alors que le client n’est pas inscrit à la TPS/TVQ : ${tt.length}`,'Ce client ne réclame ni CTI ni RTI : décochez « Taxes incl. » (le montant complet va dans la dépense).',tt)}
   const exTax=nonInscrit?[]:tx.filter(t=>t.tax&&EXEMPT.test(nm(t)));
   if(exTax.length)add('haut',`Taxes ventilées sur des comptes exemptés : ${exTax.length}`,'Assurances, frais bancaires, intérêts, permis : pas de CTI ni de RTI. Décochez « Taxes incl. ».',exTax);
-  const noTax=nonInscrit?[]:tx.filter(t=>!t.tax&&t.amt<0&&t.st!=='transit'&&TAXABLE.test(nm(t))&&!EXEMPT.test(nm(t)));
+  /* achats en US$ ou chez un fournisseur hors Canada : pas de TPS/TVQ récupérable en général, donc rien à signaler */
+  const noTax=nonInscrit||devOf(P.src)==='USD'?[]:tx.filter(t=>!t.tax&&t.amt<0&&t.st!=='transit'&&TAXABLE.test(nm(t))&&!EXEMPT.test(nm(t))&&!ETRANGER.test(norm(t.desc)));
   if(noTax.length)add('bas',`Taxes non ventilées : ${noTax.length}`,'Ces dépenses portent normalement la TPS et la TVQ. Cochez « Taxes incl. » si le fournisseur est inscrit.',noTax);
   const rep=nonInscrit?[]:tx.filter(t=>t.tax&&t.amt<0&&CAT.rep.test(nm(t)));
   if(rep.length){const taxes=rep.reduce((s,t)=>{const g=Math.abs(t.amt),n0=Math.round(g/1.14975);return s+Math.round(n0*0.05)+Math.round(n0*0.09975)},0);

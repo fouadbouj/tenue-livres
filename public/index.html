@@ -178,6 +178,24 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
 .fs td.num{width:120px}.flag{color:var(--claret);font-weight:700}
 .big{font-size:17px;min-height:52px;padding:10px 20px}
 
+/* ---------- allègement visuel (écran d'ordinateur) : contrôles plus compacts, bordures discrètes, texte plus fin ---------- */
+@media (min-width:900px){
+  input,select,textarea,button{font-size:14.5px}
+  input,select{min-height:38px;padding:6px 10px}
+  button{min-height:38px;padding:6px 14px;border-color:var(--line);font-weight:600;transition:border-color .12s,background .12s}
+  button:hover:not(:disabled){border-color:var(--ink)}
+  button.pri{border-color:var(--teal)}button.danger{border-color:color-mix(in srgb,var(--claret) 45%,var(--line))}
+  button.sm{min-height:30px;padding:3px 10px;font-size:13px}
+  h1{font-size:30px}h2{font-size:18px}.sub{font-size:14px}
+  .panel{padding:14px 16px;margin-top:12px}
+  .gauge b{font-size:22px}
+  .drop{border-width:1.5px;padding:12px 14px}
+  table{font-size:14px}td{padding:5px 8px}th{font-size:12px;padding:5px 8px;border-bottom-width:1px}
+  .rep{font-size:14px}.rep .sec td{font-size:15px;padding-top:12px;border-bottom-width:1px}
+  .tabs button{min-height:34px;padding:4px 12px;font-size:14px}
+  td select{min-height:32px;font-size:13.5px}
+}
+.rep a{text-decoration:none}.rep a:hover{text-decoration:underline;color:var(--teal)}
 </style>
 <script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
 </head>
@@ -557,8 +575,7 @@ ul.todo div{flex:1;font-weight:600}ul.todo small{display:block;color:var(--mute)
   <section id="tRec" hidden>
     <div class="panel">
       <div class="row" style="justify-content:space-between;align-items:flex-end">
-        <h2 style="margin:0">Conciliation bancaire</h2>
-        <div class="row" style="align-items:flex-end"><label class="f">Compte<select id="recSrc"></select></label><button id="recGo" class="pri">Vérifier</button></div>
+        <div class="row" style="align-items:flex-end"><label class="f">Compte à concilier<select id="recSrc"></select></label><button id="recGo" class="pri">Vérifier</button></div>
       </div>
       <p class="note">Les soldes de début et de fin de chaque relevé sont repris automatiquement : colonne « Solde » du CSV, ou lus par l'IA dans le PDF. Pour chaque relevé, l'application vérifie que solde de début + transactions = solde de fin, que chaque relevé commence là où le précédent finit, et que le solde aux livres concorde.</p>
       <div class="drop" id="recDrop" style="margin-top:10px"><div><strong>Verser les relevés pour leurs soldes seulement</strong><div class="note">Pour les relevés déjà importés : seuls les soldes de début et de fin sont repris, les transactions ne sont pas réimportées. CSV avec colonne « Solde », ou PDF (lu par l'IA).</div></div><input type="file" id="recFile" accept=".csv,.txt,.xlsx,.xls,.pdf" multiple aria-label="Choisir des relevés"></div>
