@@ -1305,9 +1305,16 @@ async function runRec(force){const src=$('recSrc').value;$('recList').innerHTML=
      d'après les opérations du relevé lui-même (celles d'après la fin d'exercice sont mises de côté pour l'exercice suivant) */
   {const b=exBornes();if(b){const[xd,xf]=b,att=(C.attente||[]).filter(x=>x.src===src&&x.rel);const S2=[];
     for(const s of S){if(!(s.du<xd&&s.au>=xd)&&!(s.du<=xf&&s.au>xf)){S2.push(s);continue}
-      let mine=tx.filter(t=>t.st_===s).concat(att.filter(x=>relS(x)===s));if(!mine.length)mine=tx.filter(t=>!t.ext&&!t.st_&&t.date>=s.du&&t.date<=s.au).concat((C.attente||[]).filter(x=>x.src===src&&!x.rel&&x.date>=s.du&&x.date<=s.au));const som=f=>mine.filter(f).reduce((a,x)=>a+x.amt,0);
-      const du=s.du<xd?xd:s.du,au=s.au>xf?xf:s.au,sd=s.du<xd?s.sd+som(x=>x.date<xd):s.sd,sf=s.au>xf?sd+som(x=>x.date>=du&&x.date<=au):s.sf;
-      const v={...s,du,au,sd,sf,nom:(s.nom||'')+` (partie dans l’exercice : relevé du ${s.du} au ${s.au}, solde ${s.au>xf?'au '+xf+' calculé':'au '+xd+' calculé'} d’après ses opérations)`};
+      /* solde à la borne : on part du solde imprimé le plus proche et on retire seulement les opérations SÛREMENT de ce relevé
+         (rattachées par leur relevé d'origine, ou datées hors du jour partagé avec un relevé voisin) */
+      const nxt=S.find(q=>q!==s&&q.du===s.au),prv=S.find(q=>q!==s&&q.au===s.du);
+      const mem=x=>{const r=x.st_||relS(x);if(r)return r===s;if(x.date<s.du||x.date>s.au)return false;if((nxt&&x.date===s.au)||(prv&&x.date===s.du))return false;return true};
+      const cand=tx.filter(t=>!t.ext).concat((C.attente||[]).filter(x=>x.src===src)).filter(mem),som=f=>cand.filter(f).reduce((a,x)=>a+x.amt,0);
+      const du=s.du<xd?xd:s.du,au=s.au>xf?xf:s.au,sd=s.du<xd?s.sd+som(x=>x.date<xd):s.sd;let sf=s.sf,doute='';
+      if(s.au>xf){const arr=s.sf-som(x=>x.date>xf),av=sd+som(x=>x.date>=du&&x.date<=xf),apres=cand.some(x=>x.date>xf);
+        /* deux calculs : à rebours depuis le solde de fin imprimé, et en avançant depuis le solde de début; s'ils diffèrent, on garde le plus sûr et on le signale */
+        sf=arr===av?arr:apres?arr:av;if(arr!==av)doute=` Les deux calculs du solde au ${xf} diffèrent (${fmtN(av)} $ en partant du début, ${fmtN(arr)} $ en partant de la fin) : vérifiez le solde imprimé au ${xf} sur le relevé.`}
+      const v={...s,du,au,sd,sf,nom:(s.nom||'')+` (partie dans l’exercice : relevé du ${s.du} au ${s.au}, solde ${s.au>xf?'au '+xf+' calculé':'au '+xd+' calculé'} d’après ses opérations)${doute}`};
       tx.forEach(t=>{if(t.st_===s)t.st_=(t.date>=du&&t.date<=au)?v:'hors'});S2.push(v)}
     S.length=0;S.push(...S2);}}
   let ok=0,prev=null;const rows=S.map((s,i)=>{let T=tx.filter(t=>t.st_?t.st_===s:t.date>=s.du&&t.date<=s.au),share='';
